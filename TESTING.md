@@ -84,7 +84,7 @@ cargo tarpaulin --test integration_tests
 ```
 src/
 ├── main.rs          # CLI and app tests (15 tests)
-├── thok.rs          # Core typing logic tests (16 tests) 
+├── thok.rs          # Core typing logic tests (16 tests)
 ├── ui.rs            # UI widget tests (10 tests)
 ├── util.rs          # Mathematical function tests (10 tests)
 └── lang/
@@ -105,157 +105,6 @@ src/
 #### Property Tests
 - **Purpose**: Test edge cases and boundary conditions
 - **Examples**: Empty inputs, large datasets, error conditions
-
-## Coverage Analysis Scripts
-
-### Coverage Analysis Script
-
-Create `scripts/coverage.sh`:
-
-```bash
-#!/bin/bash
-
-# Test Coverage Analysis Script for thokr
-set -e
-
-echo "🧪 Running Test Coverage Analysis for thokr"
-echo "============================================="
-
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
-# Check if tarpaulin is installed
-if ! command -v cargo-tarpaulin &> /dev/null; then
-    echo -e "${RED}❌ cargo-tarpaulin not found${NC}"
-    echo "Installing cargo-tarpaulin..."
-    cargo install cargo-tarpaulin
-fi
-
-# Run basic tests first
-echo -e "\n${BLUE}📋 Running all tests...${NC}"
-cargo test
-
-# Generate coverage report
-echo -e "\n${BLUE}📊 Generating coverage report...${NC}"
-cargo tarpaulin --verbose --out Html --out Json --output-dir ./coverage
-
-# Parse coverage results
-if [ -f "./coverage/tarpaulin-report.json" ]; then
-    COVERAGE=$(cat ./coverage/tarpaulin-report.json | grep -o '"coverage":[0-9.]*' | cut -d':' -f2)
-    COVERED=$(cat ./coverage/tarpaulin-report.json | grep -o '"covered":[0-9]*' | cut -d':' -f2)
-    COVERABLE=$(cat ./coverage/tarpaulin-report.json | grep -o '"coverable":[0-9]*' | cut -d':' -f2)
-    
-    echo -e "\n${GREEN}✅ Coverage Analysis Complete${NC}"
-    echo -e "📈 Overall Coverage: ${YELLOW}${COVERAGE}%${NC}"
-    echo -e "📝 Lines Covered: ${COVERED}/${COVERABLE}"
-    
-    # Coverage thresholds
-    if (( $(echo "$COVERAGE > 80" | bc -l) )); then
-        echo -e "🎉 ${GREEN}Excellent coverage!${NC}"
-    elif (( $(echo "$COVERAGE > 60" | bc -l) )); then
-        echo -e "✅ ${YELLOW}Good coverage${NC}"
-    else
-        echo -e "⚠️  ${RED}Coverage could be improved${NC}"
-    fi
-else
-    echo -e "${RED}❌ Could not parse coverage results${NC}"
-fi
-
-# Open HTML report
-if [ -f "./coverage/tarpaulin-report.html" ]; then
-    echo -e "\n${BLUE}🌐 Opening HTML coverage report...${NC}"
-    if command -v open &> /dev/null; then
-        open ./coverage/tarpaulin-report.html
-    elif command -v xdg-open &> /dev/null; then
-        xdg-open ./coverage/tarpaulin-report.html
-    else
-        echo "📁 Coverage report available at: ./coverage/tarpaulin-report.html"
-    fi
-fi
-
-echo -e "\n${GREEN}🎯 Coverage analysis complete!${NC}"
-```
-
-### Quick Coverage Check Script
-
-Create `scripts/quick-coverage.sh`:
-
-```bash
-#!/bin/bash
-
-# Quick coverage check
-echo "🏃‍♂️ Quick Coverage Check"
-echo "========================"
-
-cargo tarpaulin --skip-clean --target-dir target/tarpaulin | grep -E "(coverage|Tested/Total)"
-```
-
-### Make Scripts Executable
-
-```bash
-chmod +x scripts/coverage.sh
-chmod +x scripts/quick-coverage.sh
-```
-
-## Coverage Targets by Module
-
-### Target Coverage Goals
-
-| Module | Current | Target | Priority |
-|--------|---------|--------|----------|
-| `util.rs` | 100% | 100% | ✅ Maintain |
-| `lang/mod.rs` | 100% | 100% | ✅ Maintain |  
-| `ui.rs` | 97.4% | 98%+ | 🔄 Improve |
-| `thok.rs` | 91.4% | 95%+ | 🔄 Improve |
-| `main.rs` | 22.9% | 40%+ | 📈 Enhance |
-
-### Areas for Coverage Improvement
-
-1. **Main Application (`main.rs`)**
-   - Terminal initialization/cleanup
-   - Event loop edge cases
-   - Error handling paths
-
-2. **Core Logic (`thok.rs`)**
-   - File I/O error conditions
-   - Complex calculation edge cases
-   - State transition corner cases
-
-3. **UI Components (`ui.rs`)**
-   - Additional browser scenarios
-   - Edge case rendering conditions
-
-## Continuous Integration
-
-### GitHub Actions Example
-
-```yaml
-# .github/workflows/coverage.yml
-name: Coverage
-
-on: [push, pull_request]
-
-jobs:
-  coverage:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-      - name: Install tarpaulin
-        run: cargo install cargo-tarpaulin
-      - name: Generate coverage
-        run: cargo tarpaulin --verbose --out Xml
-      - name: Upload coverage
-        uses: codecov/codecov-action@v3
-```
-
-## Best Practices
 
 ### Writing Effective Tests
 
@@ -327,7 +176,7 @@ grcov . --binary-path ./target/debug/ -s . -t html --branch --ignore-not-existin
 ### Reading Coverage Reports
 
 1. **Green Lines**: Covered by tests
-2. **Red Lines**: Not covered by tests  
+2. **Red Lines**: Not covered by tests
 3. **Yellow Lines**: Partially covered (branches)
 4. **Gray Lines**: Non-executable (comments, declarations)
 
@@ -400,7 +249,7 @@ The current test coverage of **67.26%** represents **high-quality, strategically
 The coverage distribution follows software testing best practices:
 
 - **Critical Business Logic** (util, lang, thok core): 90-100% coverage
-- **User Interface Logic** (ui rendering): 97% coverage  
+- **User Interface Logic** (ui rendering): 97% coverage
 - **Infrastructure Code** (main app): 23% coverage (appropriate)
 
 This distribution is **optimal** because:
