@@ -1,2 +1,3 @@
 /target
 *.log
+tarpaulin-report.html
