@@ -191,9 +191,9 @@ impl Widget for &Thok {
 
                 let legend = Paragraph::new(Span::styled(
                     String::from(if Browser::is_available() {
-                        "(r)etry / (n)ew / (t)weet / (esc)ape"
+                        "(r)etry / (n)ew / (s)tats / (t)weet / (esc)ape"
                     } else {
-                        "(r)etry / (n)ew / (esc)ape"
+                        "(r)etry / (n)ew / (s)tats / (esc)ape"
                     }),
                     italic_style,
                 ));
@@ -348,6 +348,7 @@ mod tests {
                 rendered.contains("(t)weet")
                     || rendered.contains("(r)etry")
                     || rendered.contains("(n)ew")
+                    || rendered.contains("(s)tats")
                     || rendered.contains("(esc)ape")
                     || !rendered.trim().is_empty()
             );
@@ -355,6 +356,7 @@ mod tests {
             assert!(
                 rendered.contains("(r)etry")
                     || rendered.contains("(n)ew")
+                    || rendered.contains("(s)tats")
                     || rendered.contains("(esc)ape")
                     || !rendered.trim().is_empty()
             );

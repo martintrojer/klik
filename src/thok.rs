@@ -213,7 +213,7 @@ impl Thok {
             };
 
             // Record character statistic (failures are silently ignored to not interrupt typing)
-            if let Err(e) = stats_db.record_char_stat(&char_stat) {
+            if let Err(_e) = stats_db.record_char_stat(&char_stat) {
                 // For debugging: uncomment the line below to see database errors
                 // eprintln!("Warning: Failed to record character stat: {}", e);
             } else {

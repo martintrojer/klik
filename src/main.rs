@@ -65,10 +65,44 @@ impl SupportedLanguage {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum AppState {
+    Typing,
+    Results,
+    CharacterStats,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum SortBy {
+    Character,
+    AvgTime,
+    MissRate,
+    Attempts,
+}
+
+#[derive(Debug)]
+pub struct CharStatsState {
+    pub scroll_offset: usize,
+    pub sort_by: SortBy,
+    pub sort_ascending: bool,
+}
+
+impl Default for CharStatsState {
+    fn default() -> Self {
+        Self {
+            scroll_offset: 0,
+            sort_by: SortBy::Character,
+            sort_ascending: true,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct App {
     pub cli: Option<Cli>,
     pub thok: Thok,
+    pub state: AppState,
+    pub char_stats_state: CharStatsState,
 }
 
 impl App {
@@ -91,6 +125,8 @@ impl App {
             Self {
                 thok: Thok::new(prompt, count, cli.number_of_secs.map(|ns| ns as f64)),
                 cli: Some(cli),
+                state: AppState::Typing,
+                char_stats_state: CharStatsState::default(),
             }
         } else {
             Self {
@@ -100,6 +136,8 @@ impl App {
                     cli.number_of_secs.map(|ns| ns as f64),
                 ),
                 cli: Some(cli),
+                state: AppState::Typing,
+                char_stats_state: CharStatsState::default(),
             }
         }
     }
@@ -132,6 +170,8 @@ impl App {
                 cli.number_of_secs.map(|ns| ns as f64),
             );
         }
+        self.state = AppState::Typing;
+        self.char_stats_state = CharStatsState::default();
     }
 }
 
@@ -190,6 +230,7 @@ fn start_tui<B: Backend>(
 
                         if app.thok.has_finished() {
                             app.thok.calc_results();
+                            app.state = AppState::Results;
                         }
                         terminal.draw(|f| ui(app, f))?;
                     }
@@ -203,7 +244,7 @@ fn start_tui<B: Backend>(
                             break;
                         }
                         KeyCode::Backspace => {
-                            if !app.thok.has_finished() {
+                            if app.state == AppState::Typing && !app.thok.has_finished() {
                                 app.thok.backspace();
                             }
                         }
@@ -223,19 +264,22 @@ fn start_tui<B: Backend>(
                                 break;
                             }
 
-                            match app.thok.has_finished() {
-                                false => {
-                                    app.thok.on_keypress_start();
-                                    app.thok.write(c);
-                                    if app.thok.has_finished() {
-                                        app.thok.calc_results();
+                            match app.state {
+                                AppState::Typing => {
+                                    if !app.thok.has_finished() {
+                                        app.thok.on_keypress_start();
+                                        app.thok.write(c);
+                                        if app.thok.has_finished() {
+                                            app.thok.calc_results();
+                                            app.state = AppState::Results;
+                                        }
                                     }
                                 }
-                                true => match key.code {
+                                AppState::Results => match key.code {
                                     KeyCode::Char('t') => {
                                         if Browser::is_available() {
                                             webbrowser::open(&format!("https://twitter.com/intent/tweet?text={}%20wpm%20%2F%20{}%25%20acc%20%2F%20{:.2}%20sd%0A%0Ahttps%3A%2F%2Fgithub.com%thatvegandev%2Fthokr", app.thok.wpm, app.thok.accuracy, app.thok.std_dev))
-                                    .unwrap_or_default();
+                                        .unwrap_or_default();
                                         }
                                     }
                                     KeyCode::Char('r') => {
@@ -245,6 +289,63 @@ fn start_tui<B: Backend>(
                                     KeyCode::Char('n') => {
                                         exit_type = ExitType::New;
                                         break;
+                                    }
+                                    KeyCode::Char('s') => {
+                                        app.state = AppState::CharacterStats;
+                                    }
+                                    _ => {}
+                                },
+                                AppState::CharacterStats => match key.code {
+                                    KeyCode::Char('r') => {
+                                        exit_type = ExitType::Restart;
+                                        break;
+                                    }
+                                    KeyCode::Char('n') => {
+                                        exit_type = ExitType::New;
+                                        break;
+                                    }
+                                    KeyCode::Char('b') | KeyCode::Backspace => {
+                                        app.state = AppState::Results;
+                                    }
+                                    KeyCode::Up => {
+                                        if app.char_stats_state.scroll_offset > 0 {
+                                            app.char_stats_state.scroll_offset -= 1;
+                                        }
+                                    }
+                                    KeyCode::Down => {
+                                        // Will check max scroll in render function
+                                        app.char_stats_state.scroll_offset += 1;
+                                    }
+                                    KeyCode::PageUp => {
+                                        app.char_stats_state.scroll_offset = 
+                                            app.char_stats_state.scroll_offset.saturating_sub(10);
+                                    }
+                                    KeyCode::PageDown => {
+                                        app.char_stats_state.scroll_offset += 10;
+                                    }
+                                    KeyCode::Home => {
+                                        app.char_stats_state.scroll_offset = 0;
+                                    }
+                                    KeyCode::Char('1') => {
+                                        app.char_stats_state.sort_by = SortBy::Character;
+                                        app.char_stats_state.scroll_offset = 0;
+                                    }
+                                    KeyCode::Char('2') => {
+                                        app.char_stats_state.sort_by = SortBy::AvgTime;
+                                        app.char_stats_state.scroll_offset = 0;
+                                    }
+                                    KeyCode::Char('3') => {
+                                        app.char_stats_state.sort_by = SortBy::MissRate;
+                                        app.char_stats_state.scroll_offset = 0;
+                                    }
+                                    KeyCode::Char('4') => {
+                                        app.char_stats_state.sort_by = SortBy::Attempts;
+                                        app.char_stats_state.scroll_offset = 0;
+                                    }
+                                    KeyCode::Char(' ') => {
+                                        // Toggle sort direction
+                                        app.char_stats_state.sort_ascending = !app.char_stats_state.sort_ascending;
+                                        app.char_stats_state.scroll_offset = 0;
                                     }
                                     _ => {}
                                 },
@@ -309,8 +410,176 @@ fn get_thok_events(should_tick: bool) -> mpsc::Receiver<ThokEvent> {
     rx
 }
 
+fn render_character_stats(app: &mut App, f: &mut Frame) {
+    use ratatui::{
+        layout::{Alignment, Constraint, Direction, Layout},
+        style::{Color, Modifier, Style},
+        widgets::{Block, Borders, Paragraph, Table, Row, Cell},
+    };
+
+    let area = f.area();
+    
+    // Create layout
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(2)
+        .constraints([
+            Constraint::Length(3),  // Title
+            Constraint::Min(0),     // Stats table
+            Constraint::Length(4),  // Instructions
+        ])
+        .split(area);
+
+    // Title with sort indicator
+    let sort_direction = if app.char_stats_state.sort_ascending { "↑" } else { "↓" };
+    let sort_by_text = match app.char_stats_state.sort_by {
+        SortBy::Character => "Character",
+        SortBy::AvgTime => "Avg Time",
+        SortBy::MissRate => "Miss Rate",
+        SortBy::Attempts => "Attempts",
+    };
+    let title_text = format!("Character Statistics (Sort: {} {})", sort_by_text, sort_direction);
+    
+    let title = Paragraph::new(title_text)
+        .block(Block::default().borders(Borders::ALL).title("Stats"))
+        .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+        .alignment(Alignment::Center);
+    f.render_widget(title, chunks[0]);
+
+    // Get character statistics
+    if let Some(mut summary) = app.thok.get_all_char_summary() {
+        // Sort the data based on current sort criteria
+        match app.char_stats_state.sort_by {
+            SortBy::Character => {
+                summary.sort_by(|a, b| {
+                    let cmp = a.0.cmp(&b.0);
+                    if app.char_stats_state.sort_ascending { cmp } else { cmp.reverse() }
+                });
+            }
+            SortBy::AvgTime => {
+                summary.sort_by(|a, b| {
+                    let cmp = a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal);
+                    if app.char_stats_state.sort_ascending { cmp } else { cmp.reverse() }
+                });
+            }
+            SortBy::MissRate => {
+                summary.sort_by(|a, b| {
+                    let cmp = a.2.partial_cmp(&b.2).unwrap_or(std::cmp::Ordering::Equal);
+                    if app.char_stats_state.sort_ascending { cmp } else { cmp.reverse() }
+                });
+            }
+            SortBy::Attempts => {
+                summary.sort_by(|a, b| {
+                    let cmp = a.3.cmp(&b.3);
+                    if app.char_stats_state.sort_ascending { cmp } else { cmp.reverse() }
+                });
+            }
+        }
+
+        // Calculate scrolling bounds
+        let table_height = chunks[1].height.saturating_sub(3) as usize; // Account for borders and header
+        let total_rows = summary.len();
+        let max_scroll = total_rows.saturating_sub(table_height);
+        
+        // Clamp scroll offset
+        if app.char_stats_state.scroll_offset > max_scroll {
+            app.char_stats_state.scroll_offset = max_scroll;
+        }
+
+        // Create header with sort indicators
+        let char_indicator = if matches!(app.char_stats_state.sort_by, SortBy::Character) { sort_direction } else { "" };
+        let time_indicator = if matches!(app.char_stats_state.sort_by, SortBy::AvgTime) { sort_direction } else { "" };
+        let miss_indicator = if matches!(app.char_stats_state.sort_by, SortBy::MissRate) { sort_direction } else { "" };
+        let attempts_indicator = if matches!(app.char_stats_state.sort_by, SortBy::Attempts) { sort_direction } else { "" };
+
+        let header = Row::new(vec![
+            Cell::from(format!("Char {}", char_indicator)),
+            Cell::from(format!("Avg Time (ms) {}", time_indicator)),
+            Cell::from(format!("Miss Rate (%) {}", miss_indicator)),
+            Cell::from(format!("Attempts {}", attempts_indicator)),
+        ])
+        .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
+
+        // Get visible rows based on scroll offset
+        let visible_rows: Vec<Row> = summary
+            .iter()
+            .skip(app.char_stats_state.scroll_offset)
+            .take(table_height)
+            .map(|(character, avg_time, miss_rate, attempts)| {
+                let char_display = if *character == ' ' {
+                    "SPACE".to_string()
+                } else {
+                    character.to_string()
+                };
+                
+                let time_color = if *avg_time < 150.0 {
+                    Color::Green
+                } else if *avg_time < 250.0 {
+                    Color::Yellow
+                } else {
+                    Color::Red
+                };
+                
+                let miss_color = if *miss_rate == 0.0 {
+                    Color::Green
+                } else if *miss_rate < 10.0 {
+                    Color::Yellow
+                } else {
+                    Color::Red
+                };
+
+                Row::new(vec![
+                    Cell::from(char_display),
+                    Cell::from(format!("{:.1}", avg_time)).style(Style::default().fg(time_color)),
+                    Cell::from(format!("{:.1}", miss_rate)).style(Style::default().fg(miss_color)),
+                    Cell::from(attempts.to_string()),
+                ])
+            })
+            .collect();
+
+        // Show scroll position in title if there are more rows than visible
+        let scroll_info = if total_rows > table_height {
+            format!(" ({}/{} rows)", app.char_stats_state.scroll_offset + visible_rows.len().min(table_height), total_rows)
+        } else {
+            String::new()
+        };
+
+        let table = Table::new(visible_rows, &[
+            Constraint::Length(8),
+            Constraint::Length(18),
+            Constraint::Length(18),
+            Constraint::Length(12),
+        ])
+        .header(header)
+        .block(Block::default().borders(Borders::ALL).title(format!("Performance by Character{}", scroll_info)))
+        .row_highlight_style(Style::default().bg(Color::DarkGray));
+
+        f.render_widget(table, chunks[1]);
+    } else {
+        let no_data = Paragraph::new("No character statistics available.\nComplete a typing test to see your stats!")
+            .block(Block::default().borders(Borders::ALL).title("No Data"))
+            .style(Style::default().fg(Color::Gray))
+            .alignment(Alignment::Center);
+        f.render_widget(no_data, chunks[1]);
+    }
+
+    // Instructions
+    let instructions = Paragraph::new("Sort: (1)Char (2)Time (3)Miss (4)Attempts | (Space)Toggle direction\nScroll: ↑/↓ PgUp/PgDn Home | (b)ack (r)etry (n)ew (esc)ape")
+        .block(Block::default().borders(Borders::ALL))
+        .style(Style::default().fg(Color::Gray).add_modifier(Modifier::ITALIC))
+        .alignment(Alignment::Center);
+    f.render_widget(instructions, chunks[2]);
+}
+
 fn ui(app: &mut App, f: &mut Frame) {
-    f.render_widget(&app.thok, f.area());
+    match app.state {
+        AppState::Typing | AppState::Results => {
+            f.render_widget(&app.thok, f.area());
+        }
+        AppState::CharacterStats => {
+            render_character_stats(app, f);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -418,6 +687,7 @@ mod tests {
         assert_eq!(app.thok.number_of_secs, None);
         assert!(app.cli.is_some());
         assert!(!app.thok.prompt.is_empty());
+        assert_eq!(app.state, AppState::Typing);
     }
 
     #[test]
@@ -434,6 +704,7 @@ mod tests {
 
         assert_eq!(app.thok.prompt, "custom test prompt");
         assert_eq!(app.thok.number_of_words, 10);
+        assert_eq!(app.state, AppState::Typing);
     }
 
     #[test]
@@ -450,6 +721,7 @@ mod tests {
 
         assert!(app.thok.number_of_words > 0);
         assert!(!app.thok.prompt.is_empty());
+        assert_eq!(app.state, AppState::Typing);
     }
 
     #[test]
@@ -466,6 +738,7 @@ mod tests {
 
         assert_eq!(app.thok.number_of_secs, Some(60.0));
         assert_eq!(app.thok.seconds_remaining, Some(60.0));
+        assert_eq!(app.state, AppState::Typing);
     }
 
     #[test]
@@ -487,6 +760,7 @@ mod tests {
         assert_ne!(app.thok.prompt, original_prompt);
         assert_eq!(app.thok.input.len(), 0);
         assert_eq!(app.thok.cursor_pos, 0);
+        assert_eq!(app.state, AppState::Typing);
     }
 
     #[test]
@@ -511,6 +785,7 @@ mod tests {
         assert_ne!(app.thok.prompt, original_prompt);
         assert_eq!(app.thok.input.len(), 0);
         assert_eq!(app.thok.cursor_pos, 0);
+        assert_eq!(app.state, AppState::Typing);
     }
 
     #[test]
@@ -537,5 +812,52 @@ mod tests {
         assert_eq!(format!("{:?}", restart), "Restart");
         assert_eq!(format!("{:?}", new), "New");
         assert_eq!(format!("{:?}", quit), "Quit");
+    }
+
+    #[test]
+    fn test_app_state_transitions() {
+        let cli = Cli {
+            number_of_words: 3,
+            number_of_sentences: None,
+            number_of_secs: None,
+            prompt: Some("hello".to_string()),
+            supported_language: SupportedLanguage::English,
+        };
+
+        let mut app = App::new(cli);
+        
+        // Should start in Typing state
+        assert_eq!(app.state, AppState::Typing);
+        
+        // Simulate completing the typing test
+        app.thok.write('h');
+        app.thok.write('e');
+        app.thok.write('l');
+        app.thok.write('l');
+        app.thok.write('o');
+        
+        assert!(app.thok.has_finished());
+        app.thok.calc_results();
+        app.state = AppState::Results;
+        
+        assert_eq!(app.state, AppState::Results);
+        
+        // Navigate to character stats
+        app.state = AppState::CharacterStats;
+        assert_eq!(app.state, AppState::CharacterStats);
+        
+        // Navigate back to results
+        app.state = AppState::Results;
+        assert_eq!(app.state, AppState::Results);
+    }
+
+    #[test]
+    fn test_app_state_clone() {
+        let state1 = AppState::Typing;
+        let state2 = state1.clone();
+        assert_eq!(state1, state2);
+        
+        let state3 = AppState::CharacterStats;
+        assert_ne!(state1, state3);
     }
 }
