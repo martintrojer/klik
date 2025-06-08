@@ -1,4 +1,5 @@
 pub mod lang;
+pub mod stats;
 pub mod thok;
 pub mod ui;
 pub mod util;
@@ -224,6 +225,7 @@ fn start_tui<B: Backend>(
 
                             match app.thok.has_finished() {
                                 false => {
+                                    app.thok.on_keypress_start();
                                     app.thok.write(c);
                                     if app.thok.has_finished() {
                                         app.thok.calc_results();

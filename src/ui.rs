@@ -220,6 +220,7 @@ mod tests {
                     char: c,
                     outcome: Outcome::Correct,
                     timestamp: SystemTime::now(),
+                    keypress_start: None,
                 });
             }
             thok.cursor_pos = prompt.len();
@@ -304,11 +305,13 @@ mod tests {
             char: 't',
             outcome: Outcome::Correct,
             timestamp: SystemTime::now(),
+            keypress_start: None,
         });
         thok.input.push(Input {
             char: 'x',
             outcome: Outcome::Incorrect,
             timestamp: SystemTime::now(),
+            keypress_start: None,
         });
         thok.cursor_pos = 2;
 

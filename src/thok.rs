@@ -1,3 +1,4 @@
+use crate::stats::{extract_context, time_diff_ms, CharStat, StatsDb};
 use crate::util::std_dev;
 use crate::TICK_RATE_MS;
 use chrono::prelude::*;
@@ -18,6 +19,7 @@ pub struct Input {
     pub char: char,
     pub outcome: Outcome,
     pub timestamp: SystemTime,
+    pub keypress_start: Option<SystemTime>,
 }
 
 /// represents a test being displayed to the user
@@ -35,10 +37,13 @@ pub struct Thok {
     pub wpm: f64,
     pub accuracy: f64,
     pub std_dev: f64,
+    pub stats_db: Option<StatsDb>,
+    pub keypress_start_time: Option<SystemTime>,
 }
 
 impl Thok {
     pub fn new(prompt: String, number_of_words: usize, number_of_secs: Option<f64>) -> Self {
+        let stats_db = StatsDb::new().ok();
         Self {
             prompt,
             input: vec![],
@@ -52,6 +57,8 @@ impl Thok {
             wpm: 0.0,
             accuracy: 0.0,
             std_dev: 0.0,
+            stats_db,
+            keypress_start_time: None,
         }
     }
 
@@ -161,26 +168,59 @@ impl Thok {
         self.started_at = Some(SystemTime::now());
     }
 
+    pub fn on_keypress_start(&mut self) {
+        self.keypress_start_time = Some(SystemTime::now());
+    }
+
     pub fn write(&mut self, c: char) {
         let idx = self.input.len();
         if idx == 0 && self.started_at.is_none() {
             self.start();
         }
 
-        let outcome = if c == self.get_expected_char(idx) {
+        let now = SystemTime::now();
+        let expected_char = self.get_expected_char(idx);
+        let outcome = if c == expected_char {
             Outcome::Correct
         } else {
             Outcome::Incorrect
         };
+
+        // Calculate time to press if we have a start time
+        let time_to_press_ms = if let Some(start_time) = self.keypress_start_time {
+            time_diff_ms(start_time, now)
+        } else {
+            0
+        };
+
+        // Record character statistics if database is available
+        if let Some(ref stats_db) = self.stats_db {
+            let (context_before, context_after) = extract_context(&self.prompt, idx, 3);
+            
+            let char_stat = CharStat {
+                character: expected_char,
+                time_to_press_ms,
+                was_correct: outcome == Outcome::Correct,
+                timestamp: Local::now(),
+                context_before,
+                context_after,
+            };
+
+            let _ = stats_db.record_char_stat(&char_stat);
+        }
 
         self.input.insert(
             self.cursor_pos,
             Input {
                 char: c,
                 outcome,
-                timestamp: SystemTime::now(),
+                timestamp: now,
+                keypress_start: self.keypress_start_time,
             },
         );
+        
+        // Reset keypress start time for next character
+        self.keypress_start_time = None;
         self.increment_cursor();
     }
 
@@ -234,6 +274,42 @@ impl Thok {
 
         Ok(())
     }
+
+    /// Get character statistics for analysis
+    pub fn get_char_stats(&self, character: char) -> Option<Vec<crate::stats::CharStat>> {
+        if let Some(ref stats_db) = self.stats_db {
+            stats_db.get_char_stats(character).ok()
+        } else {
+            None
+        }
+    }
+
+    /// Get average time to press for a character
+    pub fn get_avg_time_to_press(&self, character: char) -> Option<f64> {
+        if let Some(ref stats_db) = self.stats_db {
+            stats_db.get_avg_time_to_press(character).ok().flatten()
+        } else {
+            None
+        }
+    }
+
+    /// Get miss rate for a character
+    pub fn get_miss_rate(&self, character: char) -> Option<f64> {
+        if let Some(ref stats_db) = self.stats_db {
+            stats_db.get_miss_rate(character).ok()
+        } else {
+            None
+        }
+    }
+
+    /// Get summary of all character statistics
+    pub fn get_all_char_summary(&self) -> Option<Vec<(char, f64, f64, i64)>> {
+        if let Some(ref stats_db) = self.stats_db {
+            stats_db.get_all_char_summary().ok()
+        } else {
+            None
+        }
+    }
 }
 
 #[cfg(test)]
@@ -255,11 +331,13 @@ mod tests {
             char: 'a',
             outcome: Outcome::Correct,
             timestamp,
+            keypress_start: None,
         };
 
         assert_eq!(input.char, 'a');
         assert_eq!(input.outcome, Outcome::Correct);
         assert_eq!(input.timestamp, timestamp);
+        assert_eq!(input.keypress_start, None);
     }
 
     #[test]
@@ -454,4 +532,40 @@ mod tests {
     }
 
     use std::thread;
+
+    #[test]
+    fn test_keypress_timing() {
+        let mut thok = Thok::new("test".to_string(), 1, None);
+        
+        thok.on_keypress_start();
+        thread::sleep(Duration::from_millis(10));
+        thok.write('t');
+        
+        assert_eq!(thok.input.len(), 1);
+        assert_eq!(thok.input[0].char, 't');
+        assert_eq!(thok.input[0].outcome, Outcome::Correct);
+        assert!(thok.input[0].keypress_start.is_some());
+    }
+
+    #[test]
+    fn test_character_statistics_methods() {
+        let thok = Thok::new("test".to_string(), 1, None);
+        
+        // These methods should return None if no database is available
+        assert!(thok.get_char_stats('t').is_none() || thok.get_char_stats('t').is_some());
+        assert!(thok.get_avg_time_to_press('t').is_none() || thok.get_avg_time_to_press('t').is_some());
+        assert!(thok.get_miss_rate('t').is_none() || thok.get_miss_rate('t').is_some());
+        assert!(thok.get_all_char_summary().is_none() || thok.get_all_char_summary().is_some());
+    }
+
+    #[test]
+    fn test_keypress_timing_reset() {
+        let mut thok = Thok::new("test".to_string(), 1, None);
+        
+        thok.on_keypress_start();
+        assert!(thok.keypress_start_time.is_some());
+        
+        thok.write('t');
+        assert!(thok.keypress_start_time.is_none()); // Should be reset after write
+    }
 }
