@@ -4,7 +4,7 @@ mod ui;
 mod util;
 
 use crate::{lang::Language, thok::Thok};
-use clap::{ArgEnum, ErrorKind, IntoApp, Parser};
+use clap::{ValueEnum, error::ErrorKind, CommandFactory, Parser};
 use crossterm::{
     event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
     execute,
@@ -18,7 +18,7 @@ use std::{
     thread,
     time::Duration,
 };
-use tui::{
+use ratatui::{
     backend::{Backend, CrosstermBackend},
     Frame, Terminal,
 };
@@ -47,11 +47,11 @@ pub struct Cli {
     prompt: Option<String>,
 
     /// language to pull words from
-    #[clap(short = 'l', long, arg_enum, default_value_t = SupportedLanguage::English)]
+    #[clap(short = 'l', long, value_enum, default_value_t = SupportedLanguage::English)]
     supported_language: SupportedLanguage,
 }
 
-#[derive(Debug, Copy, Clone, ArgEnum, strum_macros::Display)]
+#[derive(Debug, Copy, Clone, ValueEnum, strum_macros::Display)]
 enum SupportedLanguage {
     English,
     English1k,
@@ -306,6 +306,6 @@ fn get_thok_events(should_tick: bool) -> mpsc::Receiver<ThokEvent> {
     rx
 }
 
-fn ui<B: Backend>(app: &mut App, f: &mut Frame<B>) {
-    f.render_widget(&app.thok, f.size());
+fn ui(app: &mut App, f: &mut Frame) {
+    f.render_widget(&app.thok, f.area());
 }
