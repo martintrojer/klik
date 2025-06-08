@@ -46,7 +46,11 @@ Character statistics are automatically collected during typing tests:
    - Calculates the time difference (time to press)
    - Determines if the character was correct or incorrect
    - Extracts context (surrounding characters)
-   - Records all data to the database
+   - Records all data to the database immediately
+3. **Training Run Completion**: When a typing test finishes, the system:
+   - Calculates overall results (WPM, accuracy, etc.)
+   - Ensures all character statistics are flushed to disk
+   - Saves the session summary to the existing CSV log
 
 ### Statistics Analysis
 
@@ -70,6 +74,16 @@ let miss_rate = thok.get_miss_rate('a'); // Returns 0.0 to 100.0
 let summary = thok.get_all_char_summary();
 ```
 
+#### Database Operations
+```rust
+// Flush any pending statistics to disk
+thok.flush_char_stats();
+
+// For advanced usage - batch recording (requires mutable database reference)
+let mut stats_db = StatsDb::new().unwrap();
+stats_db.record_char_stats_batch(&char_stats_vector);
+```
+
 ## Data Storage Location
 
 The database is stored at:
@@ -91,6 +105,8 @@ The directory is automatically created if it doesn't exist.
 - Statistics collection has minimal overhead (< 1ms per character)
 - Database uses SQLite with bundled static compilation for reliability
 - Indexes ensure fast queries even with large datasets
+- Real-time recording during typing with batch flush at training completion
+- Graceful error handling - database failures don't interrupt typing experience
 
 ## Technical Implementation
 
@@ -103,8 +119,12 @@ The timing mechanism works as follows:
 3. **Character Processing**: `thok.write(char)` processes the character and:
    - Calculates time difference from start to now
    - Creates a `CharStat` record with all relevant data
-   - Stores the record in the SQLite database
+   - Stores the record in the SQLite database immediately
    - Resets the timer for the next character
+4. **Training Completion**: `thok.calc_results()` is called which:
+   - Processes all WPM and accuracy calculations
+   - Calls `flush_char_stats()` to ensure all data is committed
+   - Saves session summary to CSV log
 
 ### Error Handling
 

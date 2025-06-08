@@ -71,8 +71,15 @@ impl StatsDb {
 
     /// Get the database file path under $HOME/.local/state/thokr
     fn get_db_path() -> Option<PathBuf> {
-        if let Some(proj_dirs) = ProjectDirs::from("", "", "thokr") {
-            // Use data_local_dir for .local/state equivalent
+        // Try to use the XDG-compliant ~/.local/state directory first
+        if let Ok(home) = std::env::var("HOME") {
+            let state_dir = PathBuf::from(home)
+                .join(".local")
+                .join("state")
+                .join("thokr");
+            Some(state_dir.join("stats.db"))
+        } else if let Some(proj_dirs) = ProjectDirs::from("", "", "thokr") {
+            // Fallback to system-specific directory
             let state_dir = proj_dirs.data_local_dir();
             Some(state_dir.join("stats.db"))
         } else {
@@ -98,6 +105,39 @@ impl StatsDb {
             ],
         )?;
 
+        Ok(())
+    }
+
+    /// Flush any pending writes to ensure data is committed to disk
+    pub fn flush(&self) -> Result<()> {
+        // SQLite automatically commits after each INSERT unless in a transaction
+        // This is mostly a no-op for our use case, but provides a consistent API
+        Ok(())
+    }
+
+    /// Record multiple character statistics in a batch transaction
+    pub fn record_char_stats_batch(&mut self, stats: &[CharStat]) -> Result<()> {
+        let tx = self.conn.transaction()?;
+        
+        for stat in stats {
+            tx.execute(
+                r#"
+                INSERT INTO character_stats 
+                (character, time_to_press_ms, was_correct, timestamp, context_before, context_after)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                "#,
+                params![
+                    stat.character.to_string(),
+                    stat.time_to_press_ms,
+                    stat.was_correct,
+                    stat.timestamp.to_rfc3339(),
+                    stat.context_before,
+                    stat.context_after,
+                ],
+            )?;
+        }
+        
+        tx.commit()?;
         Ok(())
     }
 
@@ -206,6 +246,20 @@ impl StatsDb {
     pub fn clear_all_stats(&self) -> Result<()> {
         self.conn.execute("DELETE FROM character_stats", [])?;
         Ok(())
+    }
+
+    /// Get the actual database file path being used (for debugging)
+    pub fn get_database_path() -> Option<PathBuf> {
+        Self::get_db_path()
+    }
+
+    /// Check if the database file exists on disk
+    pub fn database_exists() -> bool {
+        if let Some(path) = Self::get_db_path() {
+            path.exists()
+        } else {
+            false
+        }
     }
 }
 
@@ -427,5 +481,67 @@ mod tests {
 
         db.clear_all_stats().unwrap();
         assert_eq!(db.get_char_stats('x').unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_flush() {
+        let db = create_test_db();
+        
+        let stat = CharStat {
+            character: 'f',
+            time_to_press_ms: 120,
+            was_correct: true,
+            timestamp: Local::now(),
+            context_before: "".to_string(),
+            context_after: "oo".to_string(),
+        };
+
+        db.record_char_stat(&stat).unwrap();
+        db.flush().unwrap();
+        
+        let stats = db.get_char_stats('f').unwrap();
+        assert_eq!(stats.len(), 1);
+        assert_eq!(stats[0].character, 'f');
+    }
+
+    #[test]
+    fn test_batch_record() {
+        let mut db = create_test_db();
+        
+        let stats = vec![
+            CharStat {
+                character: 'b',
+                time_to_press_ms: 100,
+                was_correct: true,
+                timestamp: Local::now(),
+                context_before: "".to_string(),
+                context_after: "atch".to_string(),
+            },
+            CharStat {
+                character: 'a',
+                time_to_press_ms: 110,
+                was_correct: true,
+                timestamp: Local::now(),
+                context_before: "b".to_string(),
+                context_after: "tch".to_string(),
+            },
+            CharStat {
+                character: 't',
+                time_to_press_ms: 95,
+                was_correct: false,
+                timestamp: Local::now(),
+                context_before: "ba".to_string(),
+                context_after: "ch".to_string(),
+            },
+        ];
+
+        db.record_char_stats_batch(&stats).unwrap();
+        
+        assert_eq!(db.get_char_stats('b').unwrap().len(), 1);
+        assert_eq!(db.get_char_stats('a').unwrap().len(), 1);
+        assert_eq!(db.get_char_stats('t').unwrap().len(), 1);
+        
+        let miss_rate = db.get_miss_rate('t').unwrap();
+        assert_eq!(miss_rate, 100.0); // 1 out of 1 incorrect = 100%
     }
 }

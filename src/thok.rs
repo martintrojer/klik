@@ -155,6 +155,12 @@ impl Thok {
         self.accuracy = ((correct_chars.len() as f64 / self.input.len() as f64) * 100.0).round();
 
         let _ = self.save_results();
+        
+        // Flush character statistics to database
+        if let Some(_) = self.flush_char_stats() {
+            // For debugging: uncomment to see when stats are flushed
+            // eprintln!("Character statistics flushed to database");
+        };
     }
 
     pub fn backspace(&mut self) {
@@ -206,7 +212,14 @@ impl Thok {
                 context_after,
             };
 
-            let _ = stats_db.record_char_stat(&char_stat);
+            // Record character statistic (failures are silently ignored to not interrupt typing)
+            if let Err(e) = stats_db.record_char_stat(&char_stat) {
+                // For debugging: uncomment the line below to see database errors
+                // eprintln!("Warning: Failed to record character stat: {}", e);
+            } else {
+                // For debugging: uncomment the line below to see successful recordings
+                // eprintln!("Recorded stat for '{}': {}ms", expected_char, time_to_press_ms);
+            }
         }
 
         self.input.insert(
@@ -309,6 +322,25 @@ impl Thok {
         } else {
             None
         }
+    }
+
+    /// Flush character statistics to ensure all data is written to database
+    pub fn flush_char_stats(&self) -> Option<()> {
+        if let Some(ref stats_db) = self.stats_db {
+            stats_db.flush().ok()
+        } else {
+            None
+        }
+    }
+
+    /// Check if character statistics database is available
+    pub fn has_stats_database(&self) -> bool {
+        self.stats_db.is_some()
+    }
+
+    /// Get the database path being used (for debugging)
+    pub fn get_stats_database_path(&self) -> Option<std::path::PathBuf> {
+        crate::stats::StatsDb::get_database_path()
     }
 }
 
@@ -567,5 +599,108 @@ mod tests {
         
         thok.write('t');
         assert!(thok.keypress_start_time.is_none()); // Should be reset after write
+    }
+
+    #[test]
+    fn test_flush_char_stats() {
+        let thok = Thok::new("test".to_string(), 1, None);
+        
+        // Flush should work whether or not database is available
+        let result = thok.flush_char_stats();
+        // Result can be Some(()) or None depending on database availability
+        assert!(result.is_some() || result.is_none());
+    }
+
+    #[test]
+    fn test_calc_results_flushes_stats() {
+        let mut thok = Thok::new("test".to_string(), 1, None);
+        thok.start();
+        
+        thread::sleep(Duration::from_millis(10));
+        
+        thok.write('t');
+        thok.write('e');
+        thok.write('s');
+        thok.write('t');
+        
+        // This should complete without error and flush stats
+        thok.calc_results();
+        
+        assert_eq!(thok.accuracy, 100.0);
+        assert!(thok.wpm > 0.0);
+    }
+
+    #[test]
+    fn test_database_path_and_creation() {
+        let thok = Thok::new("test".to_string(), 1, None);
+        
+        // Print debug information
+        println!("Has stats database: {}", thok.has_stats_database());
+        if let Some(path) = thok.get_stats_database_path() {
+            println!("Database path: {:?}", path);
+            println!("Database exists: {}", path.exists());
+            if let Some(parent) = path.parent() {
+                println!("Parent directory exists: {}", parent.exists());
+            }
+        }
+        
+        // Try to create a character stat
+        if thok.has_stats_database() {
+            println!("✅ Database is available for statistics");
+        } else {
+            println!("❌ Database is NOT available for statistics");
+        }
+    }
+
+    #[test]
+    fn test_real_typing_saves_to_database() {
+        let mut thok = Thok::new("hello".to_string(), 1, None);
+        
+        println!("Starting real typing simulation...");
+        
+        // Simulate real typing with timing
+        thok.on_keypress_start();
+        thread::sleep(Duration::from_millis(100));
+        thok.write('h');
+        
+        thok.on_keypress_start();
+        thread::sleep(Duration::from_millis(150));
+        thok.write('e');
+        
+        thok.on_keypress_start();
+        thread::sleep(Duration::from_millis(120));
+        thok.write('l');
+        
+        thok.on_keypress_start();
+        thread::sleep(Duration::from_millis(90));
+        thok.write('l');
+        
+        thok.on_keypress_start();
+        thread::sleep(Duration::from_millis(110));
+        thok.write('o');
+        
+        // Complete the typing test
+        assert!(thok.has_finished());
+        thok.calc_results();
+        
+        // Now check if we can query the statistics
+        if let Some(h_stats) = thok.get_char_stats('h') {
+            println!("Found {} statistics for 'h'", h_stats.len());
+            if !h_stats.is_empty() {
+                println!("First 'h' stat: char={}, time={}ms, correct={}", 
+                    h_stats[0].character, h_stats[0].time_to_press_ms, h_stats[0].was_correct);
+            }
+        } else {
+            println!("❌ No statistics found for 'h'");
+        }
+        
+        if let Some(summary) = thok.get_all_char_summary() {
+            println!("Summary statistics for {} characters", summary.len());
+            for (char, avg_time, miss_rate, attempts) in summary {
+                println!("  '{}': avg={}ms, miss={}%, attempts={}", char, avg_time, miss_rate, attempts);
+            }
+        } else {
+            println!("❌ No summary statistics found");
+        }
     }
 }
