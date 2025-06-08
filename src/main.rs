@@ -1,15 +1,19 @@
-mod lang;
-mod thok;
-mod ui;
-mod util;
+pub mod lang;
+pub mod thok;
+pub mod ui;
+pub mod util;
 
 use crate::{lang::Language, thok::Thok};
-use clap::{ValueEnum, error::ErrorKind, CommandFactory, Parser};
+use clap::{error::ErrorKind, CommandFactory, Parser, ValueEnum};
 use crossterm::{
     event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     tty::IsTty,
+};
+use ratatui::{
+    backend::{Backend, CrosstermBackend},
+    Frame, Terminal,
 };
 use std::{
     error::Error,
@@ -17,10 +21,6 @@ use std::{
     sync::mpsc,
     thread,
     time::Duration,
-};
-use ratatui::{
-    backend::{Backend, CrosstermBackend},
-    Frame, Terminal,
 };
 use webbrowser::Browser;
 
@@ -52,7 +52,7 @@ pub struct Cli {
 }
 
 #[derive(Debug, Copy, Clone, ValueEnum, strum_macros::Display)]
-enum SupportedLanguage {
+pub enum SupportedLanguage {
     English,
     English1k,
     English10k,
@@ -65,13 +65,13 @@ impl SupportedLanguage {
 }
 
 #[derive(Debug)]
-struct App {
-    cli: Option<Cli>,
-    thok: Thok,
+pub struct App {
+    pub cli: Option<Cli>,
+    pub thok: Thok,
 }
 
 impl App {
-    fn new(cli: Cli) -> Self {
+    pub fn new(cli: Cli) -> Self {
         let mut count = 0;
         let prompt = if cli.prompt.is_some() {
             cli.prompt.clone().unwrap()
@@ -103,7 +103,7 @@ impl App {
         }
     }
 
-    fn reset(&mut self, new_prompt: Option<String>) {
+    pub fn reset(&mut self, new_prompt: Option<String>) {
         let cli = self.cli.clone().unwrap();
         let mut count = 0;
         let prompt = match new_prompt {
@@ -159,6 +159,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+#[derive(Debug)]
 enum ExitType {
     Restart,
     New,
@@ -308,4 +309,231 @@ fn get_thok_events(should_tick: bool) -> mpsc::Receiver<ThokEvent> {
 
 fn ui(app: &mut App, f: &mut Frame) {
     f.render_widget(&app.thok, f.area());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    #[test]
+    fn test_cli_default_values() {
+        let cli = Cli::parse_from(&["thokr"]);
+
+        assert_eq!(cli.number_of_words, 15);
+        assert_eq!(cli.number_of_sentences, None);
+        assert_eq!(cli.number_of_secs, None);
+        assert_eq!(cli.prompt, None);
+        assert!(matches!(cli.supported_language, SupportedLanguage::English));
+    }
+
+    #[test]
+    fn test_cli_number_of_words() {
+        let cli = Cli::parse_from(&["thokr", "-w", "25"]);
+        assert_eq!(cli.number_of_words, 25);
+
+        let cli = Cli::parse_from(&["thokr", "--number-of-words", "50"]);
+        assert_eq!(cli.number_of_words, 50);
+    }
+
+    #[test]
+    fn test_cli_number_of_sentences() {
+        let cli = Cli::parse_from(&["thokr", "-f", "3"]);
+        assert_eq!(cli.number_of_sentences, Some(3));
+
+        let cli = Cli::parse_from(&["thokr", "--full-sentences", "5"]);
+        assert_eq!(cli.number_of_sentences, Some(5));
+    }
+
+    #[test]
+    fn test_cli_number_of_secs() {
+        let cli = Cli::parse_from(&["thokr", "-s", "60"]);
+        assert_eq!(cli.number_of_secs, Some(60));
+
+        let cli = Cli::parse_from(&["thokr", "--number-of-secs", "120"]);
+        assert_eq!(cli.number_of_secs, Some(120));
+    }
+
+    #[test]
+    fn test_cli_custom_prompt() {
+        let cli = Cli::parse_from(&["thokr", "-p", "hello world"]);
+        assert_eq!(cli.prompt, Some("hello world".to_string()));
+
+        let cli = Cli::parse_from(&["thokr", "--prompt", "custom text"]);
+        assert_eq!(cli.prompt, Some("custom text".to_string()));
+    }
+
+    #[test]
+    fn test_cli_supported_language() {
+        let cli = Cli::parse_from(&["thokr", "-l", "english"]);
+        assert!(matches!(cli.supported_language, SupportedLanguage::English));
+
+        let cli = Cli::parse_from(&["thokr", "--supported-language", "english1k"]);
+        assert!(matches!(
+            cli.supported_language,
+            SupportedLanguage::English1k
+        ));
+
+        let cli = Cli::parse_from(&["thokr", "--supported-language", "english10k"]);
+        assert!(matches!(
+            cli.supported_language,
+            SupportedLanguage::English10k
+        ));
+    }
+
+    #[test]
+    fn test_supported_language_as_lang() {
+        let english = SupportedLanguage::English.as_lang();
+        assert_eq!(english.name, "english");
+
+        let english1k = SupportedLanguage::English1k.as_lang();
+        assert_eq!(english1k.name, "english_1k");
+
+        let english10k = SupportedLanguage::English10k.as_lang();
+        assert_eq!(english10k.name, "english_10k");
+    }
+
+    #[test]
+    fn test_supported_language_display() {
+        assert_eq!(SupportedLanguage::English.to_string(), "English");
+        assert_eq!(SupportedLanguage::English1k.to_string(), "English1k");
+        assert_eq!(SupportedLanguage::English10k.to_string(), "English10k");
+    }
+
+    #[test]
+    fn test_app_new_with_words() {
+        let cli = Cli {
+            number_of_words: 10,
+            number_of_sentences: None,
+            number_of_secs: None,
+            prompt: None,
+            supported_language: SupportedLanguage::English,
+        };
+
+        let app = App::new(cli.clone());
+
+        assert_eq!(app.thok.number_of_words, 10);
+        assert_eq!(app.thok.number_of_secs, None);
+        assert!(app.cli.is_some());
+        assert!(!app.thok.prompt.is_empty());
+    }
+
+    #[test]
+    fn test_app_new_with_custom_prompt() {
+        let cli = Cli {
+            number_of_words: 10,
+            number_of_sentences: None,
+            number_of_secs: None,
+            prompt: Some("custom test prompt".to_string()),
+            supported_language: SupportedLanguage::English,
+        };
+
+        let app = App::new(cli);
+
+        assert_eq!(app.thok.prompt, "custom test prompt");
+        assert_eq!(app.thok.number_of_words, 10);
+    }
+
+    #[test]
+    fn test_app_new_with_sentences() {
+        let cli = Cli {
+            number_of_words: 10,
+            number_of_sentences: Some(2),
+            number_of_secs: None,
+            prompt: None,
+            supported_language: SupportedLanguage::English,
+        };
+
+        let app = App::new(cli);
+
+        assert!(app.thok.number_of_words > 0);
+        assert!(!app.thok.prompt.is_empty());
+    }
+
+    #[test]
+    fn test_app_new_with_time_limit() {
+        let cli = Cli {
+            number_of_words: 10,
+            number_of_sentences: None,
+            number_of_secs: Some(60),
+            prompt: None,
+            supported_language: SupportedLanguage::English,
+        };
+
+        let app = App::new(cli);
+
+        assert_eq!(app.thok.number_of_secs, Some(60.0));
+        assert_eq!(app.thok.seconds_remaining, Some(60.0));
+    }
+
+    #[test]
+    fn test_app_reset_with_new_prompt() {
+        let cli = Cli {
+            number_of_words: 5,
+            number_of_sentences: None,
+            number_of_secs: None,
+            prompt: None,
+            supported_language: SupportedLanguage::English,
+        };
+
+        let mut app = App::new(cli);
+        let original_prompt = app.thok.prompt.clone();
+
+        app.reset(Some("new test prompt".to_string()));
+
+        assert_eq!(app.thok.prompt, "new test prompt");
+        assert_ne!(app.thok.prompt, original_prompt);
+        assert_eq!(app.thok.input.len(), 0);
+        assert_eq!(app.thok.cursor_pos, 0);
+    }
+
+    #[test]
+    fn test_app_reset_without_new_prompt() {
+        let cli = Cli {
+            number_of_words: 5,
+            number_of_sentences: None,
+            number_of_secs: None,
+            prompt: None,
+            supported_language: SupportedLanguage::English,
+        };
+
+        let mut app = App::new(cli);
+        let original_prompt = app.thok.prompt.clone();
+
+        app.thok.write('t');
+        app.thok.write('e');
+        assert_eq!(app.thok.input.len(), 2);
+
+        app.reset(None);
+
+        assert_ne!(app.thok.prompt, original_prompt);
+        assert_eq!(app.thok.input.len(), 0);
+        assert_eq!(app.thok.cursor_pos, 0);
+    }
+
+    #[test]
+    fn test_thok_event_clone() {
+        let key_event = KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE);
+        let thok_event = ThokEvent::Key(key_event);
+        let cloned_event = thok_event.clone();
+
+        match (thok_event, cloned_event) {
+            (ThokEvent::Key(original), ThokEvent::Key(cloned)) => {
+                assert_eq!(original.code, cloned.code);
+                assert_eq!(original.modifiers, cloned.modifiers);
+            }
+            _ => panic!("Events should match"),
+        }
+    }
+
+    #[test]
+    fn test_exit_type_debug() {
+        let restart = ExitType::Restart;
+        let new = ExitType::New;
+        let quit = ExitType::Quit;
+
+        assert_eq!(format!("{:?}", restart), "Restart");
+        assert_eq!(format!("{:?}", new), "New");
+        assert_eq!(format!("{:?}", quit), "Quit");
+    }
 }

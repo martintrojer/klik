@@ -235,3 +235,223 @@ impl Thok {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn test_outcome_equality() {
+        assert_eq!(Outcome::Correct, Outcome::Correct);
+        assert_eq!(Outcome::Incorrect, Outcome::Incorrect);
+        assert_ne!(Outcome::Correct, Outcome::Incorrect);
+    }
+
+    #[test]
+    fn test_input_creation() {
+        let timestamp = SystemTime::now();
+        let input = Input {
+            char: 'a',
+            outcome: Outcome::Correct,
+            timestamp,
+        };
+
+        assert_eq!(input.char, 'a');
+        assert_eq!(input.outcome, Outcome::Correct);
+        assert_eq!(input.timestamp, timestamp);
+    }
+
+    #[test]
+    fn test_thok_new() {
+        let thok = Thok::new("hello world".to_string(), 2, None);
+
+        assert_eq!(thok.prompt, "hello world");
+        assert_eq!(thok.number_of_words, 2);
+        assert_eq!(thok.number_of_secs, None);
+        assert_eq!(thok.input.len(), 0);
+        assert_eq!(thok.cursor_pos, 0);
+        assert_eq!(thok.wpm, 0.0);
+        assert_eq!(thok.accuracy, 0.0);
+        assert_eq!(thok.std_dev, 0.0);
+        assert!(!thok.has_started());
+        assert!(!thok.has_finished());
+    }
+
+    #[test]
+    fn test_thok_new_with_time_limit() {
+        let thok = Thok::new("test".to_string(), 1, Some(30.0));
+
+        assert_eq!(thok.number_of_secs, Some(30.0));
+        assert_eq!(thok.seconds_remaining, Some(30.0));
+    }
+
+    #[test]
+    fn test_get_expected_char() {
+        let thok = Thok::new("hello".to_string(), 1, None);
+
+        assert_eq!(thok.get_expected_char(0), 'h');
+        assert_eq!(thok.get_expected_char(1), 'e');
+        assert_eq!(thok.get_expected_char(4), 'o');
+    }
+
+    #[test]
+    fn test_write_correct_char() {
+        let mut thok = Thok::new("test".to_string(), 1, None);
+
+        thok.write('t');
+
+        assert_eq!(thok.input.len(), 1);
+        assert_eq!(thok.input[0].char, 't');
+        assert_eq!(thok.input[0].outcome, Outcome::Correct);
+        assert_eq!(thok.cursor_pos, 1);
+        assert!(thok.has_started());
+    }
+
+    #[test]
+    fn test_write_incorrect_char() {
+        let mut thok = Thok::new("test".to_string(), 1, None);
+
+        thok.write('x');
+
+        assert_eq!(thok.input.len(), 1);
+        assert_eq!(thok.input[0].char, 'x');
+        assert_eq!(thok.input[0].outcome, Outcome::Incorrect);
+        assert_eq!(thok.cursor_pos, 1);
+    }
+
+    #[test]
+    fn test_backspace() {
+        let mut thok = Thok::new("test".to_string(), 1, None);
+
+        thok.write('t');
+        thok.write('e');
+        assert_eq!(thok.input.len(), 2);
+        assert_eq!(thok.cursor_pos, 2);
+
+        thok.backspace();
+        assert_eq!(thok.input.len(), 1);
+        assert_eq!(thok.cursor_pos, 1);
+
+        thok.backspace();
+        assert_eq!(thok.input.len(), 0);
+        assert_eq!(thok.cursor_pos, 0);
+    }
+
+    #[test]
+    fn test_backspace_at_start() {
+        let mut thok = Thok::new("test".to_string(), 1, None);
+
+        thok.backspace();
+        assert_eq!(thok.input.len(), 0);
+        assert_eq!(thok.cursor_pos, 0);
+    }
+
+    #[test]
+    fn test_increment_cursor() {
+        let mut thok = Thok::new("test".to_string(), 1, None);
+        thok.write('t');
+
+        let initial_pos = thok.cursor_pos;
+        thok.increment_cursor();
+
+        assert_eq!(thok.cursor_pos, initial_pos);
+    }
+
+    #[test]
+    fn test_decrement_cursor() {
+        let mut thok = Thok::new("test".to_string(), 1, None);
+        thok.write('t');
+
+        let initial_pos = thok.cursor_pos;
+        thok.decrement_cursor();
+
+        assert_eq!(thok.cursor_pos, initial_pos - 1);
+    }
+
+    #[test]
+    fn test_has_finished_by_completion() {
+        let mut thok = Thok::new("hi".to_string(), 1, None);
+
+        assert!(!thok.has_finished());
+
+        thok.write('h');
+        assert!(!thok.has_finished());
+
+        thok.write('i');
+        assert!(thok.has_finished());
+    }
+
+    #[test]
+    fn test_has_finished_by_time() {
+        let mut thok = Thok::new("test".to_string(), 1, Some(1.0));
+
+        assert!(!thok.has_finished());
+
+        thok.seconds_remaining = Some(0.0);
+        assert!(thok.has_finished());
+
+        thok.seconds_remaining = Some(-1.0);
+        assert!(thok.has_finished());
+    }
+
+    #[test]
+    fn test_on_tick() {
+        let mut thok = Thok::new("test".to_string(), 1, Some(10.0));
+        let initial_time = thok.seconds_remaining.unwrap();
+
+        thok.on_tick();
+
+        let expected_time = initial_time - (TICK_RATE_MS as f64 / 1000.0);
+        assert_eq!(thok.seconds_remaining.unwrap(), expected_time);
+    }
+
+    #[test]
+    fn test_calc_results_basic() {
+        let mut thok = Thok::new("test".to_string(), 1, None);
+        thok.start();
+
+        thread::sleep(Duration::from_millis(100));
+
+        thok.write('t');
+        thok.write('e');
+        thok.write('s');
+        thok.write('t');
+
+        thok.calc_results();
+
+        assert_eq!(thok.accuracy, 100.0);
+        assert!(thok.wpm > 0.0);
+    }
+
+    #[test]
+    fn test_calc_results_with_errors() {
+        let mut thok = Thok::new("test".to_string(), 1, None);
+        thok.start();
+
+        thread::sleep(Duration::from_millis(100));
+
+        thok.write('t');
+        thok.write('x');
+        thok.write('s');
+        thok.write('t');
+
+        thok.calc_results();
+
+        assert_eq!(thok.accuracy, 75.0);
+        assert!(thok.wpm >= 0.0);
+    }
+
+    #[test]
+    fn test_calc_results_empty_input() {
+        let mut thok = Thok::new("test".to_string(), 1, None);
+        thok.start();
+
+        thok.calc_results();
+
+        assert_eq!(thok.wpm, 0.0);
+        assert_eq!(thok.std_dev, 0.0);
+    }
+
+    use std::thread;
+}

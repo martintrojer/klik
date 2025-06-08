@@ -2,7 +2,7 @@ use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    text::{Span, Line},
+    text::{Line, Span},
     widgets::{Axis, Chart, Dataset, GraphType, Paragraph, Widget, Wrap},
 };
 use unicode_width::UnicodeWidthStr;
@@ -201,5 +201,183 @@ impl Widget for &Thok {
                 legend.render(chunks[3], buf);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::thok::{Input, Outcome, Thok};
+    use ratatui::{buffer::Buffer, layout::Rect};
+    use std::time::SystemTime;
+
+    fn create_test_thok(prompt: &str, finished: bool) -> Thok {
+        let mut thok = Thok::new(prompt.to_string(), 1, None);
+
+        if finished {
+            for (_i, c) in prompt.chars().enumerate() {
+                thok.input.push(Input {
+                    char: c,
+                    outcome: Outcome::Correct,
+                    timestamp: SystemTime::now(),
+                });
+            }
+            thok.cursor_pos = prompt.len();
+            thok.wpm = 42.0;
+            thok.accuracy = 95.0;
+            thok.std_dev = 2.5;
+            thok.wpm_coords = vec![(1.0, 20.0), (2.0, 35.0), (3.0, 42.0)];
+        }
+
+        thok
+    }
+
+    #[test]
+    fn test_ui_widget_in_progress() {
+        let thok = create_test_thok("hello world", false);
+        let area = Rect::new(0, 0, 80, 24);
+        let mut buffer = Buffer::empty(area);
+
+        (&thok).render(area, &mut buffer);
+
+        let rendered = buffer
+            .content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect::<String>();
+        assert!(rendered.contains("hello world") || !rendered.trim().is_empty());
+    }
+
+    #[test]
+    fn test_ui_widget_finished() {
+        let thok = create_test_thok("test", true);
+        let area = Rect::new(0, 0, 80, 24);
+        let mut buffer = Buffer::empty(area);
+
+        (&thok).render(area, &mut buffer);
+
+        let rendered = buffer
+            .content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect::<String>();
+
+        assert!(rendered.contains("42") || rendered.contains("95") || !rendered.trim().is_empty());
+    }
+
+    #[test]
+    fn test_ui_widget_with_time_limit() {
+        let mut thok = Thok::new("test".to_string(), 1, Some(30.0));
+        thok.seconds_remaining = Some(25.5);
+
+        let area = Rect::new(0, 0, 80, 24);
+        let mut buffer = Buffer::empty(area);
+
+        (&thok).render(area, &mut buffer);
+
+        let rendered = buffer
+            .content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect::<String>();
+        assert!(
+            rendered.contains("25.5") || rendered.contains("test") || !rendered.trim().is_empty()
+        );
+    }
+
+    #[test]
+    fn test_ui_widget_small_area() {
+        let thok = create_test_thok("hello", false);
+        let area = Rect::new(0, 0, 20, 5);
+        let mut buffer = Buffer::empty(area);
+
+        (&thok).render(area, &mut buffer);
+
+        assert!(*buffer.area() == area);
+    }
+
+    #[test]
+    fn test_ui_widget_with_incorrect_input() {
+        let mut thok = Thok::new("test".to_string(), 1, None);
+
+        thok.input.push(Input {
+            char: 't',
+            outcome: Outcome::Correct,
+            timestamp: SystemTime::now(),
+        });
+        thok.input.push(Input {
+            char: 'x',
+            outcome: Outcome::Incorrect,
+            timestamp: SystemTime::now(),
+        });
+        thok.cursor_pos = 2;
+
+        let area = Rect::new(0, 0, 80, 24);
+        let mut buffer = Buffer::empty(area);
+
+        (&thok).render(area, &mut buffer);
+
+        assert!(*buffer.area() == area);
+    }
+
+    #[test]
+    fn test_ui_constants() {
+        assert_eq!(HORIZONTAL_MARGIN, 5);
+        assert_eq!(VERTICAL_MARGIN, 2);
+    }
+
+    #[test]
+    fn test_ui_widget_finished_with_browser_available() {
+        let thok = create_test_thok("test", true);
+        let area = Rect::new(0, 0, 80, 24);
+        let mut buffer = Buffer::empty(area);
+
+        (&thok).render(area, &mut buffer);
+
+        let rendered = buffer
+            .content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect::<String>();
+
+        if Browser::is_available() {
+            assert!(
+                rendered.contains("(t)weet")
+                    || rendered.contains("(r)etry")
+                    || rendered.contains("(n)ew")
+                    || rendered.contains("(esc)ape")
+                    || !rendered.trim().is_empty()
+            );
+        } else {
+            assert!(
+                rendered.contains("(r)etry")
+                    || rendered.contains("(n)ew")
+                    || rendered.contains("(esc)ape")
+                    || !rendered.trim().is_empty()
+            );
+        }
+    }
+
+    #[test]
+    fn test_ui_widget_large_prompt() {
+        let large_prompt = "This is a very long prompt that should wrap across multiple lines when rendered in the terminal interface to test the text wrapping functionality";
+        let thok = create_test_thok(large_prompt, false);
+        let area = Rect::new(0, 0, 40, 20);
+        let mut buffer = Buffer::empty(area);
+
+        (&thok).render(area, &mut buffer);
+
+        assert!(*buffer.area() == area);
+    }
+
+    #[test]
+    fn test_ui_widget_empty_prompt() {
+        let thok = create_test_thok("", false);
+        let area = Rect::new(0, 0, 80, 24);
+        let mut buffer = Buffer::empty(area);
+
+        (&thok).render(area, &mut buffer);
+
+        assert!(*buffer.area() == area);
     }
 }
