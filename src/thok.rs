@@ -205,7 +205,7 @@ impl Thok {
     pub fn on_keypress_start(&mut self) {
         self.keypress_start_time = Some(SystemTime::now());
     }
-    
+
     /// Alternative timing method that measures inter-keystroke intervals
     pub fn calculate_inter_key_time(&self, now: SystemTime) -> u64 {
         if let Some(last_input) = self.input.last() {
@@ -243,9 +243,9 @@ impl Thok {
         } else {
             0
         };
-        
+
         let inter_key_time = self.calculate_inter_key_time(now);
-        
+
         // Prioritize inter-keystroke timing as it's more meaningful for typing performance
         let time_to_press_ms = if inter_key_time > 0 {
             inter_key_time
@@ -269,7 +269,7 @@ impl Thok {
         };
 
         // Debug logging (uncomment to debug timing issues)
-        // eprintln!("Char '{}': keypress={}ms, inter_key={}ms, final={}ms", 
+        // eprintln!("Char '{}': keypress={}ms, inter_key={}ms, final={}ms",
         //     expected_char, keypress_time, inter_key_time, time_to_press_ms);
 
         // Record character statistics if database is available
@@ -862,12 +862,17 @@ mod tests {
                     char, avg_time, miss_rate, attempts
                 );
             }
-            
+
             // Debug: Check specifically for our characters
             println!("\nDEBUG: Checking specific characters from our test:");
             for target_char in ['h', 'e', 'l', 'o'] {
-                if let Some((_, avg_time, _, attempts)) = summary.iter().find(|(c, _, _, _)| *c == target_char) {
-                    println!("  Character '{}': avg_time={}ms, attempts={}", target_char, avg_time, attempts);
+                if let Some((_, avg_time, _, attempts)) =
+                    summary.iter().find(|(c, _, _, _)| *c == target_char)
+                {
+                    println!(
+                        "  Character '{}': avg_time={}ms, attempts={}",
+                        target_char, avg_time, attempts
+                    );
                 } else {
                     println!("  Character '{}': NOT FOUND in summary", target_char);
                 }
@@ -1258,10 +1263,17 @@ mod tests {
             println!("Inter-keystroke timing results:");
             for (char, avg_time, miss_rate, attempts) in &summary {
                 if ['h', 'e', 'l', 'o'].contains(char) {
-                    println!("  '{}': avg={}ms, miss={}%, attempts={}", char, avg_time, miss_rate, attempts);
+                    println!(
+                        "  '{}': avg={}ms, miss={}%, attempts={}",
+                        char, avg_time, miss_rate, attempts
+                    );
                     // The timing should be meaningful (not 0)
-                    assert!(*avg_time > 0.0, 
-                        "Character '{}' has zero timing: {}ms", char, avg_time);
+                    assert!(
+                        *avg_time > 0.0,
+                        "Character '{}' has zero timing: {}ms",
+                        char,
+                        avg_time
+                    );
                 }
             }
         } else {
@@ -1275,7 +1287,7 @@ mod tests {
         let mut thok = Thok::new("hello world test".to_string(), 3, None, false);
 
         println!("Testing fresh database with realistic typing...");
-        
+
         // Clear any existing stats for this test
         if let Some(ref mut stats_db) = thok.stats_db {
             let _ = stats_db.clear_all_stats();
@@ -1283,8 +1295,10 @@ mod tests {
 
         // Simulate realistic typing with varying inter-keystroke intervals
         let message = "hello world test";
-        let timings = vec![200, 150, 180, 120, 250, 300, 180, 160, 140, 170, 200, 160, 220, 180, 190, 210]; // ms
-        
+        let timings = [
+            200, 150, 180, 120, 250, 300, 180, 160, 140, 170, 200, 160, 220, 180, 190, 210,
+        ]; // ms
+
         for (i, c) in message.chars().enumerate() {
             if i > 0 && i < timings.len() {
                 thread::sleep(Duration::from_millis(timings[i]));
@@ -1297,20 +1311,29 @@ mod tests {
 
         if let Some(summary) = thok.get_all_char_summary() {
             println!("Fresh database timing results:");
-            
+
             let mut has_meaningful_timing = false;
             for (char, avg_time, miss_rate, attempts) in &summary {
-                let char_display = if *char == ' ' { "SPACE".to_string() } else { char.to_string() };
-                println!("  '{}': avg={}ms, miss={}%, attempts={}", 
-                    char_display, avg_time, miss_rate, attempts);
-                
+                let char_display = if *char == ' ' {
+                    "SPACE".to_string()
+                } else {
+                    char.to_string()
+                };
+                println!(
+                    "  '{}': avg={}ms, miss={}%, attempts={}",
+                    char_display, avg_time, miss_rate, attempts
+                );
+
                 // Check that timing data is meaningful (not 0)
                 if *avg_time > 0.0 {
                     has_meaningful_timing = true;
                 }
             }
-            
-            assert!(has_meaningful_timing, "No characters have meaningful timing data!");
+
+            assert!(
+                has_meaningful_timing,
+                "No characters have meaningful timing data!"
+            );
             println!("✅ Timing fix verified - characters show realistic timing data");
         } else {
             panic!("❌ No summary statistics found for fresh database test");
