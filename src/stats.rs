@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::SystemTime;
 
-use crate::lang::CharacterDifficulty;
+use crate::language::CharacterDifficulty;
 
 /// Character-level statistics for tracking typing performance (used during session)
 #[derive(Debug, Clone)]
