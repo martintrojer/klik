@@ -1,10 +1,10 @@
 # Test Coverage Summary
 
-Generated: Mon  9 Jun 2025 13:53:28 BST
+Generated: Mon  9 Jun 2025 18:37:17 BST
 
 ## Overall Metrics
-- **Coverage**: 65.17%
-- **Lines Covered**: 683/1048
+- **Coverage**: 63.93%
+- **Lines Covered**: 700/1095
 - **Total Tests**: 66 tests
 
 ## Module Breakdown
@@ -35,6 +35,6 @@ Generated: Mon  9 Jun 2025 13:53:28 BST
 4. File I/O error path coverage
 
 ## Quality Assessment
-The 65.17% coverage represents high-quality, focused testing with excellent
+The 63.93% coverage represents high-quality, focused testing with excellent
 coverage of business-critical code paths. The lower coverage in main.rs is
 expected due to terminal/UI infrastructure code that's harder to unit test.

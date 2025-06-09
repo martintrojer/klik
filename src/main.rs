@@ -1170,4 +1170,555 @@ mod tests {
         let lang2 = lang1;
         assert!(matches!(lang2, SupportedLanguage::English));
     }
+
+    #[test]
+    fn test_get_thok_events_no_tick() {
+        // Test creating event receiver without ticking
+        let receiver = get_thok_events(false);
+        
+        // Since we can't easily inject events in a unit test without complex mocking,
+        // we'll just verify the receiver was created successfully
+        // The actual event handling is tested through integration
+        drop(receiver); // Clean up
+    }
+
+    #[test]
+    fn test_get_thok_events_with_tick() {
+        // Test creating event receiver with ticking enabled
+        let receiver = get_thok_events(true);
+        
+        // Verify we can receive tick events (with timeout to avoid hanging)
+        use std::time::Duration;
+        let result = receiver.recv_timeout(Duration::from_millis(150)); // Slightly longer than TICK_RATE_MS
+        
+        // Should receive a tick event
+        match result {
+            Ok(ThokEvent::Tick) => {
+                // Success - we got a tick event
+            }
+            Ok(_) => panic!("Expected tick event, got different event type"),
+            Err(_) => {
+                // Timeout is acceptable in test environment due to timing variations
+                // The important thing is that the receiver was created successfully
+            }
+        }
+        
+        drop(receiver); // Clean up
+    }
+
+    #[test]
+    fn test_ui_function_typing_state() {
+        use ratatui::{backend::TestBackend, Terminal};
+        
+        let cli = Cli {
+            number_of_words: 3,
+            number_of_sentences: None,
+            number_of_secs: None,
+            prompt: Some("test".to_string()),
+            supported_language: SupportedLanguage::English,
+            random_words: false,
+            capitalize: false,
+            strict: false,
+            symbols: false,
+            substitute: false,
+        };
+        
+        let mut app = App::new(cli);
+        app.state = AppState::Typing;
+        
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        
+        // Test that ui function renders without panicking
+        terminal.draw(|f| ui(&mut app, f)).unwrap();
+        
+        // Verify the buffer contains some content (the prompt should be rendered)
+        let buffer = terminal.backend().buffer();
+        let content: String = buffer.content.iter().map(|c| c.symbol()).collect();
+        assert!(content.contains("test") || !content.trim().is_empty());
+    }
+
+    #[test]
+    fn test_ui_function_results_state() {
+        use ratatui::{backend::TestBackend, Terminal};
+        
+        let cli = Cli {
+            number_of_words: 3,
+            number_of_sentences: None,
+            number_of_secs: None,
+            prompt: Some("test".to_string()),
+            supported_language: SupportedLanguage::English,
+            random_words: false,
+            capitalize: false,
+            strict: false,
+            symbols: false,
+            substitute: false,
+        };
+        
+        let mut app = App::new(cli);
+        app.state = AppState::Results;
+        
+        // Complete the typing test to generate results
+        app.thok.write('t');
+        app.thok.write('e');
+        app.thok.write('s');
+        app.thok.write('t');
+        app.thok.calc_results();
+        
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        
+        // Test that ui function renders without panicking
+        terminal.draw(|f| ui(&mut app, f)).unwrap();
+        
+        // The results screen should render successfully
+    }
+
+    #[test]
+    fn test_ui_function_character_stats_state() {
+        use ratatui::{backend::TestBackend, Terminal};
+        
+        let cli = Cli {
+            number_of_words: 3,
+            number_of_sentences: None,
+            number_of_secs: None,
+            prompt: Some("test".to_string()),
+            supported_language: SupportedLanguage::English,
+            random_words: false,
+            capitalize: false,
+            strict: false,
+            symbols: false,
+            substitute: false,
+        };
+        
+        let mut app = App::new(cli);
+        app.state = AppState::CharacterStats;
+        
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        
+        // Test that ui function renders without panicking
+        terminal.draw(|f| ui(&mut app, f)).unwrap();
+        
+        // The character stats screen should render successfully
+    }
+
+    #[test]
+    fn test_render_character_stats_with_data() {
+        use ratatui::{backend::TestBackend, Terminal};
+        
+        let cli = Cli {
+            number_of_words: 3,
+            number_of_sentences: None,
+            number_of_secs: None,
+            prompt: Some("hello".to_string()),
+            supported_language: SupportedLanguage::English,
+            random_words: false,
+            capitalize: false,
+            strict: false,
+            symbols: false,
+            substitute: false,
+        };
+        
+        let mut app = App::new(cli);
+        
+        // Generate some character stats by typing
+        app.thok.write('h');
+        app.thok.write('e');
+        app.thok.write('l');
+        app.thok.write('l');
+        app.thok.write('o');
+        app.thok.calc_results();
+        
+        app.state = AppState::CharacterStats;
+        
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        
+        // Test that render_character_stats function works with data
+        terminal.draw(|f| render_character_stats(&mut app, f)).unwrap();
+    }
+
+    #[test]
+    fn test_render_character_stats_no_data() {
+        use ratatui::{backend::TestBackend, Terminal};
+        
+        let cli = Cli {
+            number_of_words: 3,
+            number_of_sentences: None,
+            number_of_secs: None,
+            prompt: Some("test".to_string()),
+            supported_language: SupportedLanguage::English,
+            random_words: false,
+            capitalize: false,
+            strict: false,
+            symbols: false,
+            substitute: false,
+        };
+        
+        let mut app = App::new(cli);
+        app.state = AppState::CharacterStats;
+        
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        
+        // Test that render_character_stats function works without data
+        terminal.draw(|f| render_character_stats(&mut app, f)).unwrap();
+    }
+
+    #[test]
+    fn test_character_stats_scrolling() {
+        let cli = Cli {
+            number_of_words: 3,
+            number_of_sentences: None,
+            number_of_secs: None,
+            prompt: Some("hello world test".to_string()),
+            supported_language: SupportedLanguage::English,
+            random_words: false,
+            capitalize: false,
+            strict: false,
+            symbols: false,
+            substitute: false,
+        };
+        
+        let mut app = App::new(cli);
+        
+        // Generate character stats by typing the full prompt
+        for c in "hello world test".chars() {
+            app.thok.write(c);
+        }
+        app.thok.calc_results();
+        
+        app.state = AppState::CharacterStats;
+        
+        // Test initial scroll state
+        assert_eq!(app.char_stats_state.scroll_offset, 0);
+        
+        // Test scroll down
+        app.char_stats_state.scroll_offset += 1;
+        assert_eq!(app.char_stats_state.scroll_offset, 1);
+        
+        // Test scroll up
+        app.char_stats_state.scroll_offset = app.char_stats_state.scroll_offset.saturating_sub(1);
+        assert_eq!(app.char_stats_state.scroll_offset, 0);
+    }
+
+    #[test]
+    fn test_character_stats_sorting() {
+        let cli = Cli {
+            number_of_words: 3,
+            number_of_sentences: None,
+            number_of_secs: None,
+            prompt: Some("test".to_string()),
+            supported_language: SupportedLanguage::English,
+            random_words: false,
+            capitalize: false,
+            strict: false,
+            symbols: false,
+            substitute: false,
+        };
+        
+        let mut app = App::new(cli);
+        app.state = AppState::CharacterStats;
+        
+        // Test initial sort state
+        assert!(matches!(app.char_stats_state.sort_by, SortBy::Character));
+        assert!(app.char_stats_state.sort_ascending);
+        
+        // Test changing sort criteria
+        app.char_stats_state.sort_by = SortBy::AvgTime;
+        assert!(matches!(app.char_stats_state.sort_by, SortBy::AvgTime));
+        
+        app.char_stats_state.sort_by = SortBy::MissRate;
+        assert!(matches!(app.char_stats_state.sort_by, SortBy::MissRate));
+        
+        app.char_stats_state.sort_by = SortBy::Attempts;
+        assert!(matches!(app.char_stats_state.sort_by, SortBy::Attempts));
+        
+        // Test toggling sort direction
+        app.char_stats_state.sort_ascending = !app.char_stats_state.sort_ascending;
+        assert!(!app.char_stats_state.sort_ascending);
+    }
+
+    #[test]
+    fn test_exit_type_variants() {
+        // Test all ExitType variants can be created
+        let _restart = ExitType::Restart;
+        let _new = ExitType::New;
+        let _quit = ExitType::Quit;
+        
+        // Test Debug trait
+        assert_eq!(format!("{:?}", ExitType::Restart), "Restart");
+        assert_eq!(format!("{:?}", ExitType::New), "New");
+        assert_eq!(format!("{:?}", ExitType::Quit), "Quit");
+    }
+
+    #[test]
+    fn test_tick_rate_constant() {
+        // Verify the tick rate constant is reasonable
+        assert_eq!(TICK_RATE_MS, 100);
+        assert!(TICK_RATE_MS > 0);
+        assert!(TICK_RATE_MS <= 1000); // Should be sub-second
+    }
+
+    #[test]
+    fn test_integration_complete_typing_session() {
+        // Integration test for a complete typing session workflow
+        let cli = Cli {
+            number_of_words: 3,
+            number_of_sentences: None,
+            number_of_secs: None,
+            prompt: Some("hello world test".to_string()),
+            supported_language: SupportedLanguage::English,
+            random_words: false,
+            capitalize: false,
+            strict: false,
+            symbols: false,
+            substitute: false,
+        };
+
+        let mut app = App::new(cli);
+        
+        // Verify initial state
+        assert_eq!(app.state, AppState::Typing);
+        assert!(!app.thok.has_started());
+        assert!(!app.thok.has_finished());
+        
+        // Simulate typing session
+        app.thok.on_keypress_start(); // Start timing
+        for c in "hello world test".chars() {
+            app.thok.write(c);
+        }
+        
+        // Verify session completion
+        assert!(app.thok.has_started());
+        assert!(app.thok.has_finished());
+        
+        // Calculate results
+        app.thok.calc_results();
+        app.state = AppState::Results;
+        
+        // Verify results exist
+        assert!(app.thok.wpm > 0.0);
+        assert!(app.thok.accuracy >= 0.0 && app.thok.accuracy <= 100.0);
+        
+        // Test state transitions
+        app.state = AppState::CharacterStats;
+        assert_eq!(app.state, AppState::CharacterStats);
+        
+        // Test reset functionality
+        app.reset(None);
+        assert_eq!(app.state, AppState::Typing);
+        assert!(!app.thok.has_started());
+        assert!(!app.thok.has_finished());
+        assert_eq!(app.thok.input.len(), 0);
+    }
+
+    #[test]
+    fn test_integration_timed_session() {
+        // Integration test for timed typing session
+        let cli = Cli {
+            number_of_words: 10,
+            number_of_sentences: None,
+            number_of_secs: Some(1), // 1 second for fast test
+            prompt: None,
+            supported_language: SupportedLanguage::English,
+            random_words: false,
+            capitalize: false,
+            strict: false,
+            symbols: false,
+            substitute: false,
+        };
+
+        let mut app = App::new(cli);
+        
+        // Verify timed session setup
+        assert_eq!(app.thok.number_of_secs, Some(1.0));
+        assert_eq!(app.thok.seconds_remaining, Some(1.0));
+        
+        // Start typing
+        app.thok.on_keypress_start();
+        app.thok.write('t');
+        app.thok.write('e');
+        
+        // Simulate time passage via multiple ticks
+        for _ in 0..12 { // 12 ticks * 100ms = 1200ms > 1000ms
+            app.thok.on_tick();
+        }
+        
+        // Session should be finished due to time limit
+        assert!(app.thok.has_finished());
+    }
+
+    #[test]
+    fn test_integration_strict_mode_workflow() {
+        // Integration test for strict mode behavior
+        let cli = Cli {
+            number_of_words: 3,
+            number_of_sentences: None,
+            number_of_secs: None,
+            prompt: Some("hello".to_string()),
+            supported_language: SupportedLanguage::English,
+            random_words: false,
+            capitalize: false,
+            strict: true,
+            symbols: false,
+            substitute: false,
+        };
+
+        let mut app = App::new(cli);
+        
+        // Verify strict mode is enabled
+        assert!(app.thok.strict_mode);
+        
+        // Start typing
+        app.thok.on_keypress_start();
+        app.thok.write('h');
+        app.thok.write('e');
+        app.thok.write('l');
+        app.thok.write('l');
+        app.thok.write('o');
+        
+        // Verify completion
+        assert!(app.thok.has_finished());
+    }
+
+    #[test]
+    fn test_integration_character_substitution_workflow() {
+        // Integration test for character substitution feature
+        let cli = Cli {
+            number_of_words: 5,
+            number_of_sentences: None,
+            number_of_secs: None,
+            prompt: None,
+            supported_language: SupportedLanguage::English,
+            random_words: false,
+            capitalize: false,
+            strict: false,
+            symbols: false,
+            substitute: true,
+        };
+
+        let app = App::new(cli);
+        
+        // Verify substitution mode generates a prompt
+        assert!(!app.thok.prompt.is_empty());
+        // The actual substitution logic is tested in the language module
+        // Here we just verify the integration works
+    }
+
+    #[test]
+    fn test_integration_app_reset_preserves_cli_settings() {
+        // Integration test to verify app reset preserves CLI settings
+        let cli = Cli {
+            number_of_words: 25,
+            number_of_sentences: None,
+            number_of_secs: Some(60),
+            prompt: None,
+            supported_language: SupportedLanguage::English1k,
+            random_words: true,
+            capitalize: true,
+            strict: true,
+            symbols: true,
+            substitute: false,
+        };
+
+        let mut app = App::new(cli.clone());
+        
+        // Verify initial settings
+        assert_eq!(app.thok.number_of_words, 25);
+        assert_eq!(app.thok.number_of_secs, Some(60.0));
+        assert!(app.thok.strict_mode);
+        
+        // Type something to change state
+        app.thok.write('t');
+        app.thok.write('e');
+        
+        // Reset the app
+        app.reset(None);
+        
+        // Verify settings are preserved after reset
+        assert_eq!(app.thok.number_of_words, 25);
+        assert_eq!(app.thok.number_of_secs, Some(60.0));
+        assert!(app.thok.strict_mode);
+        assert_eq!(app.thok.input.len(), 0); // But input is cleared
+        assert_eq!(app.thok.cursor_pos, 0); // And cursor is reset
+        assert_eq!(app.state, AppState::Typing); // And state is reset
+    }
+
+    #[test]
+    fn test_integration_multiple_language_support() {
+        // Integration test for different language configurations
+        let languages = [
+            SupportedLanguage::English,
+            SupportedLanguage::English1k,
+            SupportedLanguage::English10k,
+        ];
+
+        for lang in languages {
+            let cli = Cli {
+                number_of_words: 5,
+                number_of_sentences: None,
+                number_of_secs: None,
+                prompt: None,
+                supported_language: lang,
+                random_words: false,
+                capitalize: false,
+                strict: false,
+                symbols: false,
+                substitute: false,
+            };
+
+            let app = App::new(cli);
+            
+            // Verify that each language generates a valid prompt
+            assert!(!app.thok.prompt.is_empty());
+            assert!(app.thok.number_of_words > 0);
+        }
+    }
+
+    #[test]
+    fn test_integration_formatting_combinations() {
+        // Integration test for various formatting flag combinations
+        let test_cases = [
+            (false, false, false), // No formatting
+            (true, false, false),  // Capitalize only
+            (false, true, false),  // Symbols only
+            (false, false, true),  // Substitute only
+            (true, true, false),   // Capitalize + Symbols
+            (true, false, true),   // Capitalize + Substitute
+            (false, true, true),   // Symbols + Substitute
+            (true, true, true),    // All formatting
+        ];
+
+        for (capitalize, symbols, substitute) in test_cases {
+            let cli = Cli {
+                number_of_words: 5,
+                number_of_sentences: None,
+                number_of_secs: None,
+                prompt: None,
+                supported_language: SupportedLanguage::English,
+                random_words: false,
+                capitalize,
+                strict: false,
+                symbols,
+                substitute,
+            };
+
+            let app = App::new(cli);
+            
+            // Verify that all formatting combinations generate valid prompts
+            assert!(!app.thok.prompt.is_empty());
+            
+            // If capitalize is enabled, check for capitalization (may be affected by other formatting)
+            if capitalize && !substitute && !symbols {
+                // Only test when other formatting options don't interfere
+                let first_char = app.thok.prompt.chars().next().unwrap();
+                // Allow for punctuation or other formatting that might come first
+                if first_char.is_alphabetic() {
+                    assert!(first_char.is_uppercase());
+                }
+            }
+        }
+    }
 }

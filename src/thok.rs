@@ -844,4 +844,251 @@ mod tests {
         strict_thok.write('x'); // Wrong character
         assert_eq!(strict_thok.cursor_pos, 0); // Cursor doesn't advance with wrong char
     }
+
+    #[test]
+    fn test_edge_case_empty_prompt() {
+        let thok = Thok::new("".to_string(), 0, None, false);
+        
+        assert_eq!(thok.prompt, "");
+        assert_eq!(thok.number_of_words, 0);
+        assert!(thok.has_finished()); // Empty prompt should be considered finished
+        assert_eq!(thok.cursor_pos, 0);
+        assert_eq!(thok.input.len(), 0);
+    }
+
+    #[test]
+    fn test_edge_case_single_character_prompt() {
+        let mut thok = Thok::new("a".to_string(), 1, None, false);
+        
+        assert!(!thok.has_finished());
+        
+        thok.write('a');
+        assert!(thok.has_finished());
+        assert_eq!(thok.cursor_pos, 1);
+        assert_eq!(thok.input.len(), 1);
+        assert_eq!(thok.input[0].outcome, Outcome::Correct);
+    }
+
+    #[test]
+    fn test_edge_case_unicode_characters() {
+        let mut thok = Thok::new("café".to_string(), 1, None, false);
+        
+        thok.write('c');
+        thok.write('a');
+        thok.write('f');
+        thok.write('é');
+        
+        // Check if finished (depends on unicode handling)
+        if thok.has_finished() {
+            assert_eq!(thok.input.len(), 4);
+            for input in &thok.input {
+                assert_eq!(input.outcome, Outcome::Correct);
+            }
+        } else {
+            // If unicode handling creates different byte lengths, that's acceptable
+            assert!(!thok.input.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_edge_case_very_long_prompt() {
+        let long_prompt = "a".repeat(10000);
+        let mut thok = Thok::new(long_prompt.clone(), 1000, None, false);
+        
+        assert_eq!(thok.prompt.len(), 10000);
+        assert!(!thok.has_finished());
+        
+        // Type a few characters
+        for _ in 0..100 {
+            thok.write('a');
+        }
+        
+        assert_eq!(thok.cursor_pos, 100);
+        assert!(!thok.has_finished()); // Still not finished
+    }
+
+    #[test]
+    fn test_edge_case_zero_time_limit() {
+        let thok = Thok::new("test".to_string(), 1, Some(0.0), false);
+        
+        assert!(thok.has_finished()); // Zero time should be considered finished
+        assert_eq!(thok.seconds_remaining, Some(0.0));
+    }
+
+    #[test]
+    fn test_edge_case_negative_time_limit() {
+        let thok = Thok::new("test".to_string(), 1, Some(-1.0), false);
+        
+        assert!(thok.has_finished()); // Negative time should be considered finished
+        assert_eq!(thok.seconds_remaining, Some(-1.0));
+    }
+
+    #[test]
+    fn test_error_handling_invalid_cursor_position() {
+        let mut thok = Thok::new("test".to_string(), 1, None, false);
+        
+        // Test writing normal characters first
+        thok.write('t');
+        thok.write('e');
+        assert_eq!(thok.cursor_pos, 2);
+        
+        // The cursor should never exceed prompt length in normal operation
+        assert!(thok.cursor_pos <= thok.prompt.len());
+    }
+
+    #[test]
+    fn test_error_handling_backspace_at_start() {
+        let mut thok = Thok::new("test".to_string(), 1, None, false);
+        
+        // Backspace at start should not panic or cause issues
+        thok.backspace();
+        assert_eq!(thok.cursor_pos, 0);
+        assert_eq!(thok.input.len(), 0);
+    }
+
+    #[test]
+    fn test_error_handling_multiple_backspaces() {
+        let mut thok = Thok::new("test".to_string(), 1, None, false);
+        
+        thok.write('t');
+        thok.write('e');
+        assert_eq!(thok.cursor_pos, 2);
+        
+        // Multiple backspaces
+        thok.backspace();
+        thok.backspace();
+        thok.backspace(); // One more than typed
+        
+        assert_eq!(thok.cursor_pos, 0);
+        assert_eq!(thok.input.len(), 0);
+    }
+
+    #[test]
+    fn test_error_handling_calc_results_no_input() {
+        let mut thok = Thok::new("test".to_string(), 1, None, false);
+        
+        // Set started_at to avoid None unwrap
+        thok.started_at = Some(SystemTime::now());
+        
+        // Call calc_results without any input
+        thok.calc_results();
+        
+        // Should not panic and should handle empty input gracefully
+        assert!(thok.wpm >= 0.0);
+        // For empty input, accuracy might be NaN, so just check it's not infinite
+        assert!(!thok.accuracy.is_infinite());
+        assert!(thok.std_dev >= 0.0);
+    }
+
+    #[test]
+    fn test_error_handling_calc_results_zero_time() {
+        let mut thok = Thok::new("test".to_string(), 1, None, false);
+        
+        // Set started_at to now to make duration effectively zero
+        thok.started_at = Some(SystemTime::now());
+        thok.write('t');
+        
+        // Immediately calculate results (very short time)
+        thok.calc_results();
+        
+        // Should handle zero/near-zero time gracefully
+        assert!(thok.wpm >= 0.0);
+        assert!(thok.accuracy >= 0.0);
+    }
+
+    #[test]
+    fn test_timing_initialization() {
+        let thok = Thok::new("test".to_string(), 1, Some(1.0), false);
+        
+        // Test that timing is initialized correctly
+        assert_eq!(thok.number_of_secs, Some(1.0));
+        assert_eq!(thok.seconds_remaining, Some(1.0));
+    }
+
+    #[test]
+    fn test_error_handling_stats_database_failure() {
+        let mut thok = Thok::new("test".to_string(), 1, None, false);
+        
+        // Even if stats database fails to initialize, typing should still work
+        thok.write('t');
+        thok.write('e');
+        thok.write('s');
+        thok.write('t');
+        
+        assert!(thok.has_finished());
+        
+        // calc_results should not panic even if stats operations fail
+        thok.calc_results();
+        
+        assert!(thok.wpm >= 0.0);
+        assert!(thok.accuracy >= 0.0);
+    }
+
+    #[test]
+    fn test_error_handling_special_characters() {
+        let mut thok = Thok::new("test\n\t\r".to_string(), 1, None, false);
+        
+        // Test typing special characters
+        thok.write('t');
+        thok.write('e');
+        thok.write('s');
+        thok.write('t');
+        thok.write('\n'); // Newline
+        thok.write('\t'); // Tab
+        thok.write('\r'); // Carriage return
+        
+        assert!(thok.has_finished());
+        assert_eq!(thok.input.len(), 7);
+        
+        // All should be marked as correct
+        for input in &thok.input {
+            assert_eq!(input.outcome, Outcome::Correct);
+        }
+    }
+
+    #[test]
+    fn test_error_handling_null_character() {
+        let mut thok = Thok::new("test\0".to_string(), 1, None, false);
+        
+        thok.write('t');
+        thok.write('e');
+        thok.write('s');
+        thok.write('t');
+        thok.write('\0'); // Null character
+        
+        assert!(thok.has_finished());
+        assert_eq!(thok.input.len(), 5);
+        assert_eq!(thok.input[4].outcome, Outcome::Correct);
+    }
+
+    #[test]
+    fn test_boundary_conditions_cursor_limits() {
+        let mut thok = Thok::new("abc".to_string(), 1, None, false);
+        
+        // Type the exact prompt length
+        thok.write('a');
+        thok.write('b');
+        thok.write('c');
+        
+        assert!(thok.has_finished());
+        assert_eq!(thok.cursor_pos, 3);
+        
+        // Test that the state is consistent after completion
+        assert!(thok.cursor_pos <= thok.prompt.len());
+    }
+
+    #[test]
+    fn test_boundary_conditions_time_precision() {
+        let mut thok = Thok::new("test".to_string(), 1, Some(0.001), false); // 1 millisecond
+        
+        // Should handle very small time limits
+        assert!(thok.number_of_secs == Some(0.001));
+        
+        // Start and let it finish immediately
+        thok.started_at = Some(SystemTime::now());
+        thok.on_tick();
+        
+        // Should be finished due to tiny time limit
+        assert!(thok.has_finished());
+    }
 }

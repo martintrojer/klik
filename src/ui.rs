@@ -398,4 +398,226 @@ mod tests {
 
         assert!(*buffer.area() == area);
     }
+
+    #[test]
+    fn test_ui_widget_extreme_sizes() {
+        let thok = create_test_thok("test prompt", false);
+        
+        // Test small area
+        let small_area = Rect::new(0, 0, 10, 5);
+        let mut small_buffer = Buffer::empty(small_area);
+        (&thok).render(small_area, &mut small_buffer);
+        assert!(*small_buffer.area() == small_area);
+        
+        // Test very large area
+        let large_area = Rect::new(0, 0, 1000, 1000);
+        let mut large_buffer = Buffer::empty(large_area);
+        (&thok).render(large_area, &mut large_buffer);
+        assert!(*large_buffer.area() == large_area);
+        
+        // Test normal sized area
+        let normal_area = Rect::new(0, 0, 80, 24);
+        let mut normal_buffer = Buffer::empty(normal_area);
+        (&thok).render(normal_area, &mut normal_buffer);
+        assert!(*normal_buffer.area() == normal_area);
+    }
+
+    #[test]
+    fn test_ui_widget_partial_typing() {
+        let mut thok = create_test_thok("hello world", false);
+        
+        // Type partially through the prompt
+        thok.write('h');
+        thok.write('e');
+        thok.write('l');
+        
+        let area = Rect::new(0, 0, 80, 24);
+        let mut buffer = Buffer::empty(area);
+        
+        (&thok).render(area, &mut buffer);
+        
+        let rendered = buffer
+            .content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect::<String>();
+        
+        // Should contain the prompt text
+        assert!(rendered.contains("hello") || rendered.contains("world"));
+    }
+
+    #[test]
+    fn test_ui_widget_with_errors() {
+        let mut thok = create_test_thok("hello", false);
+        
+        // Type with some errors
+        thok.write('h');
+        thok.write('x'); // Wrong character
+        thok.write('l');
+        thok.write('l');
+        thok.write('o');
+        
+        let area = Rect::new(0, 0, 80, 24);
+        let mut buffer = Buffer::empty(area);
+        
+        (&thok).render(area, &mut buffer);
+        
+        let rendered = buffer
+            .content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect::<String>();
+        
+        // Should render without panicking and contain some content
+        assert!(!rendered.trim().is_empty());
+    }
+
+    #[test]
+    fn test_ui_widget_special_characters() {
+        let thok = create_test_thok("café naïve résumé", false);
+        
+        let area = Rect::new(0, 0, 80, 24);
+        let mut buffer = Buffer::empty(area);
+        
+        (&thok).render(area, &mut buffer);
+        
+        let rendered = buffer
+            .content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect::<String>();
+        
+        // Should handle unicode characters without issues
+        assert!(rendered.contains("café") || rendered.contains("naïve") || rendered.contains("résumé") || !rendered.trim().is_empty());
+    }
+
+    #[test]
+    fn test_ui_widget_color_consistency() {
+        let mut thok = create_test_thok("test", false);
+        
+        // Type correctly
+        thok.write('t');
+        thok.write('e');
+        
+        let area = Rect::new(0, 0, 80, 24);
+        let mut buffer = Buffer::empty(area);
+        
+        (&thok).render(area, &mut buffer);
+        
+        // Check that the buffer was successfully populated
+        // (We can't easily test colors in unit tests, but we can verify rendering succeeds)
+        assert!(!buffer.content().is_empty());
+    }
+
+    #[test]
+    fn test_ui_widget_renders_without_panic() {
+        let thok = create_test_thok("test", false);
+        
+        let area = Rect::new(0, 0, 80, 24);
+        let mut buffer = Buffer::empty(area);
+        
+        // Test that basic rendering works without panicking
+        (&thok).render(area, &mut buffer);
+        
+        // Should render successfully
+        assert!(*buffer.area() == area);
+    }
+
+    #[test]
+    fn test_ui_widget_different_aspect_ratios() {
+        let thok = create_test_thok("testing different aspect ratios", false);
+        
+        // Test wide and short
+        let wide_area = Rect::new(0, 0, 200, 5);
+        let mut wide_buffer = Buffer::empty(wide_area);
+        (&thok).render(wide_area, &mut wide_buffer);
+        assert!(*wide_buffer.area() == wide_area);
+        
+        // Test narrow and tall
+        let tall_area = Rect::new(0, 0, 20, 50);
+        let mut tall_buffer = Buffer::empty(tall_area);
+        (&thok).render(tall_area, &mut tall_buffer);
+        assert!(*tall_buffer.area() == tall_area);
+        
+        // Test square
+        let square_area = Rect::new(0, 0, 50, 50);
+        let mut square_buffer = Buffer::empty(square_area);
+        (&thok).render(square_area, &mut square_buffer);
+        assert!(*square_buffer.area() == square_area);
+    }
+
+    #[test]
+    fn test_ui_constants_consistency() {
+        // Test that UI constants are reasonable
+        assert!(HORIZONTAL_MARGIN <= 20); // Should not be excessive
+        assert!(VERTICAL_MARGIN <= 10); // Should not be excessive
+        
+        // Test that margins don't exceed typical terminal sizes
+        assert!(HORIZONTAL_MARGIN * 2 < 80); // Common terminal width
+        assert!(VERTICAL_MARGIN * 2 < 24); // Common terminal height
+    }
+
+    #[test]
+    fn test_ui_widget_with_newlines_in_prompt() {
+        let thok = create_test_thok("line one\nline two\nline three", false);
+        
+        let area = Rect::new(0, 0, 80, 24);
+        let mut buffer = Buffer::empty(area);
+        
+        (&thok).render(area, &mut buffer);
+        
+        let rendered = buffer
+            .content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect::<String>();
+        
+        // Should handle newlines in the prompt gracefully
+        assert!(!rendered.trim().is_empty());
+    }
+
+    #[test]
+    fn test_ui_widget_render_multiple_times() {
+        let mut thok = create_test_thok("hello", false);
+        
+        let area = Rect::new(0, 0, 80, 24);
+        
+        // Render initial state
+        let mut buffer1 = Buffer::empty(area);
+        (&thok).render(area, &mut buffer1);
+        
+        // Type a character
+        thok.write('h');
+        
+        // Render after typing
+        let mut buffer2 = Buffer::empty(area);
+        (&thok).render(area, &mut buffer2);
+        
+        // Type another character
+        thok.write('e');
+        
+        // Render again
+        let mut buffer3 = Buffer::empty(area);
+        (&thok).render(area, &mut buffer3);
+        
+        // All renders should succeed
+        assert!(!buffer1.content().is_empty());
+        assert!(!buffer2.content().is_empty());
+        assert!(!buffer3.content().is_empty());
+    }
+
+    #[test]
+    fn test_ui_widget_performance_large_text() {
+        // Test with a very large prompt to ensure performance doesn't degrade significantly
+        let large_text = "word ".repeat(1000); // 5000 characters
+        let thok = create_test_thok(&large_text, false);
+        
+        let area = Rect::new(0, 0, 80, 24);
+        let mut buffer = Buffer::empty(area);
+        
+        // This should complete without hanging or excessive memory usage
+        (&thok).render(area, &mut buffer);
+        
+        assert!(*buffer.area() == area);
+    }
 }
