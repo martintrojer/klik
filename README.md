@@ -1,8 +1,9 @@
 # thokr
 ✨ sleek typing tui with intelligent practice targeting and detailed analytics
 
-[![GitHub Build Workflow](https://github.com/thatvegandev/thokr/actions/workflows/build.yml/badge.svg)](https://github.com/thatvegandev/thokr/actions/workflows/build.yml)
-[![GitHub Deploy Workflow](https://github.com/thatvegandev/thokr/actions/workflows/deploy.yml/badge.svg)](https://github.com/thatvegandev/thokr/actions/workflows/deploy.yml)
+[![CI](https://github.com/thatvegandev/thokr/actions/workflows/ci.yml/badge.svg)](https://github.com/thatvegandev/thokr/actions/workflows/ci.yml)
+[![Release](https://github.com/thatvegandev/thokr/actions/workflows/release.yml/badge.svg)](https://github.com/thatvegandev/thokr/actions/workflows/release.yml)
+[![codecov](https://codecov.io/gh/thatvegandev/thokr/branch/main/graph/badge.svg)](https://codecov.io/gh/thatvegandev/thokr)
 [![License](https://img.shields.io/badge/License-MIT-default.svg)](./LICENSE.md)
 [![Crate Version](https://img.shields.io/crates/v/thokr)](https://crates.io/crates/thokr)
 [![Github Stars](https://img.shields.io/github/stars/thatvegandev/thokr)](https://github.com/thatvegandev/thokr/stargazers)
@@ -133,12 +134,6 @@ Options:
 
 ```sh
 $ cargo install thokr
-```
-
-### Docker
-
-```sh
-$ docker run -it thatvegandev/thokr
 ```
 
 ### Arch Linux

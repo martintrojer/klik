@@ -212,10 +212,27 @@ cargo test
 
 ### Code Standards
 
-- **Formatting**: Use `cargo fmt` (enforced)
-- **Linting**: Use `cargo clippy`
+- **Formatting**: Use `cargo fmt` (enforced by CI)
+- **Linting**: Use `cargo clippy` (enforced by CI) 
 - **Testing**: Maintain >90% coverage on business logic
 - **Documentation**: Update CLAUDE.md for architectural changes
+
+### Continuous Integration
+
+**Modern GitHub Actions CI Pipeline:**
+- **Multi-platform testing**: Ubuntu, Windows, macOS
+- **Multi-version testing**: Stable and Beta Rust
+- **Code quality**: Formatting, linting, security audit
+- **Coverage reporting**: Integrated with Codecov
+- **MSRV checking**: Ensures minimum Rust version compatibility
+- **Release automation**: Automated binary builds and crates.io publishing
+
+**CI Workflow Features:**
+- Rust caching for faster builds
+- Security audit with cargo-audit
+- Minimal versions testing
+- Cross-platform binary generation
+- Coverage reporting with cargo-tarpaulin
 
 ### Key Development Commands
 

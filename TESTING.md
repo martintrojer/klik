@@ -161,7 +161,7 @@ cargo tarpaulin --all-features --verbose
 4. **Platform Issues**
    - Tarpaulin works best on Linux
    - macOS/Windows may have limitations
-   - Use Docker for consistent results
+   - Use consistent test environments with CI
 
 ### Alternative Coverage Tools
 
