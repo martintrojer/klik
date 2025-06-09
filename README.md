@@ -24,9 +24,31 @@ By default, thokr analyzes your character-level performance and intelligently se
 ### Controls:
 - **Default**: Intelligent selection targets your weakest characters
 - **Legacy mode**: Use `--random-words` flag for traditional random selection
+- **Substitution mode**: Use `--substitute` flag for "almost English" words with weak characters substituted in
 - **Realistic practice**: Use `--capitalize` flag for capitalization, punctuation, and commas
 - **Strict mode**: Use `--strict` flag to stop on errors and require correction before proceeding
 - **Symbol practice**: Use `--symbols` flag to include brackets, operators, and special characters
+
+## 🔀 Character Substitution Mode
+
+**For ultra-targeted practice, try the new substitution mode!**
+
+The `--substitute` flag creates "almost English" words by strategically replacing characters in real words with ones you need to practice most. This innovative approach provides:
+
+### Benefits:
+- **Intensive Training**: Higher concentration of your problematic characters
+- **Familiar Structure**: Maintains word patterns and muscle memory from real English
+- **Balanced Difficulty**: 30% substitution rate keeps words recognizable yet challenging
+- **Context Preservation**: Maintains capitalization, punctuation, and word boundaries
+- **Adaptive Practice**: Automatically targets your current weak points
+
+### How it works:
+1. Selects random English words as base templates
+2. Identifies your top 10 most difficult characters from performance data
+3. Strategically replaces ~30% of alphabetic characters with weak ones
+4. Preserves word structure, case, and punctuation for realistic practice
+
+**Example**: "hello world" might become "zqllo worzd" - challenging your weak characters while maintaining familiar word patterns.
 
 ## Usage
 
@@ -70,6 +92,9 @@ Options:
       --symbols
           include symbols and special characters for comprehensive typing practice
 
+      --substitute
+          enable character substitution mode: create "almost English" words by replacing characters with ones that need most practice
+
   -h, --help
           Print help (see a summary with '-h')
 
@@ -107,9 +132,10 @@ For detailed usage run `thokr -h`.
 | `thokr`                        |   15 intelligently selected words targeting your weakest letters |
 | `thokr -w 100`                 |  100 intelligently selected words from common English vocabulary |
 | `thokr -w 100 -l english1k`    |  100 intelligent words from the 1000 most common English words |
+| `thokr --substitute`           |  15 "almost English" words with weak characters substituted in |
 | `thokr --capitalize`           |  15 intelligent words with capitalization, punctuation, and commas |
 | `thokr --symbols`              |  15 intelligent words with brackets, operators, and special characters |
-| `thokr --capitalize --symbols` |  15 intelligent words with full symbol and capitalization practice |
+| `thokr --substitute --symbols` |  15 substituted words with full symbol and capitalization practice |
 | `thokr --strict`               |  15 intelligent words in strict mode (stop on errors, require correction) |
 | `thokr --random-words`         |                  15 randomly selected words (legacy behavior) |
 | `thokr -w 10 -s 5`             |  10 intelligent words with hard stop at 5 seconds |
@@ -176,6 +202,11 @@ Detailed character-level performance data is stored in a SQLite database (`stats
   - Capitalization, punctuation, and comma integration
   - Case-sensitive difficulty tracking and scoring
   - Advanced formatting for real-world typing scenarios
+
+- [x] 🔀 **Character Substitution Mode** *(completed)*
+  - "Almost English" words with strategic character replacement
+  - Ultra-targeted practice for problematic characters
+  - Maintains word structure while maximizing weak character exposure
 
 - [ ] ⚡️ Performance Optimizations
   - Optimize TUI rendering for smoother experience at high tick rates

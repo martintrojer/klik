@@ -66,6 +66,10 @@ pub struct Cli {
     /// include symbols and special characters for comprehensive typing practice
     #[clap(long)]
     symbols: bool,
+
+    /// enable character substitution mode: create "almost English" words by replacing characters with ones that need most practice
+    #[clap(long)]
+    substitute: bool,
 }
 
 #[derive(Debug, Copy, Clone, ValueEnum, strum_macros::Display)]
@@ -138,6 +142,20 @@ impl App {
             let words = if cli.random_words {
                 // Legacy random word selection
                 language.get_random(cli.number_of_words)
+            } else if cli.substitute {
+                // Character substitution mode: replace chars with ones that need practice
+                use crate::stats::StatsDb;
+                if let Ok(stats_db) = StatsDb::new() {
+                    if let Ok(char_difficulties) = stats_db.get_character_difficulties() {
+                        language.get_substituted(cli.number_of_words, &char_difficulties)
+                    } else {
+                        // Fall back to random if stats query fails
+                        language.get_random(cli.number_of_words)
+                    }
+                } else {
+                    // Fall back to random if database unavailable
+                    language.get_random(cli.number_of_words)
+                }
             } else {
                 // Intelligent word selection based on character statistics
                 use crate::stats::StatsDb;
@@ -203,6 +221,20 @@ impl App {
                     let words = if cli.random_words {
                         // Legacy random word selection
                         language.get_random(cli.number_of_words)
+                    } else if cli.substitute {
+                        // Character substitution mode: replace chars with ones that need practice
+                        use crate::stats::StatsDb;
+                        if let Ok(stats_db) = StatsDb::new() {
+                            if let Ok(char_difficulties) = stats_db.get_character_difficulties() {
+                                language.get_substituted(cli.number_of_words, &char_difficulties)
+                            } else {
+                                // Fall back to random if stats query fails
+                                language.get_random(cli.number_of_words)
+                            }
+                        } else {
+                            // Fall back to random if database unavailable
+                            language.get_random(cli.number_of_words)
+                        }
                     } else {
                         // Intelligent word selection based on character statistics
                         use crate::stats::StatsDb;
@@ -752,6 +784,7 @@ mod tests {
             capitalize: false,
             strict: false,
             symbols: false,
+            substitute: false,
         };
 
         let app = App::new(cli.clone());
@@ -775,6 +808,7 @@ mod tests {
             capitalize: false,
             strict: false,
             symbols: false,
+            substitute: false,
         };
 
         let app = App::new(cli);
@@ -796,6 +830,7 @@ mod tests {
             capitalize: false,
             strict: false,
             symbols: false,
+            substitute: false,
         };
 
         let app = App::new(cli);
@@ -817,6 +852,7 @@ mod tests {
             capitalize: false,
             strict: false,
             symbols: false,
+            substitute: false,
         };
 
         let app = App::new(cli);
@@ -838,6 +874,7 @@ mod tests {
             capitalize: false,
             strict: false,
             symbols: false,
+            substitute: false,
         };
 
         let mut app = App::new(cli);
@@ -864,6 +901,7 @@ mod tests {
             capitalize: false,
             strict: false,
             symbols: false,
+            substitute: false,
         };
 
         let mut app = App::new(cli);
@@ -919,6 +957,7 @@ mod tests {
             capitalize: false,
             strict: false,
             symbols: false,
+            substitute: false,
         };
 
         let mut app = App::new(cli);

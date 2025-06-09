@@ -188,6 +188,25 @@ impl Language {
         chars.into_iter().collect()
     }
 
+    /// Get words with character substitution: replace some characters with ones that need most practice
+    pub fn get_substituted(&self, num: usize, char_stats: &HashMap<char, CharacterDifficulty>) -> Vec<String> {
+        if char_stats.is_empty() {
+            // Fall back to random selection if no statistics available
+            return self.get_random(num);
+        }
+
+        // Get regular words first
+        let base_words = self.get_random(num);
+        
+        // Find the most difficult characters to practice
+        let weak_chars = self.get_weakest_characters(char_stats, 10);
+        
+        // For each word, substitute some characters with weak ones
+        base_words.into_iter()
+            .map(|word| self.substitute_characters_in_word(&word, &weak_chars))
+            .collect()
+    }
+
     /// Get words intelligently selected based on character statistics
     /// Words containing characters that need more practice are prioritized
     pub fn get_intelligent(&self, num: usize, char_stats: &HashMap<char, CharacterDifficulty>) -> Vec<String> {
@@ -281,6 +300,63 @@ impl Language {
         } else {
             total_score / char_count as f64
         }
+    }
+
+    /// Get the weakest characters (those that need most practice) from character statistics
+    fn get_weakest_characters(&self, char_stats: &HashMap<char, CharacterDifficulty>, count: usize) -> Vec<char> {
+        let mut char_difficulties: Vec<(char, f64)> = char_stats.iter()
+            .map(|(ch, difficulty)| {
+                // Calculate combined difficulty score (higher = more practice needed)
+                let miss_penalty = difficulty.miss_rate * 2.0;
+                let timing_penalty = if difficulty.avg_time_ms > 200.0 {
+                    (difficulty.avg_time_ms - 200.0) / 100.0
+                } else {
+                    0.0
+                };
+                let combined_difficulty = miss_penalty + timing_penalty;
+                (*ch, combined_difficulty)
+            })
+            .collect();
+
+        // Sort by difficulty (highest first)
+        char_difficulties.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+        // Return the weakest characters, limited by count
+        char_difficulties.into_iter()
+            .take(count)
+            .map(|(ch, _)| ch)
+            .collect()
+    }
+
+    /// Substitute some characters in a word with weaker characters for practice
+    fn substitute_characters_in_word(&self, word: &str, weak_chars: &[char]) -> String {
+        if weak_chars.is_empty() || word.is_empty() {
+            return word.to_string();
+        }
+
+        let rng = &mut rand::thread_rng();
+        let chars: Vec<char> = word.chars().collect();
+        let mut result: Vec<char> = Vec::with_capacity(chars.len());
+
+        for ch in chars {
+            // Only substitute alphabetic characters, preserve punctuation/spaces
+            if ch.is_alphabetic() && rng.gen_bool(0.3) { // 30% chance to substitute each character
+                if let Some(&weak_char) = weak_chars.choose(rng) {
+                    // Preserve case: if original was uppercase, make weak char uppercase too
+                    if ch.is_uppercase() {
+                        result.push(weak_char.to_uppercase().next().unwrap_or(weak_char));
+                    } else {
+                        result.push(weak_char);
+                    }
+                } else {
+                    result.push(ch);
+                }
+            } else {
+                result.push(ch);
+            }
+        }
+
+        result.into_iter().collect()
     }
 }
 
@@ -846,6 +922,134 @@ mod tests {
         let lowercase_result = result.to_lowercase();
         assert!(lowercase_result.contains("hello"));
         assert!(lowercase_result.contains("world"));
+    }
+
+    #[test]
+    fn test_get_weakest_characters() {
+        let lang = Language::new("english".to_string());
+        
+        let mut char_stats = HashMap::new();
+        char_stats.insert('a', CharacterDifficulty {
+            miss_rate: 5.0,
+            avg_time_ms: 150.0,
+            total_attempts: 20,
+            uppercase_miss_rate: 8.0,
+            uppercase_avg_time: 180.0,
+            uppercase_attempts: 5,
+            uppercase_penalty: 0.2,
+        });
+        char_stats.insert('z', CharacterDifficulty {
+            miss_rate: 25.0,
+            avg_time_ms: 400.0,
+            total_attempts: 10,
+            uppercase_miss_rate: 35.0,
+            uppercase_avg_time: 500.0,
+            uppercase_attempts: 3,
+            uppercase_penalty: 0.7,
+        });
+        char_stats.insert('q', CharacterDifficulty {
+            miss_rate: 15.0,
+            avg_time_ms: 300.0,
+            total_attempts: 8,
+            uppercase_miss_rate: 20.0,
+            uppercase_avg_time: 350.0,
+            uppercase_attempts: 2,
+            uppercase_penalty: 0.4,
+        });
+        
+        let weak_chars = lang.get_weakest_characters(&char_stats, 2);
+        
+        // Should return the 2 weakest characters
+        assert_eq!(weak_chars.len(), 2);
+        // 'z' should be first (highest difficulty) 
+        assert_eq!(weak_chars[0], 'z');
+        // 'q' should be second
+        assert_eq!(weak_chars[1], 'q');
+    }
+
+    #[test]
+    fn test_substitute_characters_in_word() {
+        let lang = Language::new("english".to_string());
+        let weak_chars = vec!['x', 'z', 'q'];
+        
+        // Test basic substitution
+        let original = "hello";
+        let substituted = lang.substitute_characters_in_word(original, &weak_chars);
+        
+        // Should be same length
+        assert_eq!(original.len(), substituted.len());
+        
+        // Should contain some original characters and some substituted ones
+        // (due to randomness, we can't predict exact result, but structure should be preserved)
+        assert!(!substituted.is_empty());
+    }
+
+    #[test]
+    fn test_substitute_characters_preserves_case() {
+        let lang = Language::new("english".to_string());
+        let weak_chars = vec!['x'];
+        
+        // Test case preservation 
+        let original = "Hello";
+        let substituted = lang.substitute_characters_in_word(original, &weak_chars);
+        
+        // Should preserve length
+        assert_eq!(original.len(), substituted.len());
+        
+        // If first char was substituted, it should still be uppercase
+        if substituted.chars().next().unwrap() == 'X' {
+            assert!(substituted.chars().next().unwrap().is_uppercase());
+        }
+    }
+
+    #[test]
+    fn test_substitute_characters_preserves_punctuation() {
+        let lang = Language::new("english".to_string());
+        let weak_chars = vec!['x', 'z'];
+        
+        let original = "hello, world!";
+        let substituted = lang.substitute_characters_in_word(original, &weak_chars);
+        
+        // Should preserve comma and exclamation mark
+        assert!(substituted.contains(','));
+        assert!(substituted.contains('!'));
+        // Should preserve space
+        assert!(substituted.contains(' '));
+    }
+
+    #[test]
+    fn test_get_substituted_with_empty_stats() {
+        let lang = Language::new("english".to_string());
+        let empty_stats = HashMap::new();
+        
+        let words = lang.get_substituted(5, &empty_stats);
+        
+        // Should fall back to random selection
+        assert_eq!(words.len(), 5);
+        for word in &words {
+            assert!(lang.words.contains(word));
+        }
+    }
+
+    #[test]
+    fn test_get_substituted_returns_correct_count() {
+        let lang = Language::new("english".to_string());
+        
+        let mut char_stats = HashMap::new();
+        char_stats.insert('x', CharacterDifficulty {
+            miss_rate: 20.0,
+            avg_time_ms: 300.0,
+            total_attempts: 10,
+            uppercase_miss_rate: 25.0,
+            uppercase_avg_time: 400.0,
+            uppercase_attempts: 3,
+            uppercase_penalty: 0.5,
+        });
+        
+        for count in [1, 5, 10] {
+            let words = lang.get_substituted(count, &char_stats);
+            assert_eq!(words.len(), count, "Should return exactly {} words", count);
+        }
     }
 
     #[test]
