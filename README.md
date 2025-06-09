@@ -1,5 +1,5 @@
 # thokr
-✨ sleek typing tui with visualized results and historical logging
+✨ sleek typing tui with intelligent practice targeting and detailed analytics
 
 [![GitHub Build Workflow](https://github.com/thatvegandev/thokr/actions/workflows/build.yml/badge.svg)](https://github.com/thatvegandev/thokr/actions/workflows/build.yml)
 [![GitHub Deploy Workflow](https://github.com/thatvegandev/thokr/actions/workflows/deploy.yml/badge.svg)](https://github.com/thatvegandev/thokr/actions/workflows/deploy.yml)
@@ -9,40 +9,60 @@
 
 ![demo](https://github.com/thatvegandev/assets/raw/main/thokr/demo.gif)
 
+## 🧠 Intelligent Word Selection
+
+**thokr now features smart word selection that adapts to your typing weaknesses!**
+
+By default, thokr analyzes your character-level performance and intelligently selects practice words containing the letters you struggle with most. This targeted approach helps you improve faster by focusing on your specific weak points.
+
+### How it works:
+- **Character Analysis**: Tracks your miss rate and timing for each character
+- **Smart Scoring**: Words are scored based on difficulty of their characters  
+- **Adaptive Selection**: Prioritizes words with your most problematic letters
+- **Balanced Practice**: Selects from top 30% of difficult words to avoid repetition
+
+### Controls:
+- **Default**: Intelligent selection targets your weakest characters
+- **Legacy mode**: Use `--random-words` flag for traditional random selection
+
 ## Usage
 
 For detailed usage run `thokr -h`.
 
 ```
-thokr 0.4.1
-sleek typing tui with visualized results and historical logging
+A sleek typing TUI with intelligent word selection that adapts to your weaknesses, detailed performance analytics, and historical progress tracking.
 
-USAGE:
-    thokr [OPTIONS]
+Usage: thokr [OPTIONS]
 
-OPTIONS:
-    -f, --full-sentences <NUMBER_OF_SENTENCES>
-            number of sentences to use in test
+Options:
+  -w, --number-of-words <NUMBER_OF_WORDS>
+          number of words to use in test
+          
+          [default: 15]
 
-    -h, --help
-            Print help information
+  -f, --full-sentences <NUMBER_OF_SENTENCES>
+          number of sentences to use in test
 
-    -l, --supported-language <SUPPORTED_LANGUAGE>
-            language to pull words from [default: english] [possible values: english, english1k,
-            english10k]
+  -s, --number-of-secs <NUMBER_OF_SECS>
+          number of seconds to run test
 
-    -p, --prompt <PROMPT>
-            custom prompt to use
+  -p, --prompt <PROMPT>
+          custom prompt to use
 
-    -s, --number-of-secs <NUMBER_OF_SECS>
-            number of seconds to run test
+  -l, --supported-language <SUPPORTED_LANGUAGE>
+          language to pull words from
+          
+          [default: english]
+          [possible values: english, english1k, english10k]
 
-    -V, --version
-            Print version information
+      --random-words
+          use random word selection instead of intelligent character-based selection (default: intelligent selection that targets your weakest characters)
 
-    -w, --number-of-words <NUMBER_OF_WORDS>
-            number of words to use in test [default: 15]
+  -h, --help
+          Print help (see a summary with '-h')
 
+  -V, --version
+          Print version
 ```
 
 
@@ -70,14 +90,15 @@ For detailed usage run `thokr -h`.
 
 ### Examples
 
-| command                     |                                                    test contents |
-|:----------------------------|-----------------------------------------------------------------:|
-| `thokr`                     |                          50 of the 200 most common english words |
-| `thokr -w 100`              |                         100 of the 200 most common English words |
-| `thokr -w 100 -l english1k` |                        100 of the 1000 most common English words |
-| `thokr -w 10 -s 5`          | 10 of the 200 most common English words (hard stop at 5 seconds) |
-| `thokr -p "$(cat foo.txt)"` |                   custom prompt with the output of `cat foo.txt` |
-| `thokr -f 4`                | 4 grammatical sentences with full stops; overrides word settings |
+| command                        |                                                    test contents |
+|:-------------------------------|-----------------------------------------------------------------:|
+| `thokr`                        |   15 intelligently selected words targeting your weakest letters |
+| `thokr -w 100`                 |  100 intelligently selected words from common English vocabulary |
+| `thokr -w 100 -l english1k`    |  100 intelligent words from the 1000 most common English words |
+| `thokr --random-words`         |                  15 randomly selected words (legacy behavior) |
+| `thokr -w 10 -s 5`             |  10 intelligent words with hard stop at 5 seconds |
+| `thokr -p "$(cat foo.txt)"`    |                   custom prompt with the output of `cat foo.txt` |
+| `thokr -f 4`                   | 4 grammatical sentences with full stops; overrides word settings |
 
 _During a test you can press ← to start over or → to see a new prompt (assuming
 you didn't supply a custom one)_
@@ -92,40 +113,68 @@ The following languages are available by default:
 | `english1k`  |  1000 most common English words |
 | `english10k` | 10000 most common English words |
 
-## Logging
+## 📊 Performance Analytics
 
-Upon completion of a test, a row outlining your results is appended to the
-`log.csv` file found in the following platform-specific folders. This way you
-can easily track your progress over time.
+thokr provides detailed character-level analytics to help you understand and improve your typing:
+
+### Character Statistics View
+- **Miss Rate**: Percentage of incorrect attempts per character
+- **Average Time**: Time taken to type each character
+- **Attempt Count**: Total practice attempts for each character
+- **Color Coding**: Visual indicators for performance levels (green/yellow/red)
+
+### Navigation & Sorting
+- **Sort Options**: Character, Average Time, Miss Rate, or Attempts
+- **Scroll Support**: Navigate through all tracked characters
+- **Real-time Updates**: Statistics update after each typing session
+
+### Access Analytics
+Press `s` on the results screen to view detailed character statistics and identify areas for improvement.
+
+## 💾 Data Storage
+
+thokr automatically tracks your typing performance with two complementary systems:
+
+### CSV Logging
+Upon completion of each test, a summary row is appended to `log.csv` for long-term progress tracking.
+
+### Character Statistics Database
+Detailed character-level performance data is stored in a SQLite database (`stats.db`) to power intelligent word selection. The database uses an efficient session-based storage architecture that scales well with usage.
+
+**Storage locations:**
 
 | platform | value                                                            |                                        example |
 | :------- | ---------------------------------------------------------------- | ---------------------------------------------: |
-| Linux    | $XDG*CONFIG_HOME/\_project_path* or $HOME/.config/_project_path_ |                      /home/colby/.config/thokr |
+| Linux    | $HOME/.local/state/thokr/ or fallback to config directory       |                      /home/colby/.local/state/thokr |
 | macOS    | $HOME/Library/Application Support/_project_path_                 | /Users/Colby/Library/Application Support/thokr |
 | Windows  | {FOLDERID*RoamingAppData}\_project_path*\config                  |    C:\Users\Colby\AppData\Roaming\thokr\config |
 
 ## Roadmap
 
-- [ ] ⚡️ Performance
-  - Right now there are known performance issues surrounding the rendering of
-    the tui at each tick interval and/or key press. Ideally each render uses the
-    prior render as a base and only makes the necessary adjustments (possibly
-    using
-    [StatefulWidget](https://docs.rs/tui/0.10.0/tui/widgets/trait.StatefulWidget.html)),
-    but I haven't been able to figure that out yet.
-- [ ] 🔠 Multi-language support
-  - I decided not to launch thokr with languages besides english because of some
-    odd rendering issues I was experiencing when trying to input characters with
-    accents. It's as though I'm not able to properly input the character in [raw
-    mode](https://docs.rs/crossterm/0.3.0/crossterm/raw/index.html). I'd love to
-    have that figure out before shipping other languages because I personally
-    felt the experience was a bit jarring. I'll open an bug report for it with
-    more details and replication steps -- would love more eyes on that problem!
-- [ ] 🧪 Tests
-  - I've only written a small amount of tests at this point. I haven't sat down
-    to really think through what tests look like when the output is dependent on
-    the users terminal size, font size, etc. If you have any ideas for this please
-    open up an issue and start the discussion!
+- [x] 🧠 **Intelligent Word Selection** *(completed)*
+  - Smart word selection based on character-level performance analysis
+  - Adaptive practice targeting your weakest typing areas
+  - Comprehensive character statistics and analytics dashboard
+
+- [ ] ⚡️ Performance Optimizations
+  - Optimize TUI rendering for smoother experience at high tick rates
+  - Implement incremental rendering using StatefulWidget patterns
+  - Reduce computational overhead during active typing sessions
+
+- [ ] 🔠 Multi-language Support  
+  - Support for additional languages beyond English word sets
+  - Proper handling of accented characters and special symbols
+  - International keyboard layout compatibility improvements
+
+- [ ] 📈 Enhanced Analytics
+  - Progress tracking over time with trend visualization
+  - Session comparison and improvement metrics
+  - Advanced filtering and data export capabilities
+
+- [ ] 🎯 Personalized Training
+  - Custom difficulty curves based on individual progress
+  - Targeted exercises for specific character combinations
+  - Adaptive timing and word length recommendations
 
 ## Contributing
 

@@ -5,9 +5,18 @@ use serde_json::from_str;
 
 use include_dir::{include_dir, Dir};
 use rand::Rng;
+use std::collections::HashMap;
 use std::error::Error;
 
 static LANG_DIR: Dir = include_dir!("src/lang");
+
+/// Character difficulty metrics for intelligent word selection
+#[derive(Debug, Clone)]
+pub struct CharacterDifficulty {
+    pub miss_rate: f64,      // Percentage of incorrect attempts (0-100)
+    pub avg_time_ms: f64,    // Average time to type the character
+    pub total_attempts: i64, // Total number of attempts for weighting
+}
 
 #[allow(dead_code)]
 #[derive(Deserialize, Clone, Debug)]
@@ -49,6 +58,74 @@ impl Language {
         let mut rng = &mut rand::thread_rng();
 
         self.words.choose_multiple(&mut rng, num).cloned().collect()
+    }
+
+    /// Get words intelligently selected based on character statistics
+    /// Words containing characters that need more practice are prioritized
+    pub fn get_intelligent(&self, num: usize, char_stats: &HashMap<char, CharacterDifficulty>) -> Vec<String> {
+        if char_stats.is_empty() {
+            // Fall back to random selection if no statistics available
+            return self.get_random(num);
+        }
+
+        // Score each word based on the difficulty of characters it contains
+        let mut word_scores: Vec<(String, f64)> = self.words
+            .iter()
+            .map(|word| {
+                let score = self.calculate_word_difficulty_score(word, char_stats);
+                (word.clone(), score)
+            })
+            .collect();
+
+        // Sort by score (highest difficulty first for more practice)
+        word_scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+        // Select from top 30% of difficult words to avoid repetition while still targeting weak areas
+        let selection_pool_size = (word_scores.len() as f64 * 0.3).max(num as f64).min(word_scores.len() as f64) as usize;
+        let selection_pool = &word_scores[0..selection_pool_size];
+
+        // Randomly select from the high-difficulty pool
+        let mut rng = &mut rand::thread_rng();
+        selection_pool
+            .choose_multiple(&mut rng, num)
+            .map(|(word, _score)| word.clone())
+            .collect()
+    }
+
+    /// Calculate difficulty score for a word based on character statistics
+    fn calculate_word_difficulty_score(&self, word: &str, char_stats: &HashMap<char, CharacterDifficulty>) -> f64 {
+        let chars: Vec<char> = word.chars().collect();
+        if chars.is_empty() {
+            return 0.0;
+        }
+
+        let mut total_score = 0.0;
+        let mut char_count = 0;
+
+        for ch in chars {
+            if let Some(difficulty) = char_stats.get(&ch) {
+                // Combine miss rate and timing factors
+                let miss_penalty = difficulty.miss_rate * 2.0; // Miss rate has higher weight
+                let timing_penalty = if difficulty.avg_time_ms > 200.0 {
+                    (difficulty.avg_time_ms - 200.0) / 100.0 // Normalize timing penalty
+                } else {
+                    0.0
+                };
+                
+                total_score += miss_penalty + timing_penalty;
+                char_count += 1;
+            } else {
+                // Unknown characters get medium priority for practice
+                total_score += 5.0;
+                char_count += 1;
+            }
+        }
+
+        if char_count == 0 {
+            0.0
+        } else {
+            total_score / char_count as f64
+        }
     }
 }
 
@@ -222,5 +299,189 @@ mod tests {
     #[should_panic(expected = "Language file not found")]
     fn test_read_nonexistent_language_file() {
         let _result = read_language_from_file("nonexistent.json".to_string());
+    }
+
+    #[test]
+    fn test_intelligent_selection_with_empty_stats() {
+        let lang = Language::new("english".to_string());
+        let char_stats = HashMap::new();
+
+        let words = lang.get_intelligent(5, &char_stats);
+        assert_eq!(words.len(), 5);
+        
+        // Should fall back to random selection when no stats available
+        for word in &words {
+            assert!(lang.words.contains(word));
+        }
+    }
+
+    #[test]
+    fn test_intelligent_selection_prioritizes_difficult_characters() {
+        let lang = Language {
+            name: "test".to_string(),
+            size: 4,
+            words: vec![
+                "easy".to_string(),   // Contains 'e' (easy)
+                "hard".to_string(),   // Contains 'h' (hard)  
+                "test".to_string(),   // Contains 't' (medium)
+                "zap".to_string(),    // Contains 'z' (very hard)
+            ],
+        };
+
+        let mut char_stats = HashMap::new();
+        char_stats.insert('e', CharacterDifficulty {
+            miss_rate: 2.0,
+            avg_time_ms: 120.0,
+            total_attempts: 50,
+        });
+        char_stats.insert('h', CharacterDifficulty {
+            miss_rate: 15.0,
+            avg_time_ms: 250.0,
+            total_attempts: 30,
+        });
+        char_stats.insert('t', CharacterDifficulty {
+            miss_rate: 8.0,
+            avg_time_ms: 180.0,
+            total_attempts: 40,
+        });
+        char_stats.insert('z', CharacterDifficulty {
+            miss_rate: 25.0,
+            avg_time_ms: 400.0,
+            total_attempts: 10,
+        });
+
+        // Test multiple selections to check statistical preference
+        let mut hard_count = 0;
+        let mut zap_count = 0;
+        let trials = 100;
+        
+        for _ in 0..trials {
+            let words = lang.get_intelligent(2, &char_stats);
+            if words.contains(&"hard".to_string()) {
+                hard_count += 1;
+            }
+            if words.contains(&"zap".to_string()) {
+                zap_count += 1;
+            }
+        }
+
+        // "zap" and "hard" should be selected more often than "easy"
+        // due to higher difficulty scores
+        assert!(zap_count > trials / 4, "zap should be selected frequently (got {} out of {})", zap_count, trials);
+        assert!(hard_count > trials / 4, "hard should be selected frequently (got {} out of {})", hard_count, trials);
+    }
+
+    #[test]
+    fn test_calculate_word_difficulty_score() {
+        let lang = Language::new("english".to_string());
+        
+        let mut char_stats = HashMap::new();
+        char_stats.insert('a', CharacterDifficulty {
+            miss_rate: 10.0,
+            avg_time_ms: 300.0,
+            total_attempts: 20,
+        });
+        char_stats.insert('b', CharacterDifficulty {
+            miss_rate: 5.0,
+            avg_time_ms: 150.0,
+            total_attempts: 15,
+        });
+
+        // Word with one difficult character
+        let score1 = lang.calculate_word_difficulty_score("abc", &char_stats);
+        
+        // Word with only easy characters
+        let score2 = lang.calculate_word_difficulty_score("bbb", &char_stats);
+        
+        // Word with only difficult characters
+        let score3 = lang.calculate_word_difficulty_score("aaa", &char_stats);
+
+        // Difficult characters should result in higher scores
+        assert!(score3 > score1, "Word with all difficult chars should score higher");
+        assert!(score1 > score2, "Word with mixed chars should score higher than easy word");
+        assert!(score3 > 0.0, "Difficult word should have positive score");
+    }
+
+    #[test]
+    fn test_calculate_word_difficulty_score_unknown_characters() {
+        let lang = Language::new("english".to_string());
+        
+        let char_stats = HashMap::new(); // No known characters
+        
+        let score = lang.calculate_word_difficulty_score("unknown", &char_stats);
+        
+        // Unknown characters should get medium priority score
+        assert!(score > 0.0, "Unknown characters should get positive score");
+        assert!(score == 5.0, "Unknown characters should get score of 5.0, got {}", score);
+    }
+
+    #[test]
+    fn test_calculate_word_difficulty_score_empty_word() {
+        let lang = Language::new("english".to_string());
+        let char_stats = HashMap::new();
+        
+        let score = lang.calculate_word_difficulty_score("", &char_stats);
+        assert_eq!(score, 0.0, "Empty word should have zero score");
+    }
+
+    #[test]
+    fn test_intelligent_selection_returns_requested_count() {
+        let lang = Language::new("english".to_string());
+        
+        let mut char_stats = HashMap::new();
+        char_stats.insert('a', CharacterDifficulty {
+            miss_rate: 10.0,
+            avg_time_ms: 200.0,
+            total_attempts: 20,
+        });
+
+        for count in [1, 5, 10, 15] {
+            let words = lang.get_intelligent(count, &char_stats);
+            assert_eq!(words.len(), count, "Should return exactly {} words", count);
+            
+            for word in &words {
+                assert!(lang.words.contains(word), "Selected word should be from language word list");
+            }
+        }
+    }
+
+    #[test]
+    fn test_intelligent_selection_avoids_exact_repetition() {
+        let lang = Language {
+            name: "test".to_string(),
+            size: 10,
+            words: (0..10).map(|i| format!("word{}", i)).collect(),
+        };
+
+        let mut char_stats = HashMap::new();
+        // Make all characters equally difficult
+        for c in 'a'..='z' {
+            char_stats.insert(c, CharacterDifficulty {
+                miss_rate: 10.0,
+                avg_time_ms: 200.0,
+                total_attempts: 20,
+            });
+        }
+
+        // Request more words than available, should get unique words
+        let words = lang.get_intelligent(5, &char_stats);
+        let mut unique_words = words.clone();
+        unique_words.sort();
+        unique_words.dedup();
+        
+        assert_eq!(words.len(), unique_words.len(), "Should not have duplicate words");
+    }
+
+    #[test]
+    fn test_character_difficulty_creation() {
+        let difficulty = CharacterDifficulty {
+            miss_rate: 15.5,
+            avg_time_ms: 250.0,
+            total_attempts: 42,
+        };
+
+        assert_eq!(difficulty.miss_rate, 15.5);
+        assert_eq!(difficulty.avg_time_ms, 250.0);
+        assert_eq!(difficulty.total_attempts, 42);
     }
 }

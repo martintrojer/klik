@@ -27,9 +27,9 @@ use webbrowser::Browser;
 
 const TICK_RATE_MS: u64 = 100;
 
-/// sleek typing tui with visualized results and historical logging
+/// sleek typing tui with visualized results and intelligent practice
 #[derive(Parser, Debug, Clone)]
-#[clap(version, about, long_about= None)]
+#[clap(version, about, long_about= "A sleek typing TUI with intelligent word selection that adapts to your weaknesses, detailed performance analytics, and historical progress tracking.")]
 pub struct Cli {
     /// number of words to use in test
     #[clap(short = 'w', long, default_value_t = 15)]
@@ -50,6 +50,10 @@ pub struct Cli {
     /// language to pull words from
     #[clap(short = 'l', long, value_enum, default_value_t = SupportedLanguage::English)]
     supported_language: SupportedLanguage,
+
+    /// use random word selection instead of intelligent character-based selection (default: intelligent selection that targets your weakest characters)
+    #[clap(long)]
+    random_words: bool,
 }
 
 #[derive(Debug, Copy, Clone, ValueEnum, strum_macros::Display)]
@@ -118,8 +122,26 @@ impl App {
             s.join("")
         } else {
             let language = cli.supported_language.as_lang();
-
-            language.get_random(cli.number_of_words).join(" ")
+            
+            if cli.random_words {
+                // Legacy random word selection
+                language.get_random(cli.number_of_words).join(" ")
+            } else {
+                // Intelligent word selection based on character statistics
+                use crate::stats::StatsDb;
+                let words = if let Ok(stats_db) = StatsDb::new() {
+                    if let Ok(char_difficulties) = stats_db.get_character_difficulties() {
+                        language.get_intelligent(cli.number_of_words, &char_difficulties)
+                    } else {
+                        // Fall back to random if stats query fails
+                        language.get_random(cli.number_of_words)
+                    }
+                } else {
+                    // Fall back to random if database unavailable
+                    language.get_random(cli.number_of_words)
+                };
+                words.join(" ")
+            }
         };
         if cli.number_of_sentences.is_some() {
             Self {
@@ -157,7 +179,26 @@ impl App {
                 }
                 _ => {
                     let language = cli.supported_language.as_lang();
-                    language.get_random(cli.number_of_words).join(" ")
+                    
+                    if cli.random_words {
+                        // Legacy random word selection
+                        language.get_random(cli.number_of_words).join(" ")
+                    } else {
+                        // Intelligent word selection based on character statistics
+                        use crate::stats::StatsDb;
+                        let words = if let Ok(stats_db) = StatsDb::new() {
+                            if let Ok(char_difficulties) = stats_db.get_character_difficulties() {
+                                language.get_intelligent(cli.number_of_words, &char_difficulties)
+                            } else {
+                                // Fall back to random if stats query fails
+                                language.get_random(cli.number_of_words)
+                            }
+                        } else {
+                            // Fall back to random if database unavailable
+                            language.get_random(cli.number_of_words)
+                        };
+                        words.join(" ")
+                    }
                 }
             },
         };
@@ -679,6 +720,7 @@ mod tests {
             number_of_secs: None,
             prompt: None,
             supported_language: SupportedLanguage::English,
+            random_words: false,
         };
 
         let app = App::new(cli.clone());
@@ -698,6 +740,7 @@ mod tests {
             number_of_secs: None,
             prompt: Some("custom test prompt".to_string()),
             supported_language: SupportedLanguage::English,
+            random_words: false,
         };
 
         let app = App::new(cli);
@@ -715,6 +758,7 @@ mod tests {
             number_of_secs: None,
             prompt: None,
             supported_language: SupportedLanguage::English,
+            random_words: false,
         };
 
         let app = App::new(cli);
@@ -732,6 +776,7 @@ mod tests {
             number_of_secs: Some(60),
             prompt: None,
             supported_language: SupportedLanguage::English,
+            random_words: false,
         };
 
         let app = App::new(cli);
@@ -749,6 +794,7 @@ mod tests {
             number_of_secs: None,
             prompt: None,
             supported_language: SupportedLanguage::English,
+            random_words: false,
         };
 
         let mut app = App::new(cli);
@@ -771,6 +817,7 @@ mod tests {
             number_of_secs: None,
             prompt: None,
             supported_language: SupportedLanguage::English,
+            random_words: false,
         };
 
         let mut app = App::new(cli);
@@ -822,6 +869,7 @@ mod tests {
             number_of_secs: None,
             prompt: Some("hello".to_string()),
             supported_language: SupportedLanguage::English,
+            random_words: false,
         };
 
         let mut app = App::new(cli);

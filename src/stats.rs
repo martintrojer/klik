@@ -5,6 +5,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::SystemTime;
 
+use crate::lang::CharacterDifficulty;
+
 /// Character-level statistics for tracking typing performance (used during session)
 #[derive(Debug, Clone)]
 pub struct CharStat {
@@ -355,6 +357,53 @@ impl StatsDb {
             [],
             |row| row.get(0)
         )
+    }
+
+    /// Get character difficulty metrics for intelligent word selection
+    pub fn get_character_difficulties(&self) -> Result<HashMap<char, CharacterDifficulty>> {
+        let mut stmt = self.conn.prepare(
+            r#"
+            SELECT 
+                character,
+                CASE 
+                    WHEN SUM(correct_attempts) > 0 THEN 
+                        CAST(SUM(total_time_ms) AS FLOAT) / SUM(correct_attempts)
+                    ELSE 500.0
+                END as avg_time,
+                CASE 
+                    WHEN SUM(total_attempts) > 0 THEN 
+                        (SUM(total_attempts - correct_attempts) * 100.0 / SUM(total_attempts))
+                    ELSE 50.0
+                END as miss_rate,
+                SUM(total_attempts) as total_attempts
+            FROM char_session_stats 
+            GROUP BY character
+            HAVING SUM(total_attempts) >= 3  -- Only include characters with sufficient data
+            ORDER BY character
+            "#,
+        )?;
+
+        let difficulty_iter = stmt.query_map([], |row| {
+            let char_str: String = row.get(0)?;
+            let character = char_str.chars().next().unwrap_or('\0');
+            let avg_time: f64 = row.get(1)?;
+            let miss_rate: f64 = row.get(2)?;
+            let total_attempts: i64 = row.get(3)?;
+
+            Ok((character, CharacterDifficulty {
+                miss_rate,
+                avg_time_ms: avg_time,
+                total_attempts,
+            }))
+        })?;
+
+        let mut difficulties = HashMap::new();
+        for item in difficulty_iter {
+            let (character, difficulty) = item?;
+            difficulties.insert(character, difficulty);
+        }
+
+        Ok(difficulties)
     }
 }
 
