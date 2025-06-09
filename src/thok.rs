@@ -6,7 +6,7 @@ use directories::ProjectDirs;
 use itertools::Itertools;
 use std::fs::OpenOptions;
 use std::io::{self, Write};
-use std::{char, collections::HashMap, time::SystemTime};
+use std::{char, collections::{HashMap, HashSet}, time::SystemTime};
 
 #[derive(Clone, Debug, Copy, PartialEq)]
 pub enum Outcome {
@@ -39,10 +39,12 @@ pub struct Thok {
     pub std_dev: f64,
     pub stats_db: Option<StatsDb>,
     pub keypress_start_time: Option<SystemTime>,
+    pub strict_mode: bool,
+    pub corrected_positions: std::collections::HashSet<usize>, // Track positions that had errors
 }
 
 impl Thok {
-    pub fn new(prompt: String, number_of_words: usize, number_of_secs: Option<f64>) -> Self {
+    pub fn new(prompt: String, number_of_words: usize, number_of_secs: Option<f64>, strict_mode: bool) -> Self {
         let stats_db = StatsDb::new().ok();
         Self {
             prompt,
@@ -59,6 +61,8 @@ impl Thok {
             std_dev: 0.0,
             stats_db,
             keypress_start_time: None,
+            strict_mode,
+            corrected_positions: HashSet::new(),
         }
     }
 
@@ -164,9 +168,21 @@ impl Thok {
     }
 
     pub fn backspace(&mut self) {
-        if self.cursor_pos > 0 {
-            self.input.remove(self.cursor_pos - 1);
-            self.decrement_cursor();
+        if self.strict_mode {
+            // In strict mode, backspace should reset the current position to allow retry
+            if self.cursor_pos > 0 {
+                self.decrement_cursor();
+                // Remove the input at the new cursor position if it exists
+                if self.cursor_pos < self.input.len() {
+                    self.input.remove(self.cursor_pos);
+                }
+            }
+        } else {
+            // Normal mode: remove previous character and move cursor back
+            if self.cursor_pos > 0 {
+                self.input.remove(self.cursor_pos - 1);
+                self.decrement_cursor();
+            }
         }
     }
 
@@ -179,7 +195,13 @@ impl Thok {
     }
 
     pub fn write(&mut self, c: char) {
-        let idx = self.input.len();
+        let idx = if self.strict_mode {
+            // In strict mode, use cursor position instead of input length
+            self.cursor_pos
+        } else {
+            self.input.len()
+        };
+        
         if idx == 0 && self.started_at.is_none() {
             self.start();
         }
@@ -223,19 +245,73 @@ impl Thok {
             }
         }
 
-        self.input.insert(
-            self.cursor_pos,
-            Input {
-                char: c,
-                outcome,
-                timestamp: now,
-                keypress_start: self.keypress_start_time,
-            },
-        );
+        if self.strict_mode {
+            // In strict mode, handle cursor progression differently
+            if outcome == Outcome::Correct {
+                // Check if this position had previous errors
+                let had_error = self.cursor_pos < self.input.len() && 
+                               self.input[self.cursor_pos].outcome == Outcome::Incorrect;
+                
+                // If there was a previous error, mark this position as corrected
+                if had_error {
+                    self.corrected_positions.insert(self.cursor_pos);
+                }
+                
+                // Replace any existing input at this position with the correct one
+                if self.cursor_pos < self.input.len() {
+                    self.input[self.cursor_pos] = Input {
+                        char: c,
+                        outcome,
+                        timestamp: now,
+                        keypress_start: self.keypress_start_time,
+                    };
+                } else {
+                    // Add new input if we're at the end
+                    self.input.push(Input {
+                        char: c,
+                        outcome,
+                        timestamp: now,
+                        keypress_start: self.keypress_start_time,
+                    });
+                }
+                // Only advance cursor on correct input
+                self.increment_cursor();
+            } else {
+                // For incorrect input, update the input at current position but don't advance cursor
+                if self.cursor_pos < self.input.len() {
+                    self.input[self.cursor_pos] = Input {
+                        char: c,
+                        outcome,
+                        timestamp: now,
+                        keypress_start: self.keypress_start_time,
+                    };
+                } else {
+                    // Add new input if we're at the end
+                    self.input.push(Input {
+                        char: c,
+                        outcome,
+                        timestamp: now,
+                        keypress_start: self.keypress_start_time,
+                    });
+                }
+                // Cursor stays at the same position for retry
+            }
+        } else {
+            // Normal mode: always insert and advance
+            self.input.insert(
+                self.cursor_pos,
+                Input {
+                    char: c,
+                    outcome,
+                    timestamp: now,
+                    keypress_start: self.keypress_start_time,
+                },
+            );
+            self.increment_cursor();
+        }
         
         // Reset keypress start time for next character
         self.keypress_start_time = None;
-        self.increment_cursor();
     }
 
     pub fn has_started(&self) -> bool {
@@ -375,7 +451,7 @@ mod tests {
 
     #[test]
     fn test_thok_new() {
-        let thok = Thok::new("hello world".to_string(), 2, None);
+        let thok = Thok::new("hello world".to_string(), 2, None, false);
 
         assert_eq!(thok.prompt, "hello world");
         assert_eq!(thok.number_of_words, 2);
@@ -387,11 +463,12 @@ mod tests {
         assert_eq!(thok.std_dev, 0.0);
         assert!(!thok.has_started());
         assert!(!thok.has_finished());
+        assert!(!thok.strict_mode);
     }
 
     #[test]
     fn test_thok_new_with_time_limit() {
-        let thok = Thok::new("test".to_string(), 1, Some(30.0));
+        let thok = Thok::new("test".to_string(), 1, Some(30.0), false);
 
         assert_eq!(thok.number_of_secs, Some(30.0));
         assert_eq!(thok.seconds_remaining, Some(30.0));
@@ -399,7 +476,7 @@ mod tests {
 
     #[test]
     fn test_get_expected_char() {
-        let thok = Thok::new("hello".to_string(), 1, None);
+        let thok = Thok::new("hello".to_string(), 1, None, false);
 
         assert_eq!(thok.get_expected_char(0), 'h');
         assert_eq!(thok.get_expected_char(1), 'e');
@@ -408,7 +485,7 @@ mod tests {
 
     #[test]
     fn test_write_correct_char() {
-        let mut thok = Thok::new("test".to_string(), 1, None);
+        let mut thok = Thok::new("test".to_string(), 1, None, false);
 
         thok.write('t');
 
@@ -421,7 +498,7 @@ mod tests {
 
     #[test]
     fn test_write_incorrect_char() {
-        let mut thok = Thok::new("test".to_string(), 1, None);
+        let mut thok = Thok::new("test".to_string(), 1, None, false);
 
         thok.write('x');
 
@@ -433,7 +510,7 @@ mod tests {
 
     #[test]
     fn test_backspace() {
-        let mut thok = Thok::new("test".to_string(), 1, None);
+        let mut thok = Thok::new("test".to_string(), 1, None, false);
 
         thok.write('t');
         thok.write('e');
@@ -451,7 +528,7 @@ mod tests {
 
     #[test]
     fn test_backspace_at_start() {
-        let mut thok = Thok::new("test".to_string(), 1, None);
+        let mut thok = Thok::new("test".to_string(), 1, None, false);
 
         thok.backspace();
         assert_eq!(thok.input.len(), 0);
@@ -460,7 +537,7 @@ mod tests {
 
     #[test]
     fn test_increment_cursor() {
-        let mut thok = Thok::new("test".to_string(), 1, None);
+        let mut thok = Thok::new("test".to_string(), 1, None, false);
         thok.write('t');
 
         let initial_pos = thok.cursor_pos;
@@ -471,7 +548,7 @@ mod tests {
 
     #[test]
     fn test_decrement_cursor() {
-        let mut thok = Thok::new("test".to_string(), 1, None);
+        let mut thok = Thok::new("test".to_string(), 1, None, false);
         thok.write('t');
 
         let initial_pos = thok.cursor_pos;
@@ -482,7 +559,7 @@ mod tests {
 
     #[test]
     fn test_has_finished_by_completion() {
-        let mut thok = Thok::new("hi".to_string(), 1, None);
+        let mut thok = Thok::new("hi".to_string(), 1, None, false);
 
         assert!(!thok.has_finished());
 
@@ -495,7 +572,7 @@ mod tests {
 
     #[test]
     fn test_has_finished_by_time() {
-        let mut thok = Thok::new("test".to_string(), 1, Some(1.0));
+        let mut thok = Thok::new("test".to_string(), 1, Some(1.0), false);
 
         assert!(!thok.has_finished());
 
@@ -508,7 +585,7 @@ mod tests {
 
     #[test]
     fn test_on_tick() {
-        let mut thok = Thok::new("test".to_string(), 1, Some(10.0));
+        let mut thok = Thok::new("test".to_string(), 1, Some(10.0), false);
         let initial_time = thok.seconds_remaining.unwrap();
 
         thok.on_tick();
@@ -519,7 +596,7 @@ mod tests {
 
     #[test]
     fn test_calc_results_basic() {
-        let mut thok = Thok::new("test".to_string(), 1, None);
+        let mut thok = Thok::new("test".to_string(), 1, None, false);
         thok.start();
 
         thread::sleep(Duration::from_millis(100));
@@ -537,7 +614,7 @@ mod tests {
 
     #[test]
     fn test_calc_results_with_errors() {
-        let mut thok = Thok::new("test".to_string(), 1, None);
+        let mut thok = Thok::new("test".to_string(), 1, None, false);
         thok.start();
 
         thread::sleep(Duration::from_millis(100));
@@ -555,7 +632,7 @@ mod tests {
 
     #[test]
     fn test_calc_results_empty_input() {
-        let mut thok = Thok::new("test".to_string(), 1, None);
+        let mut thok = Thok::new("test".to_string(), 1, None, false);
         thok.start();
 
         thok.calc_results();
@@ -568,7 +645,7 @@ mod tests {
 
     #[test]
     fn test_keypress_timing() {
-        let mut thok = Thok::new("test".to_string(), 1, None);
+        let mut thok = Thok::new("test".to_string(), 1, None, false);
         
         thok.on_keypress_start();
         thread::sleep(Duration::from_millis(10));
@@ -582,7 +659,7 @@ mod tests {
 
     #[test]
     fn test_character_statistics_methods() {
-        let thok = Thok::new("test".to_string(), 1, None);
+        let thok = Thok::new("test".to_string(), 1, None, false);
         
         // These methods should return None if no database is available
         assert!(thok.get_char_stats('t').is_none() || thok.get_char_stats('t').is_some());
@@ -593,7 +670,7 @@ mod tests {
 
     #[test]
     fn test_keypress_timing_reset() {
-        let mut thok = Thok::new("test".to_string(), 1, None);
+        let mut thok = Thok::new("test".to_string(), 1, None, false);
         
         thok.on_keypress_start();
         assert!(thok.keypress_start_time.is_some());
@@ -604,7 +681,7 @@ mod tests {
 
     #[test]
     fn test_flush_char_stats() {
-        let mut thok = Thok::new("test".to_string(), 1, None);
+        let mut thok = Thok::new("test".to_string(), 1, None, false);
         
         // Flush should work whether or not database is available
         let result = thok.flush_char_stats();
@@ -614,7 +691,7 @@ mod tests {
 
     #[test]
     fn test_calc_results_flushes_stats() {
-        let mut thok = Thok::new("test".to_string(), 1, None);
+        let mut thok = Thok::new("test".to_string(), 1, None, false);
         thok.start();
         
         thread::sleep(Duration::from_millis(10));
@@ -633,7 +710,7 @@ mod tests {
 
     #[test]
     fn test_database_path_and_creation() {
-        let thok = Thok::new("test".to_string(), 1, None);
+        let thok = Thok::new("test".to_string(), 1, None, false);
         
         // Print debug information
         println!("Has stats database: {}", thok.has_stats_database());
@@ -655,7 +732,7 @@ mod tests {
 
     #[test]
     fn test_real_typing_saves_to_database() {
-        let mut thok = Thok::new("hello".to_string(), 1, None);
+        let mut thok = Thok::new("hello".to_string(), 1, None, false);
         
         println!("Starting real typing simulation...");
         
@@ -703,5 +780,53 @@ mod tests {
         } else {
             println!("❌ No summary statistics found");
         }
+    }
+
+    #[test]
+    fn test_strict_mode_cursor_behavior() {
+        let mut thok = Thok::new("test".to_string(), 1, None, true);
+        
+        // Test correct input advances cursor
+        thok.write('t');
+        assert_eq!(thok.cursor_pos, 1);
+        
+        // Test incorrect input doesn't advance cursor
+        thok.write('x'); // Wrong character for 'e'
+        assert_eq!(thok.cursor_pos, 1); // Cursor should stay at position 1
+        assert_eq!(thok.input[1].outcome, Outcome::Incorrect);
+        
+        // Test correct input after error advances cursor and marks as corrected
+        thok.write('e'); // Correct character
+        assert_eq!(thok.cursor_pos, 2); // Cursor should advance
+        assert_eq!(thok.input[1].outcome, Outcome::Correct);
+        assert!(thok.corrected_positions.contains(&1)); // Position 1 should be marked as corrected
+    }
+
+    #[test]
+    fn test_strict_mode_backspace() {
+        let mut thok = Thok::new("test".to_string(), 1, None, true);
+        
+        thok.write('t');
+        thok.write('e');
+        assert_eq!(thok.cursor_pos, 2);
+        assert_eq!(thok.input.len(), 2);
+        
+        // Test backspace in strict mode
+        thok.backspace();
+        assert_eq!(thok.cursor_pos, 1);
+        assert_eq!(thok.input.len(), 1); // Should remove the input at new cursor position
+    }
+
+    #[test]
+    fn test_normal_mode_vs_strict_mode() {
+        // Test normal mode
+        let mut normal_thok = Thok::new("test".to_string(), 1, None, false);
+        normal_thok.write('x'); // Wrong character
+        assert_eq!(normal_thok.cursor_pos, 1); // Cursor advances even with wrong char
+        
+        // Test strict mode
+        let mut strict_thok = Thok::new("test".to_string(), 1, None, true);
+        strict_thok.write('x'); // Wrong character
+        assert_eq!(strict_thok.cursor_pos, 0); // Cursor doesn't advance with wrong char
     }
 }

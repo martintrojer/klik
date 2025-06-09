@@ -58,6 +58,10 @@ pub struct Cli {
     /// enable capitalization, punctuation, and commas for realistic typing practice
     #[clap(long)]
     capitalize: bool,
+
+    /// enable strict mode: stop on errors and require correction before proceeding
+    #[clap(long)]
+    strict: bool,
 }
 
 #[derive(Debug, Copy, Clone, ValueEnum, strum_macros::Display)]
@@ -156,7 +160,7 @@ impl App {
         };
         if cli.number_of_sentences.is_some() {
             Self {
-                thok: Thok::new(prompt, count, cli.number_of_secs.map(|ns| ns as f64)),
+                thok: Thok::new(prompt, count, cli.number_of_secs.map(|ns| ns as f64), cli.strict),
                 cli: Some(cli),
                 state: AppState::Typing,
                 char_stats_state: CharStatsState::default(),
@@ -167,6 +171,7 @@ impl App {
                     prompt,
                     cli.number_of_words,
                     cli.number_of_secs.map(|ns| ns as f64),
+                    cli.strict,
                 ),
                 cli: Some(cli),
                 state: AppState::Typing,
@@ -221,12 +226,13 @@ impl App {
             },
         };
         if cli.number_of_sentences.is_some() {
-            self.thok = Thok::new(prompt, count, cli.number_of_secs.map(|ns| ns as f64));
+            self.thok = Thok::new(prompt, count, cli.number_of_secs.map(|ns| ns as f64), cli.strict);
         } else {
             self.thok = Thok::new(
                 prompt,
                 cli.number_of_words,
                 cli.number_of_secs.map(|ns| ns as f64),
+                cli.strict,
             );
         }
         self.state = AppState::Typing;
@@ -740,6 +746,7 @@ mod tests {
             supported_language: SupportedLanguage::English,
             random_words: false,
             capitalize: false,
+            strict: false,
         };
 
         let app = App::new(cli.clone());
@@ -761,6 +768,7 @@ mod tests {
             supported_language: SupportedLanguage::English,
             random_words: false,
             capitalize: false,
+            strict: false,
         };
 
         let app = App::new(cli);
@@ -780,6 +788,7 @@ mod tests {
             supported_language: SupportedLanguage::English,
             random_words: false,
             capitalize: false,
+            strict: false,
         };
 
         let app = App::new(cli);
@@ -799,6 +808,7 @@ mod tests {
             supported_language: SupportedLanguage::English,
             random_words: false,
             capitalize: false,
+            strict: false,
         };
 
         let app = App::new(cli);
@@ -818,6 +828,7 @@ mod tests {
             supported_language: SupportedLanguage::English,
             random_words: false,
             capitalize: false,
+            strict: false,
         };
 
         let mut app = App::new(cli);
@@ -842,6 +853,7 @@ mod tests {
             supported_language: SupportedLanguage::English,
             random_words: false,
             capitalize: false,
+            strict: false,
         };
 
         let mut app = App::new(cli);
@@ -895,6 +907,7 @@ mod tests {
             supported_language: SupportedLanguage::English,
             random_words: false,
             capitalize: false,
+            strict: false,
         };
 
         let mut app = App::new(cli);

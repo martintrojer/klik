@@ -25,6 +25,7 @@ By default, thokr analyzes your character-level performance and intelligently se
 - **Default**: Intelligent selection targets your weakest characters
 - **Legacy mode**: Use `--random-words` flag for traditional random selection
 - **Realistic practice**: Use `--capitalize` flag for capitalization, punctuation, and commas
+- **Strict mode**: Use `--strict` flag to stop on errors and require correction before proceeding
 
 ## Usage
 
@@ -61,6 +62,9 @@ Options:
 
       --capitalize
           enable capitalization, punctuation, and commas for realistic typing practice
+
+      --strict
+          enable strict mode: stop on errors and require correction before proceeding
 
   -h, --help
           Print help (see a summary with '-h')
@@ -100,6 +104,7 @@ For detailed usage run `thokr -h`.
 | `thokr -w 100`                 |  100 intelligently selected words from common English vocabulary |
 | `thokr -w 100 -l english1k`    |  100 intelligent words from the 1000 most common English words |
 | `thokr --capitalize`           |  15 intelligent words with capitalization, punctuation, and commas |
+| `thokr --strict`               |  15 intelligent words in strict mode (stop on errors, require correction) |
 | `thokr --random-words`         |                  15 randomly selected words (legacy behavior) |
 | `thokr -w 10 -s 5`             |  10 intelligent words with hard stop at 5 seconds |
 | `thokr -p "$(cat foo.txt)"`    |                   custom prompt with the output of `cat foo.txt` |

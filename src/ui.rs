@@ -78,7 +78,15 @@ impl Widget for &Thok {
                                 },
                                 red_bold_style,
                             ),
-                            Outcome::Correct => Span::styled(expected, green_bold_style),
+                            Outcome::Correct => {
+                                // In strict mode, show corrected positions with a different color
+                                if self.strict_mode && self.corrected_positions.contains(&idx) {
+                                    // Show corrected errors with orange color (much more distinct from green)
+                                    Span::styled(expected, Style::default().patch(bold_style).fg(Color::Rgb(255, 165, 0)))
+                                } else {
+                                    Span::styled(expected, green_bold_style)
+                                }
+                            },
                         }
                     })
                     .collect::<Vec<Span>>();
@@ -212,7 +220,7 @@ mod tests {
     use std::time::SystemTime;
 
     fn create_test_thok(prompt: &str, finished: bool) -> Thok {
-        let mut thok = Thok::new(prompt.to_string(), 1, None);
+        let mut thok = Thok::new(prompt.to_string(), 1, None, false);
 
         if finished {
             for (_i, c) in prompt.chars().enumerate() {
@@ -268,7 +276,7 @@ mod tests {
 
     #[test]
     fn test_ui_widget_with_time_limit() {
-        let mut thok = Thok::new("test".to_string(), 1, Some(30.0));
+        let mut thok = Thok::new("test".to_string(), 1, Some(30.0), false);
         thok.seconds_remaining = Some(25.5);
 
         let area = Rect::new(0, 0, 80, 24);
@@ -299,7 +307,7 @@ mod tests {
 
     #[test]
     fn test_ui_widget_with_incorrect_input() {
-        let mut thok = Thok::new("test".to_string(), 1, None);
+        let mut thok = Thok::new("test".to_string(), 1, None, false);
 
         thok.input.push(Input {
             char: 't',
