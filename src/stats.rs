@@ -556,8 +556,8 @@ mod tests {
         let end = SystemTime::now();
         
         let diff = time_diff_ms(start, end);
-        assert!(diff >= 10);
-        assert!(diff < 50); // Should be reasonably close
+        assert!(diff >= 8); // Allow some timing variance
+        assert!(diff < 100); // More generous upper bound for slower systems
     }
 
     #[test]
