@@ -1,6 +1,6 @@
-# GitHub Actions CI/CD
+# CI/CD Pipeline Documentation
 
-This directory contains the modern Rust CI/CD pipeline for thokr.
+This document describes the modern Rust CI/CD pipeline for thokr.
 
 ## Workflows
 
