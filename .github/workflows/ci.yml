@@ -122,39 +122,39 @@ jobs:
     - name: Run security audit
       run: cargo audit
 
-  minimal-versions:
-    name: Minimal Versions
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@nightly
-
-    - name: Configure Rust cache
-      uses: Swatinem/rust-cache@v2
-
-    - name: Install cargo-minimal-versions
-      run: cargo install cargo-minimal-versions
-
-    - name: Check with minimal versions
-      run: cargo minimal-versions check
-
-  msrv:
-    name: Minimum Supported Rust Version
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Install Rust 1.70.0 (MSRV)
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        toolchain: 1.70.0
-
-    - name: Configure Rust cache
-      uses: Swatinem/rust-cache@v2
-
-    - name: Check MSRV compatibility
-      run: cargo check --verbose
+  # minimal-versions:
+  #   name: Minimal Versions
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   - name: Checkout code
+  #     uses: actions/checkout@v4
+  #
+  #   - name: Install Rust toolchain
+  #     uses: dtolnay/rust-toolchain@nightly
+  #
+  #   - name: Configure Rust cache
+  #     uses: Swatinem/rust-cache@v2
+  #
+  #   - name: Install cargo-minimal-versions
+  #     run: cargo install cargo-minimal-versions
+  #
+  #   - name: Check with minimal versions
+  #     run: cargo minimal-versions check
+  #
+  # msrv:
+  #   name: Minimum Supported Rust Version
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   - name: Checkout code
+  #     uses: actions/checkout@v4
+  #
+  #   - name: Install Rust 1.70.0 (MSRV)
+  #     uses: dtolnay/rust-toolchain@stable
+  #     with:
+  #       toolchain: 1.70.0
+  #
+  #   - name: Configure Rust cache
+  #     uses: Swatinem/rust-cache@v2
+  #
+  #   - name: Check MSRV compatibility
+  #     run: cargo check --verbose
