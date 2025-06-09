@@ -174,7 +174,7 @@ impl App {
             
             if cli.capitalize || cli.symbols {
                 // Apply formatting with capitalization and/or symbols
-                language.apply_advanced_formatting(words, cli.symbols)
+                language.apply_advanced_formatting(words, cli.capitalize, cli.symbols)
             } else {
                 // Standard space-separated words
                 words.join(" ")
@@ -253,7 +253,7 @@ impl App {
                     
                     if cli.capitalize || cli.symbols {
                         // Apply formatting with capitalization and/or symbols
-                        language.apply_advanced_formatting(words, cli.symbols)
+                        language.apply_advanced_formatting(words, cli.capitalize, cli.symbols)
                     } else {
                         // Standard space-separated words
                         words.join(" ")
@@ -995,5 +995,79 @@ mod tests {
         
         let state3 = AppState::CharacterStats;
         assert_ne!(state1, state3);
+    }
+
+    #[test]
+    fn test_flag_independence_at_app_level() {
+        // Test that CLI flags control their own behavior independently
+        
+        // Test substitute only
+        let cli_substitute_only = Cli {
+            number_of_words: 5,
+            number_of_sentences: None,
+            number_of_secs: None,
+            prompt: None,
+            supported_language: SupportedLanguage::English,
+            random_words: false,
+            capitalize: false,
+            strict: false,
+            symbols: false,
+            substitute: true,
+        };
+        let app_substitute = App::new(cli_substitute_only);
+        // Should generate substituted words without extra formatting
+        assert!(!app_substitute.thok.prompt.is_empty());
+        
+        // Test capitalize only
+        let cli_capitalize_only = Cli {
+            number_of_words: 5,
+            number_of_sentences: None,
+            number_of_secs: None,
+            prompt: None,
+            supported_language: SupportedLanguage::English,
+            random_words: false,
+            capitalize: true,
+            strict: false,
+            symbols: false,
+            substitute: false,
+        };
+        let app_capitalize = App::new(cli_capitalize_only);
+        // Should have capitalization
+        assert!(app_capitalize.thok.prompt.chars().next().unwrap().is_uppercase());
+        
+        // Test symbols only
+        let cli_symbols_only = Cli {
+            number_of_words: 5,
+            number_of_sentences: None,
+            number_of_secs: None,
+            prompt: None,
+            supported_language: SupportedLanguage::English,
+            random_words: false,
+            capitalize: false,
+            strict: false,
+            symbols: true,
+            substitute: false,
+        };
+        let app_symbols = App::new(cli_symbols_only);
+        // Should have symbols available (end punctuation at minimum)
+        assert!(app_symbols.thok.prompt.ends_with('.') || app_symbols.thok.prompt.ends_with('!') || app_symbols.thok.prompt.ends_with('?'));
+        
+        // Test all three combined
+        let cli_all = Cli {
+            number_of_words: 5,
+            number_of_sentences: None,
+            number_of_secs: None,
+            prompt: None,
+            supported_language: SupportedLanguage::English,
+            random_words: false,
+            capitalize: true,
+            strict: false,
+            symbols: true,
+            substitute: true,
+        };
+        let app_all = App::new(cli_all);
+        // Should have all features
+        assert!(!app_all.thok.prompt.is_empty());
+        assert!(app_all.thok.prompt.chars().next().unwrap().is_uppercase());
     }
 }

@@ -29,6 +29,8 @@ By default, thokr analyzes your character-level performance and intelligently se
 - **Strict mode**: Use `--strict` flag to stop on errors and require correction before proceeding
 - **Symbol practice**: Use `--symbols` flag to include brackets, operators, and special characters
 
+**Note**: All flags work independently and can be combined. Each flag only controls its specific feature without automatically enabling others.
+
 ## 🔀 Character Substitution Mode
 
 **For ultra-targeted practice, try the new substitution mode!**
@@ -41,6 +43,7 @@ The `--substitute` flag creates "almost English" words by strategically replacin
 - **Balanced Difficulty**: 30% substitution rate keeps words recognizable yet challenging
 - **Context Preservation**: Maintains capitalization, punctuation, and word boundaries
 - **Adaptive Practice**: Automatically targets your current weak points
+- **Flag Independence**: Works alone or combines with `--capitalize` and `--symbols` for additional formatting
 
 ### How it works:
 1. Selects random English words as base templates
@@ -49,6 +52,27 @@ The `--substitute` flag creates "almost English" words by strategically replacin
 4. Preserves word structure, case, and punctuation for realistic practice
 
 **Example**: "hello world" might become "zqllo worzd" - challenging your weak characters while maintaining familiar word patterns.
+
+## 🎛️ Flag Combinations
+
+**All flags work independently and can be combined for customized practice:**
+
+| Flag Combination | Word Selection | Capitalization | Symbols | Character Substitution |
+|------------------|---------------|----------------|---------|----------------------|
+| (none) | Intelligent | ❌ | ❌ | ❌ |
+| `--substitute` | Random base | ❌ | ❌ | ✅ |
+| `--capitalize` | Intelligent | ✅ | ❌ | ❌ |
+| `--symbols` | Intelligent | ❌ | ✅ | ❌ |
+| `--substitute --capitalize` | Random base | ✅ | ❌ | ✅ |
+| `--substitute --symbols` | Random base | ❌ | ✅ | ✅ |
+| `--capitalize --symbols` | Intelligent | ✅ | ✅ | ❌ |
+| `--substitute --capitalize --symbols` | Random base | ✅ | ✅ | ✅ |
+
+**Key Points**:
+- Each flag controls only its specific feature
+- Flags can be combined in any combination
+- `--substitute` uses random words as base templates, then applies character substitution
+- `--capitalize` and `--symbols` are applied after word selection/substitution
 
 ## Usage
 
@@ -135,7 +159,10 @@ For detailed usage run `thokr -h`.
 | `thokr --substitute`           |  15 "almost English" words with weak characters substituted in |
 | `thokr --capitalize`           |  15 intelligent words with capitalization, punctuation, and commas |
 | `thokr --symbols`              |  15 intelligent words with brackets, operators, and special characters |
-| `thokr --substitute --symbols` |  15 substituted words with full symbol and capitalization practice |
+| `thokr --substitute --capitalize` |  15 substituted words with capitalization and punctuation |
+| `thokr --substitute --symbols` |  15 substituted words with symbols and special characters |
+| `thokr --capitalize --symbols` |  15 intelligent words with both capitalization and symbols |
+| `thokr --substitute --capitalize --symbols` |  15 substituted words with full formatting |
 | `thokr --strict`               |  15 intelligent words in strict mode (stop on errors, require correction) |
 | `thokr --random-words`         |                  15 randomly selected words (legacy behavior) |
 | `thokr -w 10 -s 5`             |  10 intelligent words with hard stop at 5 seconds |
@@ -144,6 +171,15 @@ For detailed usage run `thokr -h`.
 
 _During a test you can press ← to start over or → to see a new prompt (assuming
 you didn't supply a custom one)_
+
+### Flag Independence
+
+All formatting and mode flags (`--substitute`, `--capitalize`, `--symbols`, `--strict`) work independently:
+
+- **Combine freely**: `thokr --substitute --capitalize --symbols` works exactly as expected
+- **No side effects**: `--substitute` won't automatically add capitalization or symbols  
+- **Predictable behavior**: Each flag only controls its documented feature
+- **Flexible practice**: Mix and match flags to create your ideal practice environment
 
 ## Supported Languages
 
