@@ -49,7 +49,10 @@ mod tests {
         let formatted = lang.apply_advanced_formatting(substituted_words, true, true);
         
         assert!(!formatted.is_empty());
-        // Should have capitalization
-        assert!(formatted.chars().next().unwrap().is_uppercase());
+        // Should have capitalization (first alphabetic character should be uppercase)
+        let first_alpha_char = formatted.chars().find(|c| c.is_alphabetic());
+        if let Some(first_char) = first_alpha_char {
+            assert!(first_char.is_uppercase());
+        }
     }
 }

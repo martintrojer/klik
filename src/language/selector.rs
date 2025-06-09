@@ -321,4 +321,120 @@ mod tests {
         // Word with difficult character should score higher
         assert!(score1 > score2);
     }
+
+    #[test]
+    fn test_calculate_word_difficulty_score_edge_cases() {
+        let char_stats = create_test_char_stats();
+        
+        // Empty word
+        let empty_score = calculate_word_difficulty_score("", &char_stats);
+        assert_eq!(empty_score, 0.0);
+        
+        // Word with unknown characters
+        let unknown_score = calculate_word_difficulty_score("xyz", &HashMap::new());
+        assert!(unknown_score > 0.0);
+        
+        // Word with mixed known and unknown characters
+        let mixed_score = calculate_word_difficulty_score("zxy", &char_stats);
+        assert!(mixed_score > 0.0);
+    }
+
+    #[test]
+    fn test_get_weakest_characters() {
+        let char_stats = create_test_char_stats();
+        
+        let weak_chars = get_weakest_characters(&char_stats, 1);
+        assert_eq!(weak_chars.len(), 1);
+        assert_eq!(weak_chars[0], 'z'); // 'z' should be the weakest based on our test data
+        
+        // Test with more characters than available
+        let all_weak_chars = get_weakest_characters(&char_stats, 10);
+        assert_eq!(all_weak_chars.len(), 1); // Only one character in test data
+    }
+
+    #[test]
+    fn test_substitute_characters_in_word() {
+        let weak_chars = vec!['x', 'y', 'z'];
+        
+        // Test with empty word
+        let empty_result = substitute_characters_in_word("", &weak_chars);
+        assert_eq!(empty_result, "");
+        
+        // Test with empty weak chars
+        let no_substitution = substitute_characters_in_word("hello", &[]);
+        assert_eq!(no_substitution, "hello");
+        
+        // Test with actual substitution - should preserve word length
+        let substituted = substitute_characters_in_word("hello", &weak_chars);
+        assert_eq!(substituted.len(), 5);
+        
+        // Test case preservation
+        let uppercase_result = substitute_characters_in_word("HELLO", &weak_chars);
+        assert_eq!(uppercase_result.len(), 5);
+        // At least the first character should remain uppercase if substituted
+        if uppercase_result.chars().next().unwrap() != 'H' {
+            assert!(uppercase_result.chars().next().unwrap().is_uppercase());
+        }
+    }
+
+    #[test]
+    fn test_word_selectors_with_different_counts() {
+        let language = create_test_language();
+        let char_stats = create_test_char_stats();
+        
+        let selectors: Vec<Box<dyn WordSelector>> = vec![
+            Box::new(RandomSelector),
+            Box::new(IntelligentSelector),
+            Box::new(SubstitutionSelector),
+        ];
+        
+        for selector in selectors {
+            // Test with count 0
+            let zero_words = selector.select_words(&language, 0, &char_stats);
+            assert_eq!(zero_words.len(), 0);
+            
+            // Test with count 1
+            let one_word = selector.select_words(&language, 1, &char_stats);
+            assert_eq!(one_word.len(), 1);
+            
+            // Test with count larger than available words
+            let many_words = selector.select_words(&language, 100, &char_stats);
+            assert!(many_words.len() <= language.words.len());
+        }
+    }
+
+    #[test]
+    fn test_calculate_word_difficulty_score_with_uppercase() {
+        let mut char_stats = HashMap::new();
+        char_stats.insert('a', CharacterDifficulty {
+            miss_rate: 10.0,
+            avg_time_ms: 200.0,
+            total_attempts: 20,
+            uppercase_miss_rate: 25.0,
+            uppercase_avg_time: 350.0,
+            uppercase_attempts: 5,
+            uppercase_penalty: 0.8,
+        });
+        
+        let lowercase_score = calculate_word_difficulty_score("aaa", &char_stats);
+        let uppercase_score = calculate_word_difficulty_score("AAA", &char_stats);
+        
+        // Uppercase should score higher due to penalty
+        assert!(uppercase_score > lowercase_score);
+    }
+
+    #[test]
+    fn test_intelligent_selector_with_limited_words() {
+        let small_language = Language {
+            name: "small".to_string(),
+            size: 2,
+            words: vec!["a".to_string(), "z".to_string()],
+        };
+        
+        let char_stats = create_test_char_stats();
+        let selector = IntelligentSelector;
+        
+        let words = selector.select_words(&small_language, 2, &char_stats);
+        assert_eq!(words.len(), 2);
+    }
 }

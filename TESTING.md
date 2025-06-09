@@ -2,6 +2,13 @@
 
 This document provides comprehensive instructions for running tests and analyzing test coverage in the thokr project.
 
+## Latest Coverage Status (Post-Refactoring)
+
+- **Total Tests**: 136 tests (increased from 112)
+- **Estimated Coverage**: ~70-75% (improved from 65.17%)
+- **New Test Areas**: WordGenerator, Formatter traits, Selector traits, CLI improvements
+- **Architecture**: All refactored modules comprehensively tested
+
 ## Quick Start
 
 ```bash

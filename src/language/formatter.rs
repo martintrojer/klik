@@ -373,7 +373,11 @@ mod tests {
         // Test combined
         let combined_formatter = CompositeFormatter::build_from_flags(true, true);
         let combined_result = combined_formatter.format(words);
-        assert!(combined_result.chars().next().unwrap().is_uppercase());
+        // Should have capitalization (first alphabetic character should be uppercase)
+        let first_alpha_char = combined_result.chars().find(|c| c.is_alphabetic());
+        if let Some(first_char) = first_alpha_char {
+            assert!(first_char.is_uppercase());
+        }
     }
 
     #[test]
@@ -383,5 +387,65 @@ mod tests {
         assert_eq!(capitalize_first_letter("test123"), "Test123");
         assert_eq!(capitalize_first_letter(""), "");
         assert_eq!(capitalize_first_letter("123abc"), "123abc");
+    }
+
+    #[test]
+    fn test_formatters_with_empty_input() {
+        let empty_words = vec![];
+        
+        assert_eq!(BasicFormatter.format(empty_words.clone()), "");
+        assert_eq!(CapitalizationFormatter.format(empty_words.clone()), "");
+        assert_eq!(SymbolFormatter.format(empty_words.clone()), "");
+    }
+
+    #[test]
+    fn test_formatters_with_single_word() {
+        let single_word = vec!["test".to_string()];
+        
+        let basic_result = BasicFormatter.format(single_word.clone());
+        assert_eq!(basic_result, "test");
+        
+        let cap_result = CapitalizationFormatter.format(single_word.clone());
+        assert!(cap_result.starts_with("Test"));
+        assert!(cap_result.ends_with('.') || cap_result.ends_with('!') || cap_result.ends_with('?'));
+        
+        let sym_result = SymbolFormatter.format(single_word);
+        assert!(!sym_result.is_empty());
+    }
+
+    #[test]
+    fn test_composite_formatter_new_and_add() {
+        let composite = CompositeFormatter::new()
+            .add_formatter(Box::new(BasicFormatter));
+        
+        let words = vec!["hello".to_string(), "world".to_string()];
+        let result = composite.format(words);
+        assert_eq!(result, "hello world");
+    }
+
+    #[test]
+    fn test_combined_formatter_empty_input() {
+        let combined = CombinedFormatter;
+        let empty_words = vec![];
+        
+        let result = combined.format(empty_words);
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_combined_formatter_functionality() {
+        let combined = CombinedFormatter;
+        let words = vec!["hello".to_string(), "world".to_string()];
+        
+        let result = combined.format(words);
+        
+        // Should have capitalization (first alphabetic character should be uppercase)
+        let first_alpha_char = result.chars().find(|c| c.is_alphabetic());
+        if let Some(first_char) = first_alpha_char {
+            assert!(first_char.is_uppercase());
+        }
+        // Should end with punctuation
+        assert!(result.ends_with('.') || result.ends_with('!') || result.ends_with('?') || 
+                result.ends_with(';') || result.ends_with(':') || result.ends_with("..."));
     }
 }

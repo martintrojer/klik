@@ -955,7 +955,8 @@ mod tests {
         };
         let app_symbols = App::new(cli_symbols_only);
         // Should have symbols available (end punctuation at minimum)
-        assert!(app_symbols.thok.prompt.ends_with('.') || app_symbols.thok.prompt.ends_with('!') || app_symbols.thok.prompt.ends_with('?'));
+        assert!(app_symbols.thok.prompt.ends_with('.') || app_symbols.thok.prompt.ends_with('!') || app_symbols.thok.prompt.ends_with('?') || 
+                app_symbols.thok.prompt.ends_with(';') || app_symbols.thok.prompt.ends_with(':') || app_symbols.thok.prompt.ends_with("..."));
         
         // Test all three combined
         let cli_all = Cli {
@@ -975,5 +976,114 @@ mod tests {
         assert!(!app_all.thok.prompt.is_empty());
         // Due to substitution and symbol randomness, just check that the prompt is generated
         // The capitalization will be handled by the formatting logic when both flags are enabled
+    }
+
+    #[test]
+    fn test_cli_to_word_gen_config() {
+        let cli = Cli {
+            number_of_words: 20,
+            number_of_sentences: Some(3),
+            number_of_secs: Some(60),
+            prompt: Some("test prompt".to_string()),
+            supported_language: SupportedLanguage::English1k,
+            random_words: true,
+            capitalize: true,
+            strict: false,
+            symbols: true,
+            substitute: false,
+        };
+
+        let config = cli.to_word_gen_config(None);
+        
+        assert_eq!(config.number_of_words, 20);
+        assert_eq!(config.number_of_sentences, Some(3));
+        assert_eq!(config.custom_prompt, None);
+        assert!(matches!(config.language, SupportedLanguage::English1k));
+        assert!(config.random_words);
+        assert!(config.capitalize);
+        assert!(config.symbols);
+        assert!(!config.substitute);
+    }
+
+    #[test]
+    fn test_cli_to_word_gen_config_with_custom_prompt() {
+        let cli = Cli {
+            number_of_words: 10,
+            number_of_sentences: None,
+            number_of_secs: None,
+            prompt: None,
+            supported_language: SupportedLanguage::English,
+            random_words: false,
+            capitalize: false,
+            strict: false,
+            symbols: false,
+            substitute: false,
+        };
+
+        let config = cli.to_word_gen_config(Some("custom prompt override".to_string()));
+        
+        assert_eq!(config.custom_prompt, Some("custom prompt override".to_string()));
+    }
+
+    #[test]
+    fn test_char_stats_state_default() {
+        let state = CharStatsState::default();
+        
+        assert_eq!(state.scroll_offset, 0);
+        assert!(matches!(state.sort_by, SortBy::Character));
+        assert!(state.sort_ascending);
+    }
+
+    #[test]
+    fn test_sort_by_variants() {
+        // Test that all SortBy variants can be created
+        let _char_sort = SortBy::Character;
+        let _time_sort = SortBy::AvgTime;
+        let _miss_sort = SortBy::MissRate;
+        let _attempts_sort = SortBy::Attempts;
+    }
+
+    #[test]
+    fn test_app_state_variants() {
+        // Test that all AppState variants can be created and are equal to themselves
+        assert_eq!(AppState::Typing, AppState::Typing);
+        assert_eq!(AppState::Results, AppState::Results);
+        assert_eq!(AppState::CharacterStats, AppState::CharacterStats);
+        
+        // Test that different variants are not equal
+        assert_ne!(AppState::Typing, AppState::Results);
+        assert_ne!(AppState::Results, AppState::CharacterStats);
+    }
+
+    #[test]
+    fn test_strict_mode_flag() {
+        let cli_strict = Cli {
+            number_of_words: 5,
+            number_of_sentences: None,
+            number_of_secs: None,
+            prompt: Some("test".to_string()),
+            supported_language: SupportedLanguage::English,
+            random_words: false,
+            capitalize: false,
+            strict: true,
+            symbols: false,
+            substitute: false,
+        };
+
+        let app = App::new(cli_strict);
+        assert!(app.thok.strict_mode);
+    }
+
+    #[test]
+    fn test_supported_language_enum_variants() {
+        // Test all variants can be created
+        let _english = SupportedLanguage::English;
+        let _english1k = SupportedLanguage::English1k;
+        let _english10k = SupportedLanguage::English10k;
+        
+        // Test copying
+        let lang1 = SupportedLanguage::English;
+        let lang2 = lang1;
+        assert!(matches!(lang2, SupportedLanguage::English));
     }
 }

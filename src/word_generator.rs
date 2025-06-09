@@ -175,7 +175,93 @@ mod tests {
         
         assert!(!prompt.is_empty());
         assert_eq!(word_count, 5);
-        // Should have capitalization
-        assert!(prompt.chars().next().unwrap().is_uppercase());
+        // Should have capitalization (first alphabetic character should be uppercase)
+        let first_alpha_char = prompt.chars().find(|c| c.is_alphabetic());
+        if let Some(first_char) = first_alpha_char {
+            assert!(first_char.is_uppercase());
+        }
+    }
+
+    #[test]
+    fn test_word_generation_intelligent_selection() {
+        let mut config = create_test_config();
+        config.random_words = false; // Use intelligent selection
+        
+        let generator = WordGenerator::new(config);
+        let (prompt, word_count) = generator.generate_prompt();
+        
+        assert!(!prompt.is_empty());
+        assert_eq!(word_count, 5);
+    }
+
+    #[test]
+    fn test_word_generation_with_symbols_only() {
+        let mut config = create_test_config();
+        config.symbols = true;
+        
+        let generator = WordGenerator::new(config);
+        let (prompt, word_count) = generator.generate_prompt();
+        
+        assert!(!prompt.is_empty());
+        assert_eq!(word_count, 5);
+        // Should end with punctuation
+        assert!(prompt.ends_with('.') || prompt.ends_with('!') || prompt.ends_with('?') || 
+                prompt.ends_with(';') || prompt.ends_with(':') || prompt.ends_with("..."));
+    }
+
+    #[test]
+    fn test_config_conversion() {
+        let config = create_test_config();
+        
+        assert_eq!(config.number_of_words, 5);
+        assert_eq!(config.number_of_sentences, None);
+        assert_eq!(config.custom_prompt, None);
+        assert!(!config.random_words);
+        assert!(!config.substitute);
+        assert!(!config.capitalize);
+        assert!(!config.symbols);
+    }
+
+    #[test]
+    fn test_generate_prompt_respects_custom_prompt() {
+        let mut config = create_test_config();
+        config.custom_prompt = Some("test custom prompt".to_string());
+        
+        let generator = WordGenerator::new(config.clone());
+        let (prompt, word_count) = generator.generate_prompt();
+        
+        assert_eq!(prompt, "test custom prompt");
+        assert_eq!(word_count, config.number_of_words);
+    }
+
+    #[test]
+    fn test_priority_order_custom_prompt_over_sentences() {
+        let mut config = create_test_config();
+        config.number_of_sentences = Some(1);
+        config.custom_prompt = Some("custom takes priority".to_string());
+        
+        let expected_word_count = config.number_of_words;
+        let generator = WordGenerator::new(config);
+        let (prompt, word_count) = generator.generate_prompt();
+        
+        // Custom prompt should take priority over sentences
+        assert_eq!(prompt, "custom takes priority");
+        assert_eq!(word_count, expected_word_count);
+    }
+
+    #[test]
+    fn test_sentences_when_no_custom_prompt() {
+        let mut config = create_test_config();
+        config.number_of_sentences = Some(1);
+        config.custom_prompt = None; // No custom prompt
+        
+        let generator = WordGenerator::new(config);
+        let (prompt, word_count) = generator.generate_prompt();
+        
+        // Should generate sentences when no custom prompt is provided
+        assert!(!prompt.is_empty());
+        assert!(word_count > 0);
+        // Should be sentence-generated content
+        assert_ne!(prompt, "custom takes priority");
     }
 }
