@@ -281,7 +281,8 @@ fn start_tui<B: Backend>(
                             match app.state {
                                 AppState::Typing => {
                                     if !app.thok.has_finished() {
-                                        app.thok.on_keypress_start();
+                                        // Remove the immediate on_keypress_start() call
+                                        // The write() method will now use inter-keystroke timing
                                         app.thok.write(c);
                                         if app.thok.has_finished() {
                                             app.thok.calc_results();
