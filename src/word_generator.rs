@@ -182,7 +182,11 @@ mod tests {
         // Should have capitalization (first alphabetic character should be uppercase)
         let first_alpha_char = prompt.chars().find(|c| c.is_alphabetic());
         if let Some(first_char) = first_alpha_char {
-            assert!(first_char.is_uppercase());
+            assert!(
+                first_char.is_uppercase(),
+                "First alphabetic character should be uppercase. Generated prompt: '{}'",
+                prompt
+            );
         }
     }
 

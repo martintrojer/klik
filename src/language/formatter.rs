@@ -310,6 +310,19 @@ impl TextFormatter for CombinedFormatter {
         text = text.replace(" ?", "?");
         text = text.replace(" ;", ";");
         text = text.replace(" :", ":");
+        
+        // Ensure the first alphabetic character is capitalized
+        // This is a safety net to handle edge cases in the complex formatting logic
+        if let Some(first_alpha_pos) = text.chars().position(|c| c.is_alphabetic()) {
+            let mut chars: Vec<char> = text.chars().collect();
+            if let Some(first_alpha_char) = chars.get(first_alpha_pos) {
+                if first_alpha_char.is_lowercase() {
+                    chars[first_alpha_pos] = first_alpha_char.to_uppercase().next().unwrap_or(*first_alpha_char);
+                    text = chars.into_iter().collect();
+                }
+            }
+        }
+        
         text
     }
 }
@@ -474,5 +487,54 @@ mod tests {
                 || result.ends_with(':')
                 || result.ends_with("...")
         );
+    }
+
+    #[test]
+    fn test_combined_formatter_capitalization_guaranteed() {
+        // Test that the first word is ALWAYS capitalized in CombinedFormatter
+        let combined = CombinedFormatter;
+        let words = vec!["test".to_string(), "word".to_string()];
+
+        // Test multiple times to ensure capitalization is consistent
+        for attempt in 0..100 {
+            let result = combined.format(words.clone());
+            
+            let first_alpha_char = result.chars().find(|c| c.is_alphabetic());
+            if let Some(first_char) = first_alpha_char {
+                assert!(
+                    first_char.is_uppercase(),
+                    "First alphabetic character should ALWAYS be uppercase on attempt {}. Generated result: '{}'",
+                    attempt,
+                    result
+                );
+            }
+        }
+    }
+
+    #[test] 
+    fn test_combined_formatter_debug_comma_issue() {
+        // Try to reproduce the comma-at-beginning issue
+        let combined = CombinedFormatter;
+        let words = vec!["ve".to_string(), "nt".to_string(), "ask".to_string(), "yany".to_string(), "i".to_string()];
+
+        for attempt in 0..100 {
+            let result = combined.format(words.clone());
+            
+            // Check for comma at beginning
+            if result.starts_with(',') {
+                panic!("Found comma at beginning on attempt {}: '{}'", attempt, result);
+            }
+            
+            // Check first alphabetic character
+            let first_alpha_char = result.chars().find(|c| c.is_alphabetic());
+            if let Some(first_char) = first_alpha_char {
+                assert!(
+                    first_char.is_uppercase(),
+                    "First alphabetic character should be uppercase on attempt {}. Generated result: '{}'",
+                    attempt,
+                    result
+                );
+            }
+        }
     }
 }
