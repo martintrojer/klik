@@ -65,14 +65,19 @@ impl Language {
         self.words.choose_multiple(&mut rng, num).cloned().collect()
     }
 
-    /// Apply capitalization, punctuation, and commas to words for realistic typing practice
-    pub fn apply_advanced_formatting(&self, words: Vec<String>) -> String {
+    /// Apply capitalization, punctuation, commas, and optionally symbols to words for realistic typing practice
+    pub fn apply_advanced_formatting(&self, words: Vec<String>, include_symbols: bool) -> String {
         if words.is_empty() {
             return String::new();
         }
 
         let rng = &mut rand::thread_rng();
         let mut result = Vec::new();
+        
+        // Define symbol sets for different contexts
+        let mathematical = ["+", "-", "*", "/", "=", "<", ">"];
+        let programming = ["@", "#", "$", "%", "^", "&", "|", "\\", "~", "`"];
+        let punctuation_symbols = [":", ";", "\"", "'"];
         
         for (i, word) in words.iter().enumerate() {
             let mut formatted_word = word.clone();
@@ -82,26 +87,96 @@ impl Language {
                 formatted_word = Self::capitalize_first_letter(&formatted_word);
             }
             
+            // Add symbols around words if symbols are enabled
+            if include_symbols {
+                // 25% chance to add symbols around words
+                if rng.gen_bool(0.25) {
+                    let symbol_type = rng.gen_range(0..4);
+                    match symbol_type {
+                        0 => {
+                            // Brackets - always paired
+                            let bracket_pair = rng.gen_range(0..3);
+                            match bracket_pair {
+                                0 => formatted_word = format!("({})", formatted_word),
+                                1 => formatted_word = format!("[{}]", formatted_word),
+                                _ => formatted_word = format!("{{{}}}", formatted_word),
+                            }
+                        },
+                        1 => {
+                            // Mathematical symbols - prefix or suffix
+                            let symbol = mathematical.choose(rng).unwrap();
+                            if rng.gen_bool(0.5) {
+                                formatted_word = format!("{}{}", symbol, formatted_word);
+                            } else {
+                                formatted_word = format!("{}{}", formatted_word, symbol);
+                            }
+                        },
+                        2 => {
+                            // Programming symbols - usually prefix
+                            let symbol = programming.choose(rng).unwrap();
+                            formatted_word = format!("{}{}", symbol, formatted_word);
+                        },
+                        _ => {
+                            // Punctuation symbols - usually suffix
+                            let symbol = punctuation_symbols.choose(rng).unwrap();
+                            formatted_word = format!("{}{}", formatted_word, symbol);
+                        }
+                    }
+                }
+            }
+            
             result.push(formatted_word);
             
             // Add punctuation between words
             if i < words.len() - 1 {
-                // 15% chance for comma, otherwise space
-                if rng.gen_bool(0.15) {
-                    result.push(",".to_string());
+                if include_symbols {
+                    // With symbols enabled, more variety in separators (20% chance for special separator)
+                    let separator_choice = rng.gen_range(0..10);
+                    match separator_choice {
+                        0 => result.push(",".to_string()),
+                        1 => result.push(";".to_string()),
+                        _ => {} // Just space
+                    }
+                } else {
+                    // Original behavior: 15% chance for comma
+                    if rng.gen_bool(0.15) {
+                        result.push(",".to_string());
+                    }
                 }
             }
         }
         
-        // Add final punctuation (80% period, 15% exclamation, 5% question mark)
-        let final_punct = match rng.gen_range(0..100) {
-            0..=79 => ".",
-            80..=94 => "!",
-            _ => "?",
-        };
-        result.push(final_punct.to_string());
+        // Add final punctuation 
+        if include_symbols {
+            // More variety with symbols enabled
+            let final_punct = match rng.gen_range(0..100) {
+                0..=50 => ".",
+                51..=65 => "!",
+                66..=75 => "?",
+                76..=85 => ";",
+                86..=92 => ":",
+                _ => "...",
+            };
+            result.push(final_punct.to_string());
+        } else {
+            // Original behavior
+            let final_punct = match rng.gen_range(0..100) {
+                0..=79 => ".",
+                80..=94 => "!",
+                _ => "?",
+            };
+            result.push(final_punct.to_string());
+        }
         
-        result.join(" ").replace(" ,", ",").replace(" .", ".").replace(" !", "!").replace(" ?", "?")
+        // Clean up spacing around punctuation
+        let mut text = result.join(" ");
+        text = text.replace(" ,", ",");
+        text = text.replace(" .", ".");
+        text = text.replace(" !", "!");
+        text = text.replace(" ?", "?");
+        text = text.replace(" ;", ";");
+        text = text.replace(" :", ":");
+        text
     }
     
     /// Helper function to capitalize the first letter of a word
@@ -619,13 +694,15 @@ mod tests {
         let lang = Language::new("english".to_string());
         let words = vec!["hello".to_string(), "world".to_string(), "test".to_string()];
         
-        let result = lang.apply_advanced_formatting(words);
+        let result = lang.apply_advanced_formatting(words, false);
         
         // Should have capitalized first word and end with punctuation
         assert!(result.starts_with("Hello"));
         assert!(result.ends_with('.') || result.ends_with('!') || result.ends_with('?'));
-        assert!(result.contains("world"));
-        assert!(result.contains("test"));
+        // Check that the base words are present (case-insensitive)
+        let lowercase_result = result.to_lowercase();
+        assert!(lowercase_result.contains("world"));
+        assert!(lowercase_result.contains("test"));
     }
 
     #[test]
@@ -633,7 +710,7 @@ mod tests {
         let lang = Language::new("english".to_string());
         let words = vec![];
         
-        let result = lang.apply_advanced_formatting(words);
+        let result = lang.apply_advanced_formatting(words, false);
         assert_eq!(result, "");
     }
 
@@ -642,7 +719,7 @@ mod tests {
         let lang = Language::new("english".to_string());
         let words = vec!["test".to_string()];
         
-        let result = lang.apply_advanced_formatting(words);
+        let result = lang.apply_advanced_formatting(words, false);
         
         // Should start with capital T and end with punctuation
         assert!(result.starts_with("Test"));
@@ -735,7 +812,7 @@ mod tests {
         
         // Test multiple times to ensure consistent structure
         for _ in 0..10 {
-            let result = lang.apply_advanced_formatting(words.clone());
+            let result = lang.apply_advanced_formatting(words.clone(), false);
             
             // Should always start with capital letter
             assert!(result.chars().next().unwrap().is_uppercase());
@@ -749,5 +826,63 @@ mod tests {
             assert!(result.to_lowercase().contains("quick"));
             assert!(result.to_lowercase().contains("brown"));
         }
+    }
+
+    #[test]
+    fn test_apply_advanced_formatting_with_symbols() {
+        let lang = Language::new("english".to_string());
+        let words = vec!["hello".to_string(), "world".to_string()];
+        
+        let result = lang.apply_advanced_formatting(words, true);
+        
+        // Should end with punctuation 
+        let last_char = result.chars().last().unwrap();
+        assert!(".:!?;".contains(last_char) || result.ends_with("..."));
+        
+        // Should have a capital letter somewhere (might not be first char due to symbols)
+        assert!(result.chars().any(|c| c.is_uppercase()));
+        
+        // Should contain base words (somewhere in the result)
+        let lowercase_result = result.to_lowercase();
+        assert!(lowercase_result.contains("hello"));
+        assert!(lowercase_result.contains("world"));
+    }
+
+    #[test]
+    fn test_symbols_include_standard_characters() {
+        let lang = Language::new("english".to_string());
+        let words = vec!["test".to_string(); 50]; // More words to increase chance of symbols
+        
+        let mut found_symbols = std::collections::HashSet::new();
+        
+        // Run multiple times to collect various symbols
+        for _ in 0..20 {
+            let result = lang.apply_advanced_formatting(words.clone(), true);
+            for ch in result.chars() {
+                if "()[]{}+-*/=<>@#$%^&|\\~`:;\"'".contains(ch) {
+                    found_symbols.insert(ch);
+                }
+            }
+        }
+        
+        // Should find at least some symbols (not all due to randomness, but several)
+        assert!(found_symbols.len() >= 3, "Should find at least 3 different symbols, found: {:?}", found_symbols);
+    }
+
+    #[test]
+    fn test_symbols_and_capitalize_combination() {
+        let lang = Language::new("english".to_string());
+        let words = vec!["hello".to_string(), "world".to_string()];
+        
+        let result = lang.apply_advanced_formatting(words, true);
+        
+        // Should work with both capitalization and symbols
+        assert!(result.chars().next().unwrap().is_uppercase());
+        assert!(!result.is_empty());
+        
+        // Should contain the original words
+        let lowercase_result = result.to_lowercase();
+        assert!(lowercase_result.contains("hello"));
+        assert!(lowercase_result.contains("world"));
     }
 }

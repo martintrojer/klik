@@ -62,6 +62,10 @@ pub struct Cli {
     /// enable strict mode: stop on errors and require correction before proceeding
     #[clap(long)]
     strict: bool,
+
+    /// include symbols and special characters for comprehensive typing practice
+    #[clap(long)]
+    symbols: bool,
 }
 
 #[derive(Debug, Copy, Clone, ValueEnum, strum_macros::Display)]
@@ -150,9 +154,9 @@ impl App {
                 }
             };
             
-            if cli.capitalize {
-                // Apply capitalization, punctuation, and commas
-                language.apply_advanced_formatting(words)
+            if cli.capitalize || cli.symbols {
+                // Apply formatting with capitalization and/or symbols
+                language.apply_advanced_formatting(words, cli.symbols)
             } else {
                 // Standard space-separated words
                 words.join(" ")
@@ -215,9 +219,9 @@ impl App {
                         }
                     };
                     
-                    if cli.capitalize {
-                        // Apply capitalization, punctuation, and commas
-                        language.apply_advanced_formatting(words)
+                    if cli.capitalize || cli.symbols {
+                        // Apply formatting with capitalization and/or symbols
+                        language.apply_advanced_formatting(words, cli.symbols)
                     } else {
                         // Standard space-separated words
                         words.join(" ")
@@ -747,6 +751,7 @@ mod tests {
             random_words: false,
             capitalize: false,
             strict: false,
+            symbols: false,
         };
 
         let app = App::new(cli.clone());
@@ -769,6 +774,7 @@ mod tests {
             random_words: false,
             capitalize: false,
             strict: false,
+            symbols: false,
         };
 
         let app = App::new(cli);
@@ -789,6 +795,7 @@ mod tests {
             random_words: false,
             capitalize: false,
             strict: false,
+            symbols: false,
         };
 
         let app = App::new(cli);
@@ -809,6 +816,7 @@ mod tests {
             random_words: false,
             capitalize: false,
             strict: false,
+            symbols: false,
         };
 
         let app = App::new(cli);
@@ -829,6 +837,7 @@ mod tests {
             random_words: false,
             capitalize: false,
             strict: false,
+            symbols: false,
         };
 
         let mut app = App::new(cli);
@@ -854,6 +863,7 @@ mod tests {
             random_words: false,
             capitalize: false,
             strict: false,
+            symbols: false,
         };
 
         let mut app = App::new(cli);
@@ -908,6 +918,7 @@ mod tests {
             random_words: false,
             capitalize: false,
             strict: false,
+            symbols: false,
         };
 
         let mut app = App::new(cli);
