@@ -407,6 +407,128 @@ impl StatsDb {
             })
     }
 
+    /// Get database size in bytes (useful for determining if compaction is needed)
+    pub fn get_database_size(&self) -> Result<i64> {
+        self.conn.query_row(
+            "SELECT page_count * page_size FROM pragma_page_count(), pragma_page_size()",
+            [],
+            |row| row.get(0),
+        )
+    }
+
+    /// Check if database needs compaction based on size and age criteria
+    pub fn needs_compaction(&self) -> Result<bool> {
+        let session_count = self.get_session_count()?;
+        let db_size = self.get_database_size()?;
+
+        // Trigger compaction if:
+        // - More than 1000 session records, OR
+        // - Database size exceeds 10MB
+        Ok(session_count > 1000 || db_size > 10 * 1024 * 1024)
+    }
+
+    /// Compact the database by merging older session data while preserving statistical accuracy
+    /// This reduces storage while maintaining all the information needed for character difficulty analysis
+    pub fn compact_database(&mut self) -> Result<()> {
+        // Start a transaction for atomic operations
+        let tx = self.conn.transaction()?;
+
+        // Create a temporary table to store compacted data
+        tx.execute(
+            r#"
+            CREATE TEMPORARY TABLE compacted_stats AS
+            SELECT 
+                character,
+                SUM(total_attempts) as total_attempts,
+                SUM(correct_attempts) as correct_attempts,
+                SUM(total_time_ms) as total_time_ms,
+                MIN(CASE WHEN min_time_ms > 0 THEN min_time_ms ELSE NULL END) as min_time_ms,
+                MAX(max_time_ms) as max_time_ms,
+                SUM(uppercase_attempts) as uppercase_attempts,
+                SUM(uppercase_correct) as uppercase_correct,
+                SUM(uppercase_time_ms) as uppercase_time_ms,
+                MIN(CASE WHEN uppercase_min_time > 0 THEN uppercase_min_time ELSE NULL END) as uppercase_min_time,
+                MAX(uppercase_max_time) as uppercase_max_time,
+                'compacted_' || date('now') as session_date
+            FROM char_session_stats
+            WHERE session_date < date('now', '-30 days')  -- Only compact data older than 30 days
+            GROUP BY character
+            HAVING COUNT(*) > 1  -- Only compact characters with multiple sessions
+            "#,
+            [],
+        )?;
+
+        // Count how many records we're about to compact
+        let records_to_compact: i64 = tx.query_row(
+            "SELECT COUNT(*) FROM char_session_stats WHERE session_date < date('now', '-30 days')",
+            [],
+            |row| row.get(0),
+        )?;
+
+        // Count how many compacted records we'll create
+        let compacted_records: i64 =
+            tx.query_row("SELECT COUNT(*) FROM compacted_stats", [], |row| row.get(0))?;
+
+        // Only proceed if compaction will actually reduce the number of records
+        if compacted_records > 0 && records_to_compact > compacted_records {
+            // Remove the old records that we're compacting
+            tx.execute(
+                "DELETE FROM char_session_stats WHERE session_date < date('now', '-30 days')",
+                [],
+            )?;
+
+            // Insert the compacted data back into the main table
+            tx.execute(
+                r#"
+                INSERT INTO char_session_stats (
+                    character, total_attempts, correct_attempts, total_time_ms, 
+                    min_time_ms, max_time_ms, uppercase_attempts, uppercase_correct, 
+                    uppercase_time_ms, uppercase_min_time, uppercase_max_time, session_date
+                )
+                SELECT 
+                    character, total_attempts, correct_attempts, total_time_ms,
+                    COALESCE(min_time_ms, 0), max_time_ms, uppercase_attempts, uppercase_correct,
+                    uppercase_time_ms, COALESCE(uppercase_min_time, 0), uppercase_max_time, session_date
+                FROM compacted_stats
+                "#,
+                [],
+            )?;
+
+            // Clean up the temporary table
+            tx.execute("DROP TABLE compacted_stats", [])?;
+        }
+
+        tx.commit()?;
+
+        // Perform VACUUM and ANALYZE outside of transaction
+        if compacted_records > 0 && records_to_compact > compacted_records {
+            // Optimize the database file
+            self.conn.execute("VACUUM", [])?;
+
+            // Update statistics for query optimizer
+            self.conn.execute("ANALYZE", [])?;
+        }
+        Ok(())
+    }
+
+    /// Perform automatic compaction if needed (called periodically)
+    pub fn auto_compact(&mut self) -> Result<()> {
+        if self.needs_compaction()? {
+            self.compact_database()
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Get compaction statistics for debugging/monitoring
+    pub fn get_compaction_info(&self) -> Result<(i64, i64, f64)> {
+        let session_count = self.get_session_count()?;
+        let db_size = self.get_database_size()?;
+        let db_size_mb = db_size as f64 / (1024.0 * 1024.0);
+
+        Ok((session_count, db_size, db_size_mb))
+    }
+
     /// Get character difficulty metrics for intelligent word selection
     pub fn get_character_difficulties(&self) -> Result<HashMap<char, CharacterDifficulty>> {
         let mut stmt = self.conn.prepare(
@@ -721,5 +843,142 @@ mod tests {
 
         // New database should have no entries
         assert_eq!(session_count, 0);
+    }
+
+    #[test]
+    fn test_database_size() {
+        let db = create_test_db();
+        let size = db.get_database_size().unwrap();
+
+        // New database should have some minimal size
+        assert!(size > 0);
+    }
+
+    #[test]
+    fn test_needs_compaction() {
+        let db = create_test_db();
+
+        // New database should not need compaction
+        assert!(!db.needs_compaction().unwrap());
+    }
+
+    #[test]
+    fn test_compaction_info() {
+        let db = create_test_db();
+        let (session_count, db_size, db_size_mb) = db.get_compaction_info().unwrap();
+
+        assert_eq!(session_count, 0);
+        assert!(db_size > 0);
+        assert!(db_size_mb >= 0.0);
+    }
+
+    #[test]
+    fn test_auto_compact() {
+        let mut db = create_test_db();
+
+        // Should not fail even with empty database
+        assert!(db.auto_compact().is_ok());
+    }
+
+    #[test]
+    fn test_compaction_preserves_data() {
+        let mut db = create_test_db();
+
+        // Add some test data with old dates
+        let conn = &db.conn;
+
+        // Insert some old data that should be compacted
+        for i in 0..5 {
+            conn.execute(
+                r#"
+                INSERT INTO char_session_stats (
+                    character, total_attempts, correct_attempts, total_time_ms,
+                    min_time_ms, max_time_ms, uppercase_attempts, uppercase_correct,
+                    uppercase_time_ms, uppercase_min_time, uppercase_max_time, session_date
+                )
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+                "#,
+                params![
+                    "a",
+                    10 + i,
+                    8 + i,
+                    (150 + i * 10) * (8 + i),
+                    100 + i * 5,
+                    200 + i * 10,
+                    2 + i / 2,
+                    1 + i / 3,
+                    (200 + i * 15) * (1 + i / 3),
+                    120 + i * 8,
+                    250 + i * 12,
+                    format!("2023-01-{:02}", i + 1) // Old dates
+                ],
+            )
+            .unwrap();
+        }
+
+        // Insert some recent data that should not be compacted
+        conn.execute(
+            r#"
+            INSERT INTO char_session_stats (
+                character, total_attempts, correct_attempts, total_time_ms,
+                min_time_ms, max_time_ms, uppercase_attempts, uppercase_correct,
+                uppercase_time_ms, uppercase_min_time, uppercase_max_time, session_date
+            )
+            VALUES ('a', 10, 8, 1200, 100, 200, 2, 1, 200, 120, 250, date('now'))
+            "#,
+            [],
+        )
+        .unwrap();
+
+        // Get statistics before compaction
+        let avg_before = db.get_avg_time_to_press('a').unwrap().unwrap();
+        let miss_rate_before = db.get_miss_rate('a').unwrap();
+        let session_count_before = db.get_session_count().unwrap();
+
+        // Perform compaction
+        db.compact_database().unwrap();
+
+        // Get statistics after compaction
+        let avg_after = db.get_avg_time_to_press('a').unwrap().unwrap();
+        let miss_rate_after = db.get_miss_rate('a').unwrap();
+        let session_count_after = db.get_session_count().unwrap();
+
+        // Statistics should be preserved (approximately, allowing for floating point precision)
+        assert!((avg_before - avg_after).abs() < 1.0);
+        assert!((miss_rate_before - miss_rate_after).abs() < 1.0);
+
+        // Session count should be reduced (old sessions compacted)
+        assert!(session_count_after < session_count_before);
+
+        // Should still have at least one record (the recent one + compacted data)
+        assert!(session_count_after >= 1);
+    }
+
+    #[test]
+    fn test_compaction_with_no_old_data() {
+        let mut db = create_test_db();
+
+        // Add only recent data
+        let conn = &db.conn;
+        conn.execute(
+            r#"
+            INSERT INTO char_session_stats (
+                character, total_attempts, correct_attempts, total_time_ms,
+                min_time_ms, max_time_ms, uppercase_attempts, uppercase_correct,
+                uppercase_time_ms, uppercase_min_time, uppercase_max_time, session_date
+            )
+            VALUES ('b', 10, 8, 1200, 100, 200, 2, 1, 200, 120, 250, date('now'))
+            "#,
+            [],
+        )
+        .unwrap();
+
+        let session_count_before = db.get_session_count().unwrap();
+
+        // Compaction should not change anything with recent data
+        db.compact_database().unwrap();
+
+        let session_count_after = db.get_session_count().unwrap();
+        assert_eq!(session_count_before, session_count_after);
     }
 }

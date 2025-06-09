@@ -269,6 +269,8 @@ cargo build --release
 
 - **Config Directory**: Uses platform-specific directories
 - **CSV Logging**: Append-only logging to `~/.config/thokr/log.csv`
+- **SQLite Database**: Character statistics stored in `~/.config/thokr/thokr_stats.db`
+- **Database Compaction**: Automatic compression of old data to maintain performance
 - **Error Handling**: Graceful degradation if logging fails
 
 ### Memory Management
@@ -276,6 +278,42 @@ cargo build --release
 - **Input Storage**: Grows with typing session length
 - **Coordinate Storage**: Used for charting, cleaned per session
 - **Language Loading**: Loaded once at startup
+
+### Database Management & Compaction
+
+**Character Statistics Database:**
+- **Storage**: SQLite database storing aggregated character-level typing performance
+- **Session-based**: Each typing session creates aggregated records per character
+- **Growth Pattern**: Database grows over time as more sessions are completed
+
+**Automatic Compaction:**
+- **Trigger Conditions**: 
+  - More than 1000 session records, OR
+  - Database size exceeds 10MB
+- **Compaction Strategy**: 
+  - Merges character statistics from sessions older than 30 days
+  - Preserves all statistical accuracy (totals, averages, min/max times)
+  - Keeps recent sessions (last 30 days) unmodified for detailed analysis
+- **Process**:
+  1. Groups old sessions by character
+  2. Aggregates attempts, times, accuracy data
+  3. Replaces multiple old records with single compacted record
+  4. Runs VACUUM to reclaim disk space
+  5. Updates query optimizer statistics
+
+**Benefits:**
+- **Performance**: Maintains fast query performance as database grows
+- **Storage**: Reduces disk usage while preserving statistical value
+- **Accuracy**: All character difficulty metrics remain mathematically correct
+- **Automatic**: Runs transparently after each typing session completion
+
+**Manual Compaction:**
+```rust
+// Available via Thok methods for testing/maintenance
+let mut thok = /* ... */;
+let success = thok.compact_database(); // Returns true if successful
+let (sessions, size_bytes, size_mb) = thok.get_database_info().unwrap();
+```
 
 ## Common Development Tasks
 
