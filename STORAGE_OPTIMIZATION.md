@@ -1,38 +1,34 @@
-# Storage Optimization Summary
+# Session-Based Storage Architecture
 
-## 🎯 **Problem Solved**
-The original implementation stored **every individual keystroke** as a separate database row, leading to massive database growth and storage inefficiency.
+## 🎯 **Efficient Character Statistics Storage**
 
-## ✅ **Solution Implemented**
+thokr uses a highly optimized session-based storage system for character-level typing statistics that scales efficiently with usage.
 
-### **Before: Individual Keystroke Storage**
-```sql
--- Every character typed = 1 database row
-character_stats:
-- id, character, time_to_press_ms, was_correct, timestamp, context_before, context_after
-- 100 characters typed = 100+ database rows
-- Full context strings stored for each character
-- Massive storage overhead
+## 🏗️ **Storage Architecture**
+
+### **Session Buffer System**
+```rust
+pub struct StatsDb {
+    conn: Connection,
+    session_buffer: HashMap<char, Vec<CharStat>>,  // In-memory during session
+}
 ```
 
-### **After: Session-Based Aggregated Storage**
+Individual character statistics are buffered in memory during typing sessions and aggregated when the session completes.
+
+### **Aggregated Database Storage**
 ```sql
--- Aggregated per character per session
 char_session_stats:
-- id, character, total_attempts, correct_attempts, total_time_ms, min_time_ms, max_time_ms, session_date
-- 100 characters typed = ~26 unique character rows maximum
-- No redundant data storage
-- Massive efficiency improvement
+- character: The typed character
+- total_attempts: Total times character was typed in session
+- correct_attempts: Successful attempts in session  
+- total_time_ms: Sum of all correct attempt times
+- min_time_ms: Fastest correct time in session
+- max_time_ms: Slowest correct time in session
+- session_date: Date of the typing session
 ```
 
-## 🚀 **Key Improvements**
-
-### **1. Memory-Only Session Tracking**
-- Individual character statistics kept in memory during typing session
-- Only aggregated results persisted to database
-- No legacy `character_stats` table needed
-
-### **2. Smart Session Aggregation**
+### **Session Statistics Structure**
 ```rust
 pub struct CharSessionStats {
     pub character: char,
@@ -44,76 +40,91 @@ pub struct CharSessionStats {
 }
 ```
 
-### **3. Automatic Legacy Migration**
-- Detects existing `character_stats` table
-- Migrates data to efficient format
-- **Completely removes legacy table** after successful migration
-- Zero user intervention required
+## 📊 **Storage Benefits**
 
-### **4. Session Buffer System**
+| Metric | Value | Benefit |
+|--------|-------|---------|
+| **Storage per session** | ~26 rows max | Scales with unique characters, not keystrokes |
+| **Database writes** | Once per session | Minimal I/O overhead |
+| **Query performance** | Fast aggregated data | No scanning individual records |
+| **Memory usage** | Session buffer only | Efficient memory management |
+| **Scalability** | Linear with sessions | Sustainable long-term growth |
+
+## 🔧 **Technical Implementation**
+
+### **Session Workflow**
+1. **During Typing**: Individual character stats buffered in memory
+2. **Session End**: Buffer aggregated into `CharSessionStats`
+3. **Database Write**: Single batch insert of aggregated data
+4. **Buffer Clear**: Memory freed for next session
+
+### **Aggregation Logic**
 ```rust
-pub struct StatsDb {
-    conn: Connection,
-    session_buffer: HashMap<char, Vec<CharStat>>,  // In-memory during session
+fn aggregate_char_stats_from_buffer(buffer: &HashMap<char, Vec<CharStat>>) -> Vec<CharSessionStats> {
+    // Groups individual character attempts by character
+    // Calculates totals, averages, min/max times
+    // Returns compressed session summaries
 }
 ```
 
-## 📊 **Storage Benefits**
+### **Query Efficiency**
+- **Character summaries**: Aggregated across all sessions
+- **Performance metrics**: Pre-calculated totals and rates
+- **Time analysis**: Min/max/average from session data
+- **Trend tracking**: Session-based historical data
 
-| Metric | Before | After | Improvement |
-|--------|--------|-------|-------------|
-| **Storage per session** | ~100 rows for 100 chars | ~26 rows max | **75%+ reduction** |
-| **Redundant data** | Full context strings | None | **100% elimination** |
-| **Database writes** | Every keystroke | Once per session | **99%+ reduction** |
-| **Query performance** | Slow (many rows) | Fast (aggregated) | **Significant improvement** |
-| **Database growth** | Linear with keystrokes | Linear with sessions | **Sustainable scaling** |
+## 🎯 **Usage Patterns**
 
-## 🔧 **Technical Features**
+### **Typical Session (100 characters typed)**
+- **Memory**: ~100 `CharStat` objects buffered
+- **Database**: ~26 `CharSessionStats` records written
+- **Compression**: ~75% storage reduction vs individual records
 
-### **Intelligent Session Management**
-- Statistics buffered in memory during typing
-- Aggregated and flushed when session completes
-- Automatic grouping by character with statistical summaries
+### **Long-term Usage (1000 sessions)**
+- **Database size**: Thousands of efficient session records
+- **Query speed**: Fast aggregated statistics
+- **Storage growth**: Predictable and sustainable
 
-### **Zero-Downtime Migration**
-- Automatic detection of legacy data
-- Safe migration with data preservation
-- Complete cleanup of old tables
-- Transparent to user experience
+## ✨ **API Features**
 
-### **Maintained API Compatibility**
-- All existing statistics methods work unchanged
-- UI displays identical information
-- No breaking changes to functionality
-- Same analytical accuracy preserved
+### **Statistics Retrieval**
+```rust
+// Get aggregated character performance
+pub fn get_avg_time_to_press(&self, character: char) -> Result<Option<f64>>
+pub fn get_miss_rate(&self, character: char) -> Result<f64>
+pub fn get_all_char_summary(&self) -> Result<Vec<(char, f64, f64, i64)>>
 
-## 🎯 **Real-World Impact**
+// Get session-specific data
+pub fn get_char_session_stats(&self, character: char) -> Result<Vec<CharSessionStats>>
+```
 
-### **Database Size Reduction**
-- **Before**: Potentially thousands of individual keystroke records
-- **After**: Hundreds of aggregated session records  
-- **Legacy table**: Completely eliminated
+### **Session Management**
+```rust
+// Buffer individual stats during session
+pub fn record_char_stat(&mut self, stat: &CharStat) -> Result<()>
 
-### **Performance Improvements**
-- **Write Performance**: Single batch write per session vs. constant writes
-- **Read Performance**: Aggregated queries vs. scanning individual records
-- **Storage Efficiency**: Minimal redundancy vs. massive duplication
+// Flush session buffer to database
+pub fn flush(&mut self) -> Result<()>
 
-### **Future Scalability**
-- **Sustainable Growth**: Database size grows with sessions, not keystrokes
-- **Predictable Performance**: Query time stays constant regardless of usage
-- **Analytics Ready**: Session-based data perfect for trend analysis
+// Batch process session completion
+pub fn record_char_stats_batch(&mut self, stats: &[CharStat]) -> Result<()>
+```
 
-## ✨ **User Experience**
-- **Seamless Migration**: Happens automatically on first run with new version
-- **No Data Loss**: All statistical accuracy preserved
-- **Same Features**: Character statistics screen works identically
-- **Better Performance**: Faster app startup and statistics display
+## 🚀 **Performance Characteristics**
 
-## 🧪 **Testing Coverage**
-- All existing tests pass (84/84)
-- New aggregation logic thoroughly tested
-- Migration process validated
-- Storage efficiency verified
+### **Write Performance**
+- **Session buffering**: Near-zero overhead during typing
+- **Batch writes**: Single transaction per session
+- **No blocking**: Non-disruptive to typing experience
 
-This optimization transforms thokr from a **storage-heavy application** that grows unsustainably with usage into a **lean, efficient system** that scales gracefully while maintaining full analytical capabilities.
+### **Read Performance**  
+- **Aggregated queries**: Fast statistical calculations
+- **Indexed access**: Efficient character-based lookups
+- **Minimal data scanning**: Pre-calculated session summaries
+
+### **Storage Efficiency**
+- **Compression**: ~75% reduction vs individual keystroke storage
+- **Deduplication**: No redundant context or timestamp data
+- **Optimal growth**: Database size scales with sessions, not keystrokes
+
+This architecture provides enterprise-grade efficiency while maintaining full analytical capabilities for character-level typing performance analysis.

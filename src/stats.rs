@@ -80,30 +80,10 @@ impl StatsDb {
             [],
         )?;
 
-        // Check for legacy table and migrate if it exists
-        let legacy_exists = conn.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='character_stats'")
-            .and_then(|mut stmt| stmt.exists([]))
-            .unwrap_or(false);
-        
-        if legacy_exists {
-            // Legacy table exists, we need to migrate and then drop it
-            println!("Found legacy character statistics table, migrating to efficient format...");
-        }
-
-        let mut db = StatsDb { 
+        Ok(StatsDb { 
             conn, 
             session_buffer: HashMap::new() 
-        };
-        
-        // Migrate any existing old data and clean up
-        if legacy_exists {
-            db.migrate_old_data()?;
-            // Drop the legacy table after successful migration
-            db.conn.execute("DROP TABLE IF EXISTS character_stats", [])?;
-            println!("Legacy table removed, database optimized!");
-        }
-
-        Ok(db)
+        })
     }
 
     /// Get the database file path under $HOME/.local/state/thokr
@@ -353,96 +333,6 @@ impl StatsDb {
         Ok(())
     }
     
-    /// Migrate old individual character stats to aggregated format
-    pub fn migrate_old_data(&self) -> Result<()> {
-        // Check if old table has data
-        let count: i64 = self.conn.query_row(
-            "SELECT COUNT(*) FROM character_stats",
-            [],
-            |row| row.get(0)
-        ).unwrap_or(0);
-        
-        if count == 0 {
-            return Ok(());
-        }
-        
-        println!("Migrating {} individual character records to efficient session-based storage...", count);
-        
-        // Get all old data grouped by date
-        let mut stmt = self.conn.prepare(
-            r#"
-            SELECT character, time_to_press_ms, was_correct, DATE(timestamp) as session_date
-            FROM character_stats
-            ORDER BY session_date, character
-            "#,
-        )?;
-        
-        let rows = stmt.query_map([], |row| {
-            Ok((
-                row.get::<_, String>(0)?.chars().next().unwrap_or('\0'),
-                row.get::<_, u64>(1)?,
-                row.get::<_, bool>(2)?,
-                row.get::<_, String>(3)?,
-            ))
-        })?;
-        
-        let mut daily_stats: HashMap<String, HashMap<char, CharSessionStats>> = HashMap::new();
-        
-        for row in rows {
-            let (character, time_ms, was_correct, date) = row?;
-            
-            let day_stats = daily_stats.entry(date).or_insert_with(HashMap::new);
-            let char_stats = day_stats.entry(character).or_insert(CharSessionStats {
-                character,
-                total_attempts: 0,
-                correct_attempts: 0,
-                total_time_ms: 0,
-                min_time_ms: u64::MAX,
-                max_time_ms: 0,
-            });
-            
-            char_stats.total_attempts += 1;
-            if was_correct {
-                char_stats.correct_attempts += 1;
-                char_stats.total_time_ms += time_ms;
-                char_stats.min_time_ms = char_stats.min_time_ms.min(time_ms);
-                char_stats.max_time_ms = char_stats.max_time_ms.max(time_ms);
-            }
-        }
-        
-        // Calculate compression stats before consuming daily_stats
-        let session_entries: usize = daily_stats.values().map(|m| m.len()).sum();
-        
-        // Insert aggregated data
-        for (date, char_map) in daily_stats {
-            for mut char_stats in char_map.into_values() {
-                if char_stats.correct_attempts == 0 {
-                    char_stats.min_time_ms = 0;
-                }
-                
-                self.conn.execute(
-                    r#"
-                    INSERT INTO char_session_stats 
-                    (character, total_attempts, correct_attempts, total_time_ms, min_time_ms, max_time_ms, session_date)
-                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
-                    "#,
-                    params![
-                        char_stats.character.to_string(),
-                        char_stats.total_attempts,
-                        char_stats.correct_attempts,
-                        char_stats.total_time_ms,
-                        char_stats.min_time_ms,
-                        char_stats.max_time_ms,
-                        date,
-                    ],
-                )?;
-            }
-        }
-        
-        println!("Migration completed successfully! {} records compressed to {} session entries.", count, session_entries);
-        
-        Ok(())
-    }
 
     /// Get the actual database file path being used (for debugging)
     pub fn get_database_path() -> Option<PathBuf> {
@@ -458,17 +348,13 @@ impl StatsDb {
         }
     }
     
-    /// Get storage efficiency statistics
-    pub fn get_storage_stats(&self) -> Result<(i64, String)> {
-        let session_count: i64 = self.conn.query_row(
+    /// Get session statistics count
+    pub fn get_session_count(&self) -> Result<i64> {
+        self.conn.query_row(
             "SELECT COUNT(*) FROM char_session_stats",
             [],
             |row| row.get(0)
-        )?;
-        
-        let efficiency = "Optimized session-based storage".to_string();
-        
-        Ok((session_count, efficiency))
+        )
     }
 }
 
@@ -695,9 +581,9 @@ mod tests {
     }
 
     #[test]
-    fn test_storage_efficiency() {
+    fn test_session_count() {
         let db = create_test_db();
-        let (session_count, _efficiency) = db.get_storage_stats().unwrap();
+        let session_count = db.get_session_count().unwrap();
         
         // New database should have no entries
         assert_eq!(session_count, 0);
