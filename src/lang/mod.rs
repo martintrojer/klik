@@ -13,9 +13,14 @@ static LANG_DIR: Dir = include_dir!("src/lang");
 /// Character difficulty metrics for intelligent word selection
 #[derive(Debug, Clone)]
 pub struct CharacterDifficulty {
-    pub miss_rate: f64,      // Percentage of incorrect attempts (0-100)
-    pub avg_time_ms: f64,    // Average time to type the character
-    pub total_attempts: i64, // Total number of attempts for weighting
+    pub miss_rate: f64,             // Percentage of incorrect attempts (0-100) for any case
+    pub avg_time_ms: f64,           // Average time to type the character (any case)
+    pub total_attempts: i64,        // Total number of attempts for weighting
+    // Uppercase-specific difficulty metrics
+    pub uppercase_miss_rate: f64,   // Percentage of incorrect uppercase attempts (0-100)
+    pub uppercase_avg_time: f64,    // Average time for uppercase variants
+    pub uppercase_attempts: i64,    // Total uppercase attempts for weighting
+    pub uppercase_penalty: f64,     // Additional difficulty penalty for uppercase (0-1)
 }
 
 #[allow(dead_code)]
@@ -58,6 +63,54 @@ impl Language {
         let mut rng = &mut rand::thread_rng();
 
         self.words.choose_multiple(&mut rng, num).cloned().collect()
+    }
+
+    /// Apply capitalization, punctuation, and commas to words for realistic typing practice
+    pub fn apply_advanced_formatting(&self, words: Vec<String>) -> String {
+        if words.is_empty() {
+            return String::new();
+        }
+
+        let rng = &mut rand::thread_rng();
+        let mut result = Vec::new();
+        
+        for (i, word) in words.iter().enumerate() {
+            let mut formatted_word = word.clone();
+            
+            // Capitalize first word and randomly capitalize others (20% chance)
+            if i == 0 || rng.gen_bool(0.2) {
+                formatted_word = Self::capitalize_first_letter(&formatted_word);
+            }
+            
+            result.push(formatted_word);
+            
+            // Add punctuation between words
+            if i < words.len() - 1 {
+                // 15% chance for comma, otherwise space
+                if rng.gen_bool(0.15) {
+                    result.push(",".to_string());
+                }
+            }
+        }
+        
+        // Add final punctuation (80% period, 15% exclamation, 5% question mark)
+        let final_punct = match rng.gen_range(0..100) {
+            0..=79 => ".",
+            80..=94 => "!",
+            _ => "?",
+        };
+        result.push(final_punct.to_string());
+        
+        result.join(" ").replace(" ,", ",").replace(" .", ".").replace(" !", "!").replace(" ?", "?")
+    }
+    
+    /// Helper function to capitalize the first letter of a word
+    fn capitalize_first_letter(word: &str) -> String {
+        let mut chars: Vec<char> = word.chars().collect();
+        if !chars.is_empty() && chars[0].is_alphabetic() {
+            chars[0] = chars[0].to_uppercase().next().unwrap_or(chars[0]);
+        }
+        chars.into_iter().collect()
     }
 
     /// Get words intelligently selected based on character statistics
@@ -103,8 +156,11 @@ impl Language {
         let mut char_count = 0;
 
         for ch in chars {
-            if let Some(difficulty) = char_stats.get(&ch) {
-                // Combine miss rate and timing factors
+            let base_char = ch.to_lowercase().next().unwrap_or(ch);
+            let is_uppercase = ch != base_char;
+            
+            if let Some(difficulty) = char_stats.get(&base_char) {
+                // Base difficulty calculation
                 let miss_penalty = difficulty.miss_rate * 2.0; // Miss rate has higher weight
                 let timing_penalty = if difficulty.avg_time_ms > 200.0 {
                     (difficulty.avg_time_ms - 200.0) / 100.0 // Normalize timing penalty
@@ -112,11 +168,35 @@ impl Language {
                     0.0
                 };
                 
-                total_score += miss_penalty + timing_penalty;
+                let mut char_score = miss_penalty + timing_penalty;
+                
+                // Apply uppercase penalty if applicable
+                if is_uppercase && ch.is_alphabetic() {
+                    let uppercase_multiplier = 1.0 + difficulty.uppercase_penalty;
+                    char_score *= uppercase_multiplier;
+                    
+                    // Additional penalty based on uppercase-specific performance
+                    if difficulty.uppercase_attempts > 0 {
+                        let uppercase_miss_penalty = difficulty.uppercase_miss_rate * 1.5;
+                        let uppercase_timing_penalty = if difficulty.uppercase_avg_time > 200.0 {
+                            (difficulty.uppercase_avg_time - 200.0) / 100.0
+                        } else {
+                            0.0
+                        };
+                        char_score += (uppercase_miss_penalty + uppercase_timing_penalty) * 0.5;
+                    }
+                }
+                
+                total_score += char_score;
+                char_count += 1;
+            } else if ch.is_alphabetic() {
+                // Unknown alphabetic characters get higher priority if uppercase
+                let base_score = 5.0;
+                total_score += if is_uppercase { base_score * 1.5 } else { base_score };
                 char_count += 1;
             } else {
-                // Unknown characters get medium priority for practice
-                total_score += 5.0;
+                // Punctuation gets medium difficulty score
+                total_score += 3.0;
                 char_count += 1;
             }
         }
@@ -333,21 +413,37 @@ mod tests {
             miss_rate: 2.0,
             avg_time_ms: 120.0,
             total_attempts: 50,
+            uppercase_miss_rate: 5.0,
+            uppercase_avg_time: 140.0,
+            uppercase_attempts: 10,
+            uppercase_penalty: 0.2,
         });
         char_stats.insert('h', CharacterDifficulty {
             miss_rate: 15.0,
             avg_time_ms: 250.0,
             total_attempts: 30,
+            uppercase_miss_rate: 25.0,
+            uppercase_avg_time: 350.0,
+            uppercase_attempts: 8,
+            uppercase_penalty: 0.6,
         });
         char_stats.insert('t', CharacterDifficulty {
             miss_rate: 8.0,
             avg_time_ms: 180.0,
             total_attempts: 40,
+            uppercase_miss_rate: 12.0,
+            uppercase_avg_time: 220.0,
+            uppercase_attempts: 15,
+            uppercase_penalty: 0.3,
         });
         char_stats.insert('z', CharacterDifficulty {
             miss_rate: 25.0,
             avg_time_ms: 400.0,
             total_attempts: 10,
+            uppercase_miss_rate: 40.0,
+            uppercase_avg_time: 600.0,
+            uppercase_attempts: 3,
+            uppercase_penalty: 0.8,
         });
 
         // Test multiple selections to check statistical preference
@@ -380,11 +476,19 @@ mod tests {
             miss_rate: 10.0,
             avg_time_ms: 300.0,
             total_attempts: 20,
+            uppercase_miss_rate: 15.0,
+            uppercase_avg_time: 400.0,
+            uppercase_attempts: 5,
+            uppercase_penalty: 0.5,
         });
         char_stats.insert('b', CharacterDifficulty {
             miss_rate: 5.0,
             avg_time_ms: 150.0,
             total_attempts: 15,
+            uppercase_miss_rate: 8.0,
+            uppercase_avg_time: 180.0,
+            uppercase_attempts: 7,
+            uppercase_penalty: 0.2,
         });
 
         // Word with one difficult character
@@ -433,6 +537,10 @@ mod tests {
             miss_rate: 10.0,
             avg_time_ms: 200.0,
             total_attempts: 20,
+            uppercase_miss_rate: 15.0,
+            uppercase_avg_time: 250.0,
+            uppercase_attempts: 8,
+            uppercase_penalty: 0.3,
         });
 
         for count in [1, 5, 10, 15] {
@@ -460,6 +568,10 @@ mod tests {
                 miss_rate: 10.0,
                 avg_time_ms: 200.0,
                 total_attempts: 20,
+                uppercase_miss_rate: 15.0,
+                uppercase_avg_time: 250.0,
+                uppercase_attempts: 8,
+                uppercase_penalty: 0.3,
             });
         }
 
@@ -478,10 +590,164 @@ mod tests {
             miss_rate: 15.5,
             avg_time_ms: 250.0,
             total_attempts: 42,
+            uppercase_miss_rate: 20.0,
+            uppercase_avg_time: 300.0,
+            uppercase_attempts: 15,
+            uppercase_penalty: 0.4,
         };
 
         assert_eq!(difficulty.miss_rate, 15.5);
         assert_eq!(difficulty.avg_time_ms, 250.0);
         assert_eq!(difficulty.total_attempts, 42);
+        assert_eq!(difficulty.uppercase_miss_rate, 20.0);
+        assert_eq!(difficulty.uppercase_avg_time, 300.0);
+        assert_eq!(difficulty.uppercase_attempts, 15);
+        assert_eq!(difficulty.uppercase_penalty, 0.4);
+    }
+
+    #[test]
+    fn test_capitalize_first_letter() {
+        assert_eq!(Language::capitalize_first_letter("hello"), "Hello");
+        assert_eq!(Language::capitalize_first_letter("WORLD"), "WORLD");
+        assert_eq!(Language::capitalize_first_letter("test123"), "Test123");
+        assert_eq!(Language::capitalize_first_letter(""), "");
+        assert_eq!(Language::capitalize_first_letter("123abc"), "123abc");
+    }
+
+    #[test]
+    fn test_apply_advanced_formatting_basic() {
+        let lang = Language::new("english".to_string());
+        let words = vec!["hello".to_string(), "world".to_string(), "test".to_string()];
+        
+        let result = lang.apply_advanced_formatting(words);
+        
+        // Should have capitalized first word and end with punctuation
+        assert!(result.starts_with("Hello"));
+        assert!(result.ends_with('.') || result.ends_with('!') || result.ends_with('?'));
+        assert!(result.contains("world"));
+        assert!(result.contains("test"));
+    }
+
+    #[test]
+    fn test_apply_advanced_formatting_empty() {
+        let lang = Language::new("english".to_string());
+        let words = vec![];
+        
+        let result = lang.apply_advanced_formatting(words);
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_apply_advanced_formatting_single_word() {
+        let lang = Language::new("english".to_string());
+        let words = vec!["test".to_string()];
+        
+        let result = lang.apply_advanced_formatting(words);
+        
+        // Should start with capital T and end with punctuation
+        assert!(result.starts_with("Test"));
+        assert!(result.ends_with('.') || result.ends_with('!') || result.ends_with('?'));
+        assert_eq!(result.len(), 5); // "Test" + 1 punctuation mark
+    }
+
+    #[test]
+    fn test_calculate_word_difficulty_score_with_uppercase() {
+        let lang = Language::new("english".to_string());
+        
+        let mut char_stats = HashMap::new();
+        char_stats.insert('h', CharacterDifficulty {
+            miss_rate: 10.0,
+            avg_time_ms: 200.0,
+            total_attempts: 20,
+            uppercase_miss_rate: 20.0,
+            uppercase_avg_time: 300.0,
+            uppercase_attempts: 5,
+            uppercase_penalty: 0.6,
+        });
+        
+        // Test lowercase vs uppercase scoring
+        let lowercase_score = lang.calculate_word_difficulty_score("hello", &char_stats);
+        let uppercase_score = lang.calculate_word_difficulty_score("Hello", &char_stats);
+        
+        // Uppercase should have higher difficulty score
+        assert!(uppercase_score > lowercase_score, "Uppercase should score higher than lowercase");
+    }
+
+    #[test]
+    fn test_calculate_word_difficulty_score_with_punctuation() {
+        let lang = Language::new("english".to_string());
+        
+        let mut char_stats = HashMap::new();
+        char_stats.insert('h', CharacterDifficulty {
+            miss_rate: 10.0,
+            avg_time_ms: 200.0,
+            total_attempts: 20,
+            uppercase_miss_rate: 15.0,
+            uppercase_avg_time: 250.0,
+            uppercase_attempts: 8,
+            uppercase_penalty: 0.3,
+        });
+        
+        // Test word with punctuation
+        let score_with_punct = lang.calculate_word_difficulty_score("hello.", &char_stats);
+        let score_without_punct = lang.calculate_word_difficulty_score("hello", &char_stats);
+        
+        // Should handle punctuation without crashing
+        assert!(score_with_punct > 0.0);
+        assert!(score_without_punct > 0.0);
+    }
+
+    #[test]
+    fn test_calculate_word_difficulty_score_mixed_case() {
+        let lang = Language::new("english".to_string());
+        
+        let mut char_stats = HashMap::new();
+        char_stats.insert('h', CharacterDifficulty {
+            miss_rate: 5.0,
+            avg_time_ms: 150.0,
+            total_attempts: 30,
+            uppercase_miss_rate: 15.0,
+            uppercase_avg_time: 220.0,
+            uppercase_attempts: 10,
+            uppercase_penalty: 0.4,
+        });
+        char_stats.insert('e', CharacterDifficulty {
+            miss_rate: 3.0,
+            avg_time_ms: 120.0,
+            total_attempts: 40,
+            uppercase_miss_rate: 8.0,
+            uppercase_avg_time: 160.0,
+            uppercase_attempts: 15,
+            uppercase_penalty: 0.2,
+        });
+        
+        // Test mixed case word
+        let score = lang.calculate_word_difficulty_score("Hello", &char_stats);
+        
+        // Should incorporate both uppercase penalty for 'H' and normal scoring for other letters
+        assert!(score > 0.0);
+    }
+
+    #[test]
+    fn test_advanced_formatting_consistency() {
+        let lang = Language::new("english".to_string());
+        let words = vec!["the".to_string(), "quick".to_string(), "brown".to_string()];
+        
+        // Test multiple times to ensure consistent structure
+        for _ in 0..10 {
+            let result = lang.apply_advanced_formatting(words.clone());
+            
+            // Should always start with capital letter
+            assert!(result.chars().next().unwrap().is_uppercase());
+            
+            // Should always end with punctuation
+            let last_char = result.chars().last().unwrap();
+            assert!(last_char == '.' || last_char == '!' || last_char == '?');
+            
+            // Should contain all original words
+            assert!(result.to_lowercase().contains("the"));
+            assert!(result.to_lowercase().contains("quick"));
+            assert!(result.to_lowercase().contains("brown"));
+        }
     }
 }

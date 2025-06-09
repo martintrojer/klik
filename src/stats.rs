@@ -10,9 +10,10 @@ use crate::lang::CharacterDifficulty;
 /// Character-level statistics for tracking typing performance (used during session)
 #[derive(Debug, Clone)]
 pub struct CharStat {
-    pub character: char,
+    pub character: char,           // The base character (always lowercase for letters)
     pub time_to_press_ms: u64,
     pub was_correct: bool,
+    pub was_uppercase: bool,       // True if the original character was uppercase
     pub timestamp: DateTime<Local>,
     pub context_before: String,
     pub context_after: String,
@@ -21,12 +22,18 @@ pub struct CharStat {
 /// Aggregated statistics for a character across multiple attempts in a session
 #[derive(Debug, Clone)]
 pub struct CharSessionStats {
-    pub character: char,
-    pub total_attempts: u32,
-    pub correct_attempts: u32,
-    pub total_time_ms: u64,
-    pub min_time_ms: u64,
-    pub max_time_ms: u64,
+    pub character: char,              // Base character (lowercase)
+    pub total_attempts: u32,          // Total attempts for this character (any case)
+    pub correct_attempts: u32,        // Correct attempts for this character (any case)
+    pub total_time_ms: u64,           // Total time for correct attempts (any case)
+    pub min_time_ms: u64,             // Fastest time for any case
+    pub max_time_ms: u64,             // Slowest time for any case
+    // Uppercase-specific metrics
+    pub uppercase_attempts: u32,      // Total uppercase attempts
+    pub uppercase_correct: u32,       // Correct uppercase attempts
+    pub uppercase_time_ms: u64,       // Total time for correct uppercase attempts
+    pub uppercase_min_time: u64,      // Fastest uppercase time
+    pub uppercase_max_time: u64,      // Slowest uppercase time
 }
 
 /// Database manager for character statistics
@@ -64,6 +71,11 @@ impl StatsDb {
                 total_time_ms INTEGER NOT NULL,
                 min_time_ms INTEGER NOT NULL,
                 max_time_ms INTEGER NOT NULL,
+                uppercase_attempts INTEGER NOT NULL DEFAULT 0,
+                uppercase_correct INTEGER NOT NULL DEFAULT 0,
+                uppercase_time_ms INTEGER NOT NULL DEFAULT 0,
+                uppercase_min_time INTEGER NOT NULL DEFAULT 0,
+                uppercase_max_time INTEGER NOT NULL DEFAULT 0,
                 session_date TEXT NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
@@ -123,8 +135,9 @@ impl StatsDb {
             self.conn.execute(
                 r#"
                 INSERT INTO char_session_stats 
-                (character, total_attempts, correct_attempts, total_time_ms, min_time_ms, max_time_ms, session_date)
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+                (character, total_attempts, correct_attempts, total_time_ms, min_time_ms, max_time_ms, 
+                 uppercase_attempts, uppercase_correct, uppercase_time_ms, uppercase_min_time, uppercase_max_time, session_date)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
                 "#,
                 params![
                     stat.character.to_string(),
@@ -133,6 +146,11 @@ impl StatsDb {
                     stat.total_time_ms,
                     stat.min_time_ms,
                     stat.max_time_ms,
+                    stat.uppercase_attempts,
+                    stat.uppercase_correct,
+                    stat.uppercase_time_ms,
+                    stat.uppercase_min_time,
+                    stat.uppercase_max_time,
                     session_date,
                 ],
             )?;
@@ -182,21 +200,41 @@ impl StatsDb {
                 total_time_ms: 0,
                 min_time_ms: u64::MAX,
                 max_time_ms: 0,
+                uppercase_attempts: 0,
+                uppercase_correct: 0,
+                uppercase_time_ms: 0,
+                uppercase_min_time: u64::MAX,
+                uppercase_max_time: 0,
             };
             
             for stat in stats {
                 char_session.total_attempts += 1;
+                
+                if stat.was_uppercase {
+                    char_session.uppercase_attempts += 1;
+                }
+                
                 if stat.was_correct {
                     char_session.correct_attempts += 1;
                     char_session.total_time_ms += stat.time_to_press_ms;
                     char_session.min_time_ms = char_session.min_time_ms.min(stat.time_to_press_ms);
                     char_session.max_time_ms = char_session.max_time_ms.max(stat.time_to_press_ms);
+                    
+                    if stat.was_uppercase {
+                        char_session.uppercase_correct += 1;
+                        char_session.uppercase_time_ms += stat.time_to_press_ms;
+                        char_session.uppercase_min_time = char_session.uppercase_min_time.min(stat.time_to_press_ms);
+                        char_session.uppercase_max_time = char_session.uppercase_max_time.max(stat.time_to_press_ms);
+                    }
                 }
             }
             
             // Fix min_time_ms for characters with no correct attempts
             if char_session.correct_attempts == 0 {
                 char_session.min_time_ms = 0;
+            }
+            if char_session.uppercase_correct == 0 {
+                char_session.uppercase_min_time = 0;
             }
             
             session_stats.push(char_session);
@@ -216,7 +254,8 @@ impl StatsDb {
     pub fn get_char_session_stats(&self, character: char) -> Result<Vec<CharSessionStats>> {
         let mut stmt = self.conn.prepare(
             r#"
-            SELECT character, total_attempts, correct_attempts, total_time_ms, min_time_ms, max_time_ms
+            SELECT character, total_attempts, correct_attempts, total_time_ms, min_time_ms, max_time_ms,
+                   uppercase_attempts, uppercase_correct, uppercase_time_ms, uppercase_min_time, uppercase_max_time
             FROM char_session_stats 
             WHERE character = ?1
             ORDER BY session_date DESC
@@ -231,6 +270,11 @@ impl StatsDb {
                 total_time_ms: row.get(3)?,
                 min_time_ms: row.get(4)?,
                 max_time_ms: row.get(5)?,
+                uppercase_attempts: row.get(6)?,
+                uppercase_correct: row.get(7)?,
+                uppercase_time_ms: row.get(8)?,
+                uppercase_min_time: row.get(9)?,
+                uppercase_max_time: row.get(10)?,
             })
         })?;
 
@@ -375,7 +419,18 @@ impl StatsDb {
                         (SUM(total_attempts - correct_attempts) * 100.0 / SUM(total_attempts))
                     ELSE 50.0
                 END as miss_rate,
-                SUM(total_attempts) as total_attempts
+                SUM(total_attempts) as total_attempts,
+                CASE 
+                    WHEN SUM(uppercase_correct) > 0 THEN 
+                        CAST(SUM(uppercase_time_ms) AS FLOAT) / SUM(uppercase_correct)
+                    ELSE 700.0
+                END as uppercase_avg_time,
+                CASE 
+                    WHEN SUM(uppercase_attempts) > 0 THEN 
+                        (SUM(uppercase_attempts - uppercase_correct) * 100.0 / SUM(uppercase_attempts))
+                    ELSE 75.0
+                END as uppercase_miss_rate,
+                SUM(uppercase_attempts) as uppercase_attempts
             FROM char_session_stats 
             GROUP BY character
             HAVING SUM(total_attempts) >= 3  -- Only include characters with sufficient data
@@ -389,11 +444,27 @@ impl StatsDb {
             let avg_time: f64 = row.get(1)?;
             let miss_rate: f64 = row.get(2)?;
             let total_attempts: i64 = row.get(3)?;
+            let uppercase_avg_time: f64 = row.get(4)?;
+            let uppercase_miss_rate: f64 = row.get(5)?;
+            let uppercase_attempts: i64 = row.get(6)?;
+            
+            // Calculate uppercase penalty based on performance difference
+            let uppercase_penalty = if uppercase_attempts > 0 {
+                let time_penalty = (uppercase_avg_time - avg_time).max(0.0) / avg_time;
+                let miss_penalty = (uppercase_miss_rate - miss_rate).max(0.0) / 100.0;
+                (time_penalty + miss_penalty).min(1.0) // Cap at 1.0
+            } else {
+                0.5 // Default penalty when no uppercase data
+            };
 
             Ok((character, CharacterDifficulty {
                 miss_rate,
                 avg_time_ms: avg_time,
                 total_attempts,
+                uppercase_miss_rate,
+                uppercase_avg_time,
+                uppercase_attempts,
+                uppercase_penalty,
             }))
         })?;
 
@@ -450,6 +521,11 @@ mod tests {
                 total_time_ms INTEGER NOT NULL,
                 min_time_ms INTEGER NOT NULL,
                 max_time_ms INTEGER NOT NULL,
+                uppercase_attempts INTEGER NOT NULL DEFAULT 0,
+                uppercase_correct INTEGER NOT NULL DEFAULT 0,
+                uppercase_time_ms INTEGER NOT NULL DEFAULT 0,
+                uppercase_min_time INTEGER NOT NULL DEFAULT 0,
+                uppercase_max_time INTEGER NOT NULL DEFAULT 0,
                 session_date TEXT NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
@@ -520,6 +596,7 @@ mod tests {
                 character: 'h',
                 time_to_press_ms: 150,
                 was_correct: true,
+                was_uppercase: false,
                 timestamp: Local::now(),
                 context_before: "".to_string(),
                 context_after: "ello".to_string(),
@@ -528,6 +605,7 @@ mod tests {
                 character: 'h',
                 time_to_press_ms: 120,
                 was_correct: true,
+                was_uppercase: false,
                 timestamp: Local::now(),
                 context_before: "".to_string(),
                 context_after: "ello".to_string(),
@@ -549,6 +627,7 @@ mod tests {
                 character: 't',
                 time_to_press_ms: 100,
                 was_correct: true,
+                was_uppercase: false,
                 timestamp: Local::now(),
                 context_before: "".to_string(),
                 context_after: "est".to_string(),
@@ -557,6 +636,7 @@ mod tests {
                 character: 't',
                 time_to_press_ms: 150,
                 was_correct: false,
+                was_uppercase: false,
                 timestamp: Local::now(),
                 context_before: "".to_string(),
                 context_after: "est".to_string(),
@@ -565,6 +645,7 @@ mod tests {
                 character: 't',
                 time_to_press_ms: 120,
                 was_correct: true,
+                was_uppercase: false,
                 timestamp: Local::now(),
                 context_before: "".to_string(),
                 context_after: "est".to_string(),
@@ -588,6 +669,7 @@ mod tests {
             character: 'x',
             time_to_press_ms: 100,
             was_correct: true,
+            was_uppercase: false,
             timestamp: Local::now(),
             context_before: "".to_string(),
             context_after: "yz".to_string(),
@@ -610,6 +692,7 @@ mod tests {
             character: 'f',
             time_to_press_ms: 120,
             was_correct: true,
+            was_uppercase: false,
             timestamp: Local::now(),
             context_before: "".to_string(),
             context_after: "oo".to_string(),

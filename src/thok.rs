@@ -204,9 +204,10 @@ impl Thok {
             let (context_before, context_after) = extract_context(&self.prompt, idx, 3);
             
             let char_stat = CharStat {
-                character: expected_char,
+                character: expected_char.to_lowercase().next().unwrap_or(expected_char), // Store as lowercase
                 time_to_press_ms,
                 was_correct: outcome == Outcome::Correct,
+                was_uppercase: expected_char.is_uppercase(),
                 timestamp: Local::now(),
                 context_before,
                 context_after,

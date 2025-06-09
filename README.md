@@ -24,6 +24,7 @@ By default, thokr analyzes your character-level performance and intelligently se
 ### Controls:
 - **Default**: Intelligent selection targets your weakest characters
 - **Legacy mode**: Use `--random-words` flag for traditional random selection
+- **Realistic practice**: Use `--capitalize` flag for capitalization, punctuation, and commas
 
 ## Usage
 
@@ -57,6 +58,9 @@ Options:
 
       --random-words
           use random word selection instead of intelligent character-based selection (default: intelligent selection that targets your weakest characters)
+
+      --capitalize
+          enable capitalization, punctuation, and commas for realistic typing practice
 
   -h, --help
           Print help (see a summary with '-h')
@@ -95,6 +99,7 @@ For detailed usage run `thokr -h`.
 | `thokr`                        |   15 intelligently selected words targeting your weakest letters |
 | `thokr -w 100`                 |  100 intelligently selected words from common English vocabulary |
 | `thokr -w 100 -l english1k`    |  100 intelligent words from the 1000 most common English words |
+| `thokr --capitalize`           |  15 intelligent words with capitalization, punctuation, and commas |
 | `thokr --random-words`         |                  15 randomly selected words (legacy behavior) |
 | `thokr -w 10 -s 5`             |  10 intelligent words with hard stop at 5 seconds |
 | `thokr -p "$(cat foo.txt)"`    |                   custom prompt with the output of `cat foo.txt` |
@@ -155,6 +160,11 @@ Detailed character-level performance data is stored in a SQLite database (`stats
   - Smart word selection based on character-level performance analysis
   - Adaptive practice targeting your weakest typing areas
   - Comprehensive character statistics and analytics dashboard
+
+- [x] 🔤 **Realistic Typing Practice** *(completed)*
+  - Capitalization, punctuation, and comma integration
+  - Case-sensitive difficulty tracking and scoring
+  - Advanced formatting for real-world typing scenarios
 
 - [ ] ⚡️ Performance Optimizations
   - Optimize TUI rendering for smoother experience at high tick rates
