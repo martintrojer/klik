@@ -553,13 +553,15 @@ mod tests {
 
     #[test]
     fn test_ui_constants_consistency() {
-        // Test that UI constants are reasonable
-        assert!(HORIZONTAL_MARGIN <= 20); // Should not be excessive
-        assert!(VERTICAL_MARGIN <= 10); // Should not be excessive
+        // Test that UI constants are reasonable values
+        assert_eq!(HORIZONTAL_MARGIN, 5);
+        assert_eq!(VERTICAL_MARGIN, 2);
 
-        // Test that margins don't exceed typical terminal sizes
-        assert!(HORIZONTAL_MARGIN * 2 < 80); // Common terminal width
-        assert!(VERTICAL_MARGIN * 2 < 24); // Common terminal height
+        // These are compile-time checks that our constants are reasonable
+        const _: () = assert!(HORIZONTAL_MARGIN <= 20); // Should not be excessive
+        const _: () = assert!(VERTICAL_MARGIN <= 10); // Should not be excessive
+        const _: () = assert!(HORIZONTAL_MARGIN * 2 < 80); // Common terminal width
+        const _: () = assert!(VERTICAL_MARGIN * 2 < 24); // Common terminal height
     }
 
     #[test]

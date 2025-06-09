@@ -1461,8 +1461,10 @@ mod tests {
     fn test_tick_rate_constant() {
         // Verify the tick rate constant is reasonable
         assert_eq!(TICK_RATE_MS, 100);
-        assert!(TICK_RATE_MS > 0);
-        assert!(TICK_RATE_MS <= 1000); // Should be sub-second
+
+        // These are compile-time checks that our constant is reasonable
+        const _: () = assert!(TICK_RATE_MS > 0);
+        const _: () = assert!(TICK_RATE_MS <= 1000); // Should be sub-second
     }
 
     #[test]
