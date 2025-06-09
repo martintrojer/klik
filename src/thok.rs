@@ -6,7 +6,11 @@ use directories::ProjectDirs;
 use itertools::Itertools;
 use std::fs::OpenOptions;
 use std::io::{self, Write};
-use std::{char, collections::{HashMap, HashSet}, time::SystemTime};
+use std::{
+    char,
+    collections::{HashMap, HashSet},
+    time::SystemTime,
+};
 
 #[derive(Clone, Debug, Copy, PartialEq)]
 pub enum Outcome {
@@ -44,7 +48,12 @@ pub struct Thok {
 }
 
 impl Thok {
-    pub fn new(prompt: String, number_of_words: usize, number_of_secs: Option<f64>, strict_mode: bool) -> Self {
+    pub fn new(
+        prompt: String,
+        number_of_words: usize,
+        number_of_secs: Option<f64>,
+        strict_mode: bool,
+    ) -> Self {
         let stats_db = StatsDb::new().ok();
         Self {
             prompt,
@@ -159,9 +168,9 @@ impl Thok {
         self.accuracy = ((correct_chars.len() as f64 / self.input.len() as f64) * 100.0).round();
 
         let _ = self.save_results();
-        
+
         // Flush character statistics to database
-        if let Some(_) = self.flush_char_stats() {
+        if self.flush_char_stats().is_some() {
             // For debugging: uncomment to see when stats are flushed
             // eprintln!("Character statistics flushed to database");
         };
@@ -201,7 +210,7 @@ impl Thok {
         } else {
             self.input.len()
         };
-        
+
         if idx == 0 && self.started_at.is_none() {
             self.start();
         }
@@ -224,7 +233,7 @@ impl Thok {
         // Record character statistics if database is available
         if let Some(ref mut stats_db) = self.stats_db {
             let (context_before, context_after) = extract_context(&self.prompt, idx, 3);
-            
+
             let char_stat = CharStat {
                 character: expected_char.to_lowercase().next().unwrap_or(expected_char), // Store as lowercase
                 time_to_press_ms,
@@ -249,14 +258,14 @@ impl Thok {
             // In strict mode, handle cursor progression differently
             if outcome == Outcome::Correct {
                 // Check if this position had previous errors
-                let had_error = self.cursor_pos < self.input.len() && 
-                               self.input[self.cursor_pos].outcome == Outcome::Incorrect;
-                
+                let had_error = self.cursor_pos < self.input.len()
+                    && self.input[self.cursor_pos].outcome == Outcome::Incorrect;
+
                 // If there was a previous error, mark this position as corrected
                 if had_error {
                     self.corrected_positions.insert(self.cursor_pos);
                 }
-                
+
                 // Replace any existing input at this position with the correct one
                 if self.cursor_pos < self.input.len() {
                     self.input[self.cursor_pos] = Input {
@@ -309,7 +318,7 @@ impl Thok {
             );
             self.increment_cursor();
         }
-        
+
         // Reset keypress start time for next character
         self.keypress_start_time = None;
     }
@@ -334,7 +343,6 @@ impl Thok {
             let needs_header = !log_path.exists();
 
             let mut log_file = OpenOptions::new()
-                .write(true)
                 .append(true)
                 .create(true)
                 .open(log_path)?;
@@ -646,11 +654,11 @@ mod tests {
     #[test]
     fn test_keypress_timing() {
         let mut thok = Thok::new("test".to_string(), 1, None, false);
-        
+
         thok.on_keypress_start();
         thread::sleep(Duration::from_millis(10));
         thok.write('t');
-        
+
         assert_eq!(thok.input.len(), 1);
         assert_eq!(thok.input[0].char, 't');
         assert_eq!(thok.input[0].outcome, Outcome::Correct);
@@ -660,10 +668,12 @@ mod tests {
     #[test]
     fn test_character_statistics_methods() {
         let thok = Thok::new("test".to_string(), 1, None, false);
-        
+
         // These methods should return None if no database is available
         assert!(thok.get_char_stats('t').is_none() || thok.get_char_stats('t').is_some());
-        assert!(thok.get_avg_time_to_press('t').is_none() || thok.get_avg_time_to_press('t').is_some());
+        assert!(
+            thok.get_avg_time_to_press('t').is_none() || thok.get_avg_time_to_press('t').is_some()
+        );
         assert!(thok.get_miss_rate('t').is_none() || thok.get_miss_rate('t').is_some());
         assert!(thok.get_all_char_summary().is_none() || thok.get_all_char_summary().is_some());
     }
@@ -671,10 +681,10 @@ mod tests {
     #[test]
     fn test_keypress_timing_reset() {
         let mut thok = Thok::new("test".to_string(), 1, None, false);
-        
+
         thok.on_keypress_start();
         assert!(thok.keypress_start_time.is_some());
-        
+
         thok.write('t');
         assert!(thok.keypress_start_time.is_none()); // Should be reset after write
     }
@@ -682,7 +692,7 @@ mod tests {
     #[test]
     fn test_flush_char_stats() {
         let mut thok = Thok::new("test".to_string(), 1, None, false);
-        
+
         // Flush should work whether or not database is available
         let result = thok.flush_char_stats();
         // Result can be Some(()) or None depending on database availability
@@ -693,17 +703,17 @@ mod tests {
     fn test_calc_results_flushes_stats() {
         let mut thok = Thok::new("test".to_string(), 1, None, false);
         thok.start();
-        
+
         thread::sleep(Duration::from_millis(10));
-        
+
         thok.write('t');
         thok.write('e');
         thok.write('s');
         thok.write('t');
-        
+
         // This should complete without error and flush stats
         thok.calc_results();
-        
+
         assert_eq!(thok.accuracy, 100.0);
         assert!(thok.wpm > 0.0);
     }
@@ -711,7 +721,7 @@ mod tests {
     #[test]
     fn test_database_path_and_creation() {
         let thok = Thok::new("test".to_string(), 1, None, false);
-        
+
         // Print debug information
         println!("Has stats database: {}", thok.has_stats_database());
         if let Some(path) = thok.get_stats_database_path() {
@@ -721,7 +731,7 @@ mod tests {
                 println!("Parent directory exists: {}", parent.exists());
             }
         }
-        
+
         // Try to create a character stat
         if thok.has_stats_database() {
             println!("✅ Database is available for statistics");
@@ -733,49 +743,54 @@ mod tests {
     #[test]
     fn test_real_typing_saves_to_database() {
         let mut thok = Thok::new("hello".to_string(), 1, None, false);
-        
+
         println!("Starting real typing simulation...");
-        
+
         // Simulate real typing with timing
         thok.on_keypress_start();
         thread::sleep(Duration::from_millis(100));
         thok.write('h');
-        
+
         thok.on_keypress_start();
         thread::sleep(Duration::from_millis(150));
         thok.write('e');
-        
+
         thok.on_keypress_start();
         thread::sleep(Duration::from_millis(120));
         thok.write('l');
-        
+
         thok.on_keypress_start();
         thread::sleep(Duration::from_millis(90));
         thok.write('l');
-        
+
         thok.on_keypress_start();
         thread::sleep(Duration::from_millis(110));
         thok.write('o');
-        
+
         // Complete the typing test
         assert!(thok.has_finished());
         thok.calc_results();
-        
+
         // Now check if we can query the statistics
         if let Some(h_stats) = thok.get_char_stats('h') {
             println!("Found {} statistics for 'h'", h_stats.len());
             if !h_stats.is_empty() {
-                println!("First 'h' stat: char={}, time={}ms, correct={}", 
-                    h_stats[0].character, h_stats[0].time_to_press_ms, h_stats[0].was_correct);
+                println!(
+                    "First 'h' stat: char={}, time={}ms, correct={}",
+                    h_stats[0].character, h_stats[0].time_to_press_ms, h_stats[0].was_correct
+                );
             }
         } else {
             println!("❌ No statistics found for 'h'");
         }
-        
+
         if let Some(summary) = thok.get_all_char_summary() {
             println!("Summary statistics for {} characters", summary.len());
             for (char, avg_time, miss_rate, attempts) in summary {
-                println!("  '{}': avg={}ms, miss={}%, attempts={}", char, avg_time, miss_rate, attempts);
+                println!(
+                    "  '{}': avg={}ms, miss={}%, attempts={}",
+                    char, avg_time, miss_rate, attempts
+                );
             }
         } else {
             println!("❌ No summary statistics found");
@@ -785,16 +800,16 @@ mod tests {
     #[test]
     fn test_strict_mode_cursor_behavior() {
         let mut thok = Thok::new("test".to_string(), 1, None, true);
-        
+
         // Test correct input advances cursor
         thok.write('t');
         assert_eq!(thok.cursor_pos, 1);
-        
+
         // Test incorrect input doesn't advance cursor
         thok.write('x'); // Wrong character for 'e'
         assert_eq!(thok.cursor_pos, 1); // Cursor should stay at position 1
         assert_eq!(thok.input[1].outcome, Outcome::Incorrect);
-        
+
         // Test correct input after error advances cursor and marks as corrected
         thok.write('e'); // Correct character
         assert_eq!(thok.cursor_pos, 2); // Cursor should advance
@@ -805,12 +820,12 @@ mod tests {
     #[test]
     fn test_strict_mode_backspace() {
         let mut thok = Thok::new("test".to_string(), 1, None, true);
-        
+
         thok.write('t');
         thok.write('e');
         assert_eq!(thok.cursor_pos, 2);
         assert_eq!(thok.input.len(), 2);
-        
+
         // Test backspace in strict mode
         thok.backspace();
         assert_eq!(thok.cursor_pos, 1);
@@ -823,7 +838,7 @@ mod tests {
         let mut normal_thok = Thok::new("test".to_string(), 1, None, false);
         normal_thok.write('x'); // Wrong character
         assert_eq!(normal_thok.cursor_pos, 1); // Cursor advances even with wrong char
-        
+
         // Test strict mode
         let mut strict_thok = Thok::new("test".to_string(), 1, None, true);
         strict_thok.write('x'); // Wrong character

@@ -9,8 +9,10 @@ pub mod sentences;
 // Re-export the main types for convenience
 pub use core::Language;
 pub use difficulty::CharacterDifficulty;
-pub use formatter::{TextFormatter, BasicFormatter, CapitalizationFormatter, SymbolFormatter, CompositeFormatter};
-pub use selector::{WordSelector, RandomSelector, IntelligentSelector, SubstitutionSelector};
+pub use formatter::{
+    BasicFormatter, CapitalizationFormatter, CompositeFormatter, SymbolFormatter, TextFormatter,
+};
+pub use selector::{IntelligentSelector, RandomSelector, SubstitutionSelector, WordSelector};
 
 #[cfg(test)]
 mod tests {
@@ -20,34 +22,37 @@ mod tests {
     #[test]
     fn test_integrated_functionality() {
         let lang = Language::new("english".to_string());
-        
+
         // Test that all functionality works together
         let words = lang.get_random(5);
         assert_eq!(words.len(), 5);
-        
+
         let formatted = lang.apply_advanced_formatting(words, true, false);
         assert!(!formatted.is_empty());
         assert!(formatted.chars().next().unwrap().is_uppercase());
     }
 
-    #[test] 
+    #[test]
     fn test_substitution_with_formatting() {
         let lang = Language::new("english".to_string());
-        
+
         let mut char_stats = HashMap::new();
-        char_stats.insert('x', CharacterDifficulty {
-            miss_rate: 20.0,
-            avg_time_ms: 300.0,
-            total_attempts: 10,
-            uppercase_miss_rate: 25.0,
-            uppercase_avg_time: 400.0,
-            uppercase_attempts: 3,
-            uppercase_penalty: 0.5,
-        });
-        
+        char_stats.insert(
+            'x',
+            CharacterDifficulty {
+                miss_rate: 20.0,
+                avg_time_ms: 300.0,
+                total_attempts: 10,
+                uppercase_miss_rate: 25.0,
+                uppercase_avg_time: 400.0,
+                uppercase_attempts: 3,
+                uppercase_penalty: 0.5,
+            },
+        );
+
         let substituted_words = lang.get_substituted(3, &char_stats);
         let formatted = lang.apply_advanced_formatting(substituted_words, true, true);
-        
+
         assert!(!formatted.is_empty());
         // Should have capitalization (first alphabetic character should be uppercase)
         let first_alpha_char = formatted.chars().find(|c| c.is_alphabetic());

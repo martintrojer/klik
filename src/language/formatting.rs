@@ -4,27 +4,32 @@ use rand::Rng;
 
 impl Language {
     /// Apply capitalization, punctuation, commas, and optionally symbols to words for realistic typing practice
-    pub fn apply_advanced_formatting(&self, words: Vec<String>, include_capitalize: bool, include_symbols: bool) -> String {
+    pub fn apply_advanced_formatting(
+        &self,
+        words: Vec<String>,
+        include_capitalize: bool,
+        include_symbols: bool,
+    ) -> String {
         if words.is_empty() {
             return String::new();
         }
 
         let rng = &mut rand::thread_rng();
         let mut result = Vec::new();
-        
+
         // Define symbol sets for different contexts
         let mathematical = ["+", "-", "*", "/", "=", "<", ">"];
         let programming = ["@", "#", "$", "%", "^", "&", "|", "\\", "~", "`"];
         let punctuation_symbols = [":", ";", "\"", "'"];
-        
+
         for (i, word) in words.iter().enumerate() {
             let mut formatted_word = word.clone();
-            
+
             // Capitalize first word and randomly capitalize others (20% chance) if capitalize is enabled
             if include_capitalize && (i == 0 || rng.gen_bool(0.2)) {
                 formatted_word = Self::capitalize_first_letter(&formatted_word);
             }
-            
+
             // Add symbols around words if symbols are enabled
             if include_symbols {
                 // 25% chance to add symbols around words
@@ -39,7 +44,7 @@ impl Language {
                                 1 => formatted_word = format!("[{}]", formatted_word),
                                 _ => formatted_word = format!("{{{}}}", formatted_word),
                             }
-                        },
+                        }
                         1 => {
                             // Mathematical symbols - prefix or suffix
                             let symbol = mathematical.choose(rng).unwrap();
@@ -48,12 +53,12 @@ impl Language {
                             } else {
                                 formatted_word = format!("{}{}", formatted_word, symbol);
                             }
-                        },
+                        }
                         2 => {
                             // Programming symbols - usually prefix
                             let symbol = programming.choose(rng).unwrap();
                             formatted_word = format!("{}{}", symbol, formatted_word);
-                        },
+                        }
                         _ => {
                             // Punctuation symbols - usually suffix
                             let symbol = punctuation_symbols.choose(rng).unwrap();
@@ -62,9 +67,9 @@ impl Language {
                     }
                 }
             }
-            
+
             result.push(formatted_word);
-            
+
             // Add punctuation between words
             if i < words.len() - 1 {
                 if include_symbols {
@@ -83,8 +88,8 @@ impl Language {
                 }
             }
         }
-        
-        // Add final punctuation 
+
+        // Add final punctuation
         if include_symbols {
             // More variety with symbols enabled
             let final_punct = match rng.gen_range(0..100) {
@@ -105,7 +110,7 @@ impl Language {
             };
             result.push(final_punct.to_string());
         }
-        
+
         // Clean up spacing around punctuation
         let mut text = result.join(" ");
         text = text.replace(" ,", ",");
@@ -116,7 +121,7 @@ impl Language {
         text = text.replace(" :", ":");
         text
     }
-    
+
     /// Helper function to capitalize the first letter of a word
     fn capitalize_first_letter(word: &str) -> String {
         let mut chars: Vec<char> = word.chars().collect();
@@ -135,9 +140,9 @@ mod tests {
     fn test_apply_advanced_formatting_basic() {
         let lang = Language::new("english".to_string());
         let words = vec!["hello".to_string(), "world".to_string(), "test".to_string()];
-        
+
         let result = lang.apply_advanced_formatting(words, true, false);
-        
+
         // Should have capitalized first word and end with punctuation
         assert!(result.starts_with("Hello"));
         assert!(result.ends_with('.') || result.ends_with('!') || result.ends_with('?'));
@@ -160,33 +165,36 @@ mod tests {
     fn test_flag_independence_capitalize_only() {
         let lang = Language::new("english".to_string());
         let words = vec!["hello".to_string(), "world".to_string()];
-        
+
         let result = lang.apply_advanced_formatting(words, true, false);
-        
+
         // Should have capitalization
         assert!(result.chars().next().unwrap().is_uppercase());
-        
+
         // Should NOT have symbols (only basic punctuation at end)
         let symbol_chars = "@#$%^&*()[]{}|\\~`+-=<>";
         // Allow symbols only at the very end (final punctuation)
-        let main_content = &result[..result.len()-1]; // Remove final punctuation
+        let main_content = &result[..result.len() - 1]; // Remove final punctuation
         let has_symbols_in_main = main_content.chars().any(|c| symbol_chars.contains(c));
-        assert!(!has_symbols_in_main, "Should not have symbols in main content with capitalize only");
+        assert!(
+            !has_symbols_in_main,
+            "Should not have symbols in main content with capitalize only"
+        );
     }
 
     #[test]
     fn test_flag_independence_symbols_only() {
         let lang = Language::new("english".to_string());
         let words = vec!["hello".to_string(), "world".to_string()];
-        
+
         let result = lang.apply_advanced_formatting(words.clone(), false, true);
-        
+
         // Should NOT have capitalization (except potentially from symbols)
         // But basic words should remain lowercase
         let lowercase_result = result.to_lowercase();
         assert!(lowercase_result.contains("hello"));
         assert!(lowercase_result.contains("world"));
-        
+
         // Should potentially have symbols (due to 25% chance, run multiple times)
         let mut _found_symbols = false;
         for _ in 0..10 {
@@ -204,18 +212,21 @@ mod tests {
     fn test_flag_independence_neither() {
         let lang = Language::new("english".to_string());
         let words = vec!["hello".to_string(), "world".to_string()];
-        
+
         let result = lang.apply_advanced_formatting(words, false, false);
-        
+
         // Should have basic punctuation but no capitalization or symbols
         assert!(result.ends_with('.') || result.ends_with('!') || result.ends_with('?'));
-        
+
         // Should not start with capital (unless word itself was capitalized)
-        assert!(!result.chars().next().unwrap().is_uppercase(), "Should not capitalize without flag");
-        
+        assert!(
+            !result.chars().next().unwrap().is_uppercase(),
+            "Should not capitalize without flag"
+        );
+
         // Should not have symbols
         let symbol_chars = "@#$%^&*()[]{}|\\~`+-=<>";
-        let main_content = &result[..result.len()-1]; // Remove final punctuation
+        let main_content = &result[..result.len() - 1]; // Remove final punctuation
         let has_symbols_in_main = main_content.chars().any(|c| symbol_chars.contains(c));
         assert!(!has_symbols_in_main, "Should not have symbols without flag");
     }

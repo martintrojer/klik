@@ -8,7 +8,11 @@ pub mod word_generator;
 // Keep the old lang module name for compatibility
 pub use language as lang;
 
-use crate::{lang::Language, thok::Thok, word_generator::{WordGenerator, WordGenConfig}};
+use crate::{
+    lang::Language,
+    thok::Thok,
+    word_generator::{WordGenConfig, WordGenerator},
+};
 use clap::{error::ErrorKind, CommandFactory, Parser, ValueEnum};
 use crossterm::{
     event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
@@ -33,7 +37,11 @@ const TICK_RATE_MS: u64 = 100;
 
 /// sleek typing tui with visualized results and intelligent practice
 #[derive(Parser, Debug, Clone)]
-#[clap(version, about, long_about= "A sleek typing TUI with intelligent word selection that adapts to your weaknesses, detailed performance analytics, and historical progress tracking.")]
+#[clap(
+    version,
+    about,
+    long_about = "A sleek typing TUI with intelligent word selection that adapts to your weaknesses, detailed performance analytics, and historical progress tracking."
+)]
 pub struct Cli {
     /// number of words to use in test
     #[clap(short = 'w', long, default_value_t = 15)]
@@ -323,7 +331,7 @@ fn start_tui<B: Backend>(
                                         app.char_stats_state.scroll_offset += 1;
                                     }
                                     KeyCode::PageUp => {
-                                        app.char_stats_state.scroll_offset = 
+                                        app.char_stats_state.scroll_offset =
                                             app.char_stats_state.scroll_offset.saturating_sub(10);
                                     }
                                     KeyCode::PageDown => {
@@ -350,7 +358,8 @@ fn start_tui<B: Backend>(
                                     }
                                     KeyCode::Char(' ') => {
                                         // Toggle sort direction
-                                        app.char_stats_state.sort_ascending = !app.char_stats_state.sort_ascending;
+                                        app.char_stats_state.sort_ascending =
+                                            !app.char_stats_state.sort_ascending;
                                         app.char_stats_state.scroll_offset = 0;
                                     }
                                     _ => {}
@@ -420,35 +429,46 @@ fn render_character_stats(app: &mut App, f: &mut Frame) {
     use ratatui::{
         layout::{Alignment, Constraint, Direction, Layout},
         style::{Color, Modifier, Style},
-        widgets::{Block, Borders, Paragraph, Table, Row, Cell},
+        widgets::{Block, Borders, Cell, Paragraph, Row, Table},
     };
 
     let area = f.area();
-    
+
     // Create layout
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .margin(2)
         .constraints([
-            Constraint::Length(3),  // Title
-            Constraint::Min(0),     // Stats table
-            Constraint::Length(4),  // Instructions
+            Constraint::Length(3), // Title
+            Constraint::Min(0),    // Stats table
+            Constraint::Length(4), // Instructions
         ])
         .split(area);
 
     // Title with sort indicator
-    let sort_direction = if app.char_stats_state.sort_ascending { "↑" } else { "↓" };
+    let sort_direction = if app.char_stats_state.sort_ascending {
+        "↑"
+    } else {
+        "↓"
+    };
     let sort_by_text = match app.char_stats_state.sort_by {
         SortBy::Character => "Character",
         SortBy::AvgTime => "Avg Time",
         SortBy::MissRate => "Miss Rate",
         SortBy::Attempts => "Attempts",
     };
-    let title_text = format!("Character Statistics (Sort: {} {})", sort_by_text, sort_direction);
-    
+    let title_text = format!(
+        "Character Statistics (Sort: {} {})",
+        sort_by_text, sort_direction
+    );
+
     let title = Paragraph::new(title_text)
         .block(Block::default().borders(Borders::ALL).title("Stats"))
-        .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+        .style(
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )
         .alignment(Alignment::Center);
     f.render_widget(title, chunks[0]);
 
@@ -459,25 +479,41 @@ fn render_character_stats(app: &mut App, f: &mut Frame) {
             SortBy::Character => {
                 summary.sort_by(|a, b| {
                     let cmp = a.0.cmp(&b.0);
-                    if app.char_stats_state.sort_ascending { cmp } else { cmp.reverse() }
+                    if app.char_stats_state.sort_ascending {
+                        cmp
+                    } else {
+                        cmp.reverse()
+                    }
                 });
             }
             SortBy::AvgTime => {
                 summary.sort_by(|a, b| {
                     let cmp = a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal);
-                    if app.char_stats_state.sort_ascending { cmp } else { cmp.reverse() }
+                    if app.char_stats_state.sort_ascending {
+                        cmp
+                    } else {
+                        cmp.reverse()
+                    }
                 });
             }
             SortBy::MissRate => {
                 summary.sort_by(|a, b| {
                     let cmp = a.2.partial_cmp(&b.2).unwrap_or(std::cmp::Ordering::Equal);
-                    if app.char_stats_state.sort_ascending { cmp } else { cmp.reverse() }
+                    if app.char_stats_state.sort_ascending {
+                        cmp
+                    } else {
+                        cmp.reverse()
+                    }
                 });
             }
             SortBy::Attempts => {
                 summary.sort_by(|a, b| {
                     let cmp = a.3.cmp(&b.3);
-                    if app.char_stats_state.sort_ascending { cmp } else { cmp.reverse() }
+                    if app.char_stats_state.sort_ascending {
+                        cmp
+                    } else {
+                        cmp.reverse()
+                    }
                 });
             }
         }
@@ -486,17 +522,33 @@ fn render_character_stats(app: &mut App, f: &mut Frame) {
         let table_height = chunks[1].height.saturating_sub(3) as usize; // Account for borders and header
         let total_rows = summary.len();
         let max_scroll = total_rows.saturating_sub(table_height);
-        
+
         // Clamp scroll offset
         if app.char_stats_state.scroll_offset > max_scroll {
             app.char_stats_state.scroll_offset = max_scroll;
         }
 
         // Create header with sort indicators
-        let char_indicator = if matches!(app.char_stats_state.sort_by, SortBy::Character) { sort_direction } else { "" };
-        let time_indicator = if matches!(app.char_stats_state.sort_by, SortBy::AvgTime) { sort_direction } else { "" };
-        let miss_indicator = if matches!(app.char_stats_state.sort_by, SortBy::MissRate) { sort_direction } else { "" };
-        let attempts_indicator = if matches!(app.char_stats_state.sort_by, SortBy::Attempts) { sort_direction } else { "" };
+        let char_indicator = if matches!(app.char_stats_state.sort_by, SortBy::Character) {
+            sort_direction
+        } else {
+            ""
+        };
+        let time_indicator = if matches!(app.char_stats_state.sort_by, SortBy::AvgTime) {
+            sort_direction
+        } else {
+            ""
+        };
+        let miss_indicator = if matches!(app.char_stats_state.sort_by, SortBy::MissRate) {
+            sort_direction
+        } else {
+            ""
+        };
+        let attempts_indicator = if matches!(app.char_stats_state.sort_by, SortBy::Attempts) {
+            sort_direction
+        } else {
+            ""
+        };
 
         let header = Row::new(vec![
             Cell::from(format!("Char {}", char_indicator)),
@@ -504,7 +556,11 @@ fn render_character_stats(app: &mut App, f: &mut Frame) {
             Cell::from(format!("Miss Rate (%) {}", miss_indicator)),
             Cell::from(format!("Attempts {}", attempts_indicator)),
         ])
-        .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
+        .style(
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        );
 
         // Get visible rows based on scroll offset
         let visible_rows: Vec<Row> = summary
@@ -517,7 +573,7 @@ fn render_character_stats(app: &mut App, f: &mut Frame) {
                 } else {
                     character.to_string()
                 };
-                
+
                 let time_color = if *avg_time < 150.0 {
                     Color::Green
                 } else if *avg_time < 250.0 {
@@ -525,7 +581,7 @@ fn render_character_stats(app: &mut App, f: &mut Frame) {
                 } else {
                     Color::Red
                 };
-                
+
                 let miss_color = if *miss_rate == 0.0 {
                     Color::Green
                 } else if *miss_rate < 10.0 {
@@ -545,27 +601,40 @@ fn render_character_stats(app: &mut App, f: &mut Frame) {
 
         // Show scroll position in title if there are more rows than visible
         let scroll_info = if total_rows > table_height {
-            format!(" ({}/{} rows)", app.char_stats_state.scroll_offset + visible_rows.len().min(table_height), total_rows)
+            format!(
+                " ({}/{} rows)",
+                app.char_stats_state.scroll_offset + visible_rows.len().min(table_height),
+                total_rows
+            )
         } else {
             String::new()
         };
 
-        let table = Table::new(visible_rows, &[
-            Constraint::Length(8),
-            Constraint::Length(18),
-            Constraint::Length(18),
-            Constraint::Length(12),
-        ])
+        let table = Table::new(
+            visible_rows,
+            &[
+                Constraint::Length(8),
+                Constraint::Length(18),
+                Constraint::Length(18),
+                Constraint::Length(12),
+            ],
+        )
         .header(header)
-        .block(Block::default().borders(Borders::ALL).title(format!("Performance by Character{}", scroll_info)))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(format!("Performance by Character{}", scroll_info)),
+        )
         .row_highlight_style(Style::default().bg(Color::DarkGray));
 
         f.render_widget(table, chunks[1]);
     } else {
-        let no_data = Paragraph::new("No character statistics available.\nComplete a typing test to see your stats!")
-            .block(Block::default().borders(Borders::ALL).title("No Data"))
-            .style(Style::default().fg(Color::Gray))
-            .alignment(Alignment::Center);
+        let no_data = Paragraph::new(
+            "No character statistics available.\nComplete a typing test to see your stats!",
+        )
+        .block(Block::default().borders(Borders::ALL).title("No Data"))
+        .style(Style::default().fg(Color::Gray))
+        .alignment(Alignment::Center);
         f.render_widget(no_data, chunks[1]);
     }
 
@@ -595,7 +664,7 @@ mod tests {
 
     #[test]
     fn test_cli_default_values() {
-        let cli = Cli::parse_from(&["thokr"]);
+        let cli = Cli::parse_from(["thokr"]);
 
         assert_eq!(cli.number_of_words, 15);
         assert_eq!(cli.number_of_sentences, None);
@@ -606,52 +675,52 @@ mod tests {
 
     #[test]
     fn test_cli_number_of_words() {
-        let cli = Cli::parse_from(&["thokr", "-w", "25"]);
+        let cli = Cli::parse_from(["thokr", "-w", "25"]);
         assert_eq!(cli.number_of_words, 25);
 
-        let cli = Cli::parse_from(&["thokr", "--number-of-words", "50"]);
+        let cli = Cli::parse_from(["thokr", "--number-of-words", "50"]);
         assert_eq!(cli.number_of_words, 50);
     }
 
     #[test]
     fn test_cli_number_of_sentences() {
-        let cli = Cli::parse_from(&["thokr", "-f", "3"]);
+        let cli = Cli::parse_from(["thokr", "-f", "3"]);
         assert_eq!(cli.number_of_sentences, Some(3));
 
-        let cli = Cli::parse_from(&["thokr", "--full-sentences", "5"]);
+        let cli = Cli::parse_from(["thokr", "--full-sentences", "5"]);
         assert_eq!(cli.number_of_sentences, Some(5));
     }
 
     #[test]
     fn test_cli_number_of_secs() {
-        let cli = Cli::parse_from(&["thokr", "-s", "60"]);
+        let cli = Cli::parse_from(["thokr", "-s", "60"]);
         assert_eq!(cli.number_of_secs, Some(60));
 
-        let cli = Cli::parse_from(&["thokr", "--number-of-secs", "120"]);
+        let cli = Cli::parse_from(["thokr", "--number-of-secs", "120"]);
         assert_eq!(cli.number_of_secs, Some(120));
     }
 
     #[test]
     fn test_cli_custom_prompt() {
-        let cli = Cli::parse_from(&["thokr", "-p", "hello world"]);
+        let cli = Cli::parse_from(["thokr", "-p", "hello world"]);
         assert_eq!(cli.prompt, Some("hello world".to_string()));
 
-        let cli = Cli::parse_from(&["thokr", "--prompt", "custom text"]);
+        let cli = Cli::parse_from(["thokr", "--prompt", "custom text"]);
         assert_eq!(cli.prompt, Some("custom text".to_string()));
     }
 
     #[test]
     fn test_cli_supported_language() {
-        let cli = Cli::parse_from(&["thokr", "-l", "english"]);
+        let cli = Cli::parse_from(["thokr", "-l", "english"]);
         assert!(matches!(cli.supported_language, SupportedLanguage::English));
 
-        let cli = Cli::parse_from(&["thokr", "--supported-language", "english1k"]);
+        let cli = Cli::parse_from(["thokr", "--supported-language", "english1k"]);
         assert!(matches!(
             cli.supported_language,
             SupportedLanguage::English1k
         ));
 
-        let cli = Cli::parse_from(&["thokr", "--supported-language", "english10k"]);
+        let cli = Cli::parse_from(["thokr", "--supported-language", "english10k"]);
         assert!(matches!(
             cli.supported_language,
             SupportedLanguage::English10k
@@ -866,27 +935,27 @@ mod tests {
         };
 
         let mut app = App::new(cli);
-        
+
         // Should start in Typing state
         assert_eq!(app.state, AppState::Typing);
-        
+
         // Simulate completing the typing test
         app.thok.write('h');
         app.thok.write('e');
         app.thok.write('l');
         app.thok.write('l');
         app.thok.write('o');
-        
+
         assert!(app.thok.has_finished());
         app.thok.calc_results();
         app.state = AppState::Results;
-        
+
         assert_eq!(app.state, AppState::Results);
-        
+
         // Navigate to character stats
         app.state = AppState::CharacterStats;
         assert_eq!(app.state, AppState::CharacterStats);
-        
+
         // Navigate back to results
         app.state = AppState::Results;
         assert_eq!(app.state, AppState::Results);
@@ -897,7 +966,7 @@ mod tests {
         let state1 = AppState::Typing;
         let state2 = state1.clone();
         assert_eq!(state1, state2);
-        
+
         let state3 = AppState::CharacterStats;
         assert_ne!(state1, state3);
     }
@@ -905,7 +974,7 @@ mod tests {
     #[test]
     fn test_flag_independence_at_app_level() {
         // Test that CLI flags control their own behavior independently
-        
+
         // Test substitute only
         let cli_substitute_only = Cli {
             number_of_words: 5,
@@ -922,7 +991,7 @@ mod tests {
         let app_substitute = App::new(cli_substitute_only);
         // Should generate substituted words without extra formatting
         assert!(!app_substitute.thok.prompt.is_empty());
-        
+
         // Test capitalize only
         let cli_capitalize_only = Cli {
             number_of_words: 5,
@@ -938,8 +1007,14 @@ mod tests {
         };
         let app_capitalize = App::new(cli_capitalize_only);
         // Should have capitalization
-        assert!(app_capitalize.thok.prompt.chars().next().unwrap().is_uppercase());
-        
+        assert!(app_capitalize
+            .thok
+            .prompt
+            .chars()
+            .next()
+            .unwrap()
+            .is_uppercase());
+
         // Test symbols only
         let cli_symbols_only = Cli {
             number_of_words: 5,
@@ -955,9 +1030,15 @@ mod tests {
         };
         let app_symbols = App::new(cli_symbols_only);
         // Should have symbols available (end punctuation at minimum)
-        assert!(app_symbols.thok.prompt.ends_with('.') || app_symbols.thok.prompt.ends_with('!') || app_symbols.thok.prompt.ends_with('?') || 
-                app_symbols.thok.prompt.ends_with(';') || app_symbols.thok.prompt.ends_with(':') || app_symbols.thok.prompt.ends_with("..."));
-        
+        assert!(
+            app_symbols.thok.prompt.ends_with('.')
+                || app_symbols.thok.prompt.ends_with('!')
+                || app_symbols.thok.prompt.ends_with('?')
+                || app_symbols.thok.prompt.ends_with(';')
+                || app_symbols.thok.prompt.ends_with(':')
+                || app_symbols.thok.prompt.ends_with("...")
+        );
+
         // Test all three combined
         let cli_all = Cli {
             number_of_words: 5,
@@ -994,7 +1075,7 @@ mod tests {
         };
 
         let config = cli.to_word_gen_config(None);
-        
+
         assert_eq!(config.number_of_words, 20);
         assert_eq!(config.number_of_sentences, Some(3));
         assert_eq!(config.custom_prompt, None);
@@ -1021,14 +1102,17 @@ mod tests {
         };
 
         let config = cli.to_word_gen_config(Some("custom prompt override".to_string()));
-        
-        assert_eq!(config.custom_prompt, Some("custom prompt override".to_string()));
+
+        assert_eq!(
+            config.custom_prompt,
+            Some("custom prompt override".to_string())
+        );
     }
 
     #[test]
     fn test_char_stats_state_default() {
         let state = CharStatsState::default();
-        
+
         assert_eq!(state.scroll_offset, 0);
         assert!(matches!(state.sort_by, SortBy::Character));
         assert!(state.sort_ascending);
@@ -1049,7 +1133,7 @@ mod tests {
         assert_eq!(AppState::Typing, AppState::Typing);
         assert_eq!(AppState::Results, AppState::Results);
         assert_eq!(AppState::CharacterStats, AppState::CharacterStats);
-        
+
         // Test that different variants are not equal
         assert_ne!(AppState::Typing, AppState::Results);
         assert_ne!(AppState::Results, AppState::CharacterStats);
@@ -1080,7 +1164,7 @@ mod tests {
         let _english = SupportedLanguage::English;
         let _english1k = SupportedLanguage::English1k;
         let _english10k = SupportedLanguage::English10k;
-        
+
         // Test copying
         let lang1 = SupportedLanguage::English;
         let lang2 = lang1;

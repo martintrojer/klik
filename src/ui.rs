@@ -82,11 +82,16 @@ impl Widget for &Thok {
                                 // In strict mode, show corrected positions with a different color
                                 if self.strict_mode && self.corrected_positions.contains(&idx) {
                                     // Show corrected errors with orange color (much more distinct from green)
-                                    Span::styled(expected, Style::default().patch(bold_style).fg(Color::Rgb(255, 165, 0)))
+                                    Span::styled(
+                                        expected,
+                                        Style::default()
+                                            .patch(bold_style)
+                                            .fg(Color::Rgb(255, 165, 0)),
+                                    )
                                 } else {
                                     Span::styled(expected, green_bold_style)
                                 }
-                            },
+                            }
                         }
                     })
                     .collect::<Vec<Span>>();
@@ -143,7 +148,7 @@ impl Widget for &Thok {
 
                 for ts in &self.wpm_coords {
                     if ts.1 > highest_wpm {
-                        highest_wpm = ts.1 as f64;
+                        highest_wpm = ts.1;
                     }
                 }
 
@@ -223,7 +228,7 @@ mod tests {
         let mut thok = Thok::new(prompt.to_string(), 1, None, false);
 
         if finished {
-            for (_i, c) in prompt.chars().enumerate() {
+            for c in prompt.chars() {
                 thok.input.push(Input {
                     char: c,
                     outcome: Outcome::Correct,

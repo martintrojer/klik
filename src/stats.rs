@@ -10,10 +10,10 @@ use crate::language::CharacterDifficulty;
 /// Character-level statistics for tracking typing performance (used during session)
 #[derive(Debug, Clone)]
 pub struct CharStat {
-    pub character: char,           // The base character (always lowercase for letters)
+    pub character: char, // The base character (always lowercase for letters)
     pub time_to_press_ms: u64,
     pub was_correct: bool,
-    pub was_uppercase: bool,       // True if the original character was uppercase
+    pub was_uppercase: bool, // True if the original character was uppercase
     pub timestamp: DateTime<Local>,
     pub context_before: String,
     pub context_after: String,
@@ -22,18 +22,18 @@ pub struct CharStat {
 /// Aggregated statistics for a character across multiple attempts in a session
 #[derive(Debug, Clone)]
 pub struct CharSessionStats {
-    pub character: char,              // Base character (lowercase)
-    pub total_attempts: u32,          // Total attempts for this character (any case)
-    pub correct_attempts: u32,        // Correct attempts for this character (any case)
-    pub total_time_ms: u64,           // Total time for correct attempts (any case)
-    pub min_time_ms: u64,             // Fastest time for any case
-    pub max_time_ms: u64,             // Slowest time for any case
+    pub character: char,       // Base character (lowercase)
+    pub total_attempts: u32,   // Total attempts for this character (any case)
+    pub correct_attempts: u32, // Correct attempts for this character (any case)
+    pub total_time_ms: u64,    // Total time for correct attempts (any case)
+    pub min_time_ms: u64,      // Fastest time for any case
+    pub max_time_ms: u64,      // Slowest time for any case
     // Uppercase-specific metrics
-    pub uppercase_attempts: u32,      // Total uppercase attempts
-    pub uppercase_correct: u32,       // Correct uppercase attempts
-    pub uppercase_time_ms: u64,       // Total time for correct uppercase attempts
-    pub uppercase_min_time: u64,      // Fastest uppercase time
-    pub uppercase_max_time: u64,      // Slowest uppercase time
+    pub uppercase_attempts: u32, // Total uppercase attempts
+    pub uppercase_correct: u32,  // Correct uppercase attempts
+    pub uppercase_time_ms: u64,  // Total time for correct uppercase attempts
+    pub uppercase_min_time: u64, // Fastest uppercase time
+    pub uppercase_max_time: u64, // Slowest uppercase time
 }
 
 /// Database manager for character statistics
@@ -47,7 +47,7 @@ impl StatsDb {
     /// Initialize the database connection and create tables if needed
     pub fn new() -> Result<Self> {
         let db_path = Self::get_db_path().unwrap_or_else(|| PathBuf::from("thokr_stats.db"));
-        
+
         // Create parent directory if it doesn't exist
         if let Some(parent) = db_path.parent() {
             std::fs::create_dir_all(parent).map_err(|e| {
@@ -59,7 +59,7 @@ impl StatsDb {
         }
 
         let conn = Connection::open(&db_path)?;
-        
+
         // Create the aggregated character statistics table
         conn.execute(
             r#"
@@ -94,9 +94,9 @@ impl StatsDb {
             [],
         )?;
 
-        Ok(StatsDb { 
-            conn, 
-            session_buffer: HashMap::new() 
+        Ok(StatsDb {
+            conn,
+            session_buffer: HashMap::new(),
         })
     }
 
@@ -122,15 +122,15 @@ impl StatsDb {
     pub fn record_char_stat(&mut self, stat: &CharStat) -> Result<()> {
         self.session_buffer
             .entry(stat.character)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(stat.clone());
         Ok(())
     }
-    
+
     /// Record aggregated session statistics for characters
     pub fn record_session_stats(&self, session_stats: &[CharSessionStats]) -> Result<()> {
         let session_date = Local::now().format("%Y-%m-%d").to_string();
-        
+
         for stat in session_stats {
             self.conn.execute(
                 r#"
@@ -167,13 +167,13 @@ impl StatsDb {
 
         // Aggregate all buffered stats
         let session_stats = Self::aggregate_char_stats_from_buffer(&self.session_buffer);
-        
+
         // Record to database
         self.record_session_stats(&session_stats)?;
-        
+
         // Clear buffer
         self.session_buffer.clear();
-        
+
         Ok(())
     }
 
@@ -183,15 +183,17 @@ impl StatsDb {
         for stat in stats {
             self.record_char_stat(stat)?;
         }
-        
+
         // Immediately flush for session end
         self.flush()
     }
-    
+
     /// Aggregate buffered character statistics into session summaries
-    fn aggregate_char_stats_from_buffer(buffer: &HashMap<char, Vec<CharStat>>) -> Vec<CharSessionStats> {
+    fn aggregate_char_stats_from_buffer(
+        buffer: &HashMap<char, Vec<CharStat>>,
+    ) -> Vec<CharSessionStats> {
         let mut session_stats = Vec::new();
-        
+
         for (&character, stats) in buffer {
             let mut char_session = CharSessionStats {
                 character,
@@ -206,29 +208,31 @@ impl StatsDb {
                 uppercase_min_time: u64::MAX,
                 uppercase_max_time: 0,
             };
-            
+
             for stat in stats {
                 char_session.total_attempts += 1;
-                
+
                 if stat.was_uppercase {
                     char_session.uppercase_attempts += 1;
                 }
-                
+
                 if stat.was_correct {
                     char_session.correct_attempts += 1;
                     char_session.total_time_ms += stat.time_to_press_ms;
                     char_session.min_time_ms = char_session.min_time_ms.min(stat.time_to_press_ms);
                     char_session.max_time_ms = char_session.max_time_ms.max(stat.time_to_press_ms);
-                    
+
                     if stat.was_uppercase {
                         char_session.uppercase_correct += 1;
                         char_session.uppercase_time_ms += stat.time_to_press_ms;
-                        char_session.uppercase_min_time = char_session.uppercase_min_time.min(stat.time_to_press_ms);
-                        char_session.uppercase_max_time = char_session.uppercase_max_time.max(stat.time_to_press_ms);
+                        char_session.uppercase_min_time =
+                            char_session.uppercase_min_time.min(stat.time_to_press_ms);
+                        char_session.uppercase_max_time =
+                            char_session.uppercase_max_time.max(stat.time_to_press_ms);
                     }
                 }
             }
-            
+
             // Fix min_time_ms for characters with no correct attempts
             if char_session.correct_attempts == 0 {
                 char_session.min_time_ms = 0;
@@ -236,10 +240,10 @@ impl StatsDb {
             if char_session.uppercase_correct == 0 {
                 char_session.uppercase_min_time = 0;
             }
-            
+
             session_stats.push(char_session);
         }
-        
+
         session_stats
     }
 
@@ -249,7 +253,7 @@ impl StatsDb {
         // This maintains API compatibility but reduces storage
         Ok(Vec::new())
     }
-    
+
     /// Get session-based statistics for a specific character
     pub fn get_char_session_stats(&self, character: char) -> Result<Vec<CharSessionStats>> {
         let mut stmt = self.conn.prepare(
@@ -296,9 +300,10 @@ impl StatsDb {
             "#,
         )?;
 
-        let result: Result<(Option<i64>, Option<i64>), _> = stmt.query_row([character.to_string()], |row| {
-            Ok((row.get(0)?, row.get(1)?))
-        });
+        let result: Result<(Option<i64>, Option<i64>), _> = stmt
+            .query_row([character.to_string()], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            });
 
         match result {
             Ok((Some(total_time), Some(total_correct))) if total_correct > 0 => {
@@ -320,9 +325,10 @@ impl StatsDb {
             "#,
         )?;
 
-        let result: Result<(Option<i64>, Option<i64>), _> = stmt.query_row([character.to_string()], |row| {
-            Ok((row.get(0)?, row.get(1)?))
-        });
+        let result: Result<(Option<i64>, Option<i64>), _> = stmt
+            .query_row([character.to_string()], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            });
 
         match result {
             Ok((Some(total), Some(incorrect))) if total > 0 => {
@@ -378,7 +384,6 @@ impl StatsDb {
         self.conn.execute("DELETE FROM char_session_stats", [])?;
         Ok(())
     }
-    
 
     /// Get the actual database file path being used (for debugging)
     pub fn get_database_path() -> Option<PathBuf> {
@@ -393,14 +398,13 @@ impl StatsDb {
             false
         }
     }
-    
+
     /// Get session statistics count
     pub fn get_session_count(&self) -> Result<i64> {
-        self.conn.query_row(
-            "SELECT COUNT(*) FROM char_session_stats",
-            [],
-            |row| row.get(0)
-        )
+        self.conn
+            .query_row("SELECT COUNT(*) FROM char_session_stats", [], |row| {
+                row.get(0)
+            })
     }
 
     /// Get character difficulty metrics for intelligent word selection
@@ -447,7 +451,7 @@ impl StatsDb {
             let uppercase_avg_time: f64 = row.get(4)?;
             let uppercase_miss_rate: f64 = row.get(5)?;
             let uppercase_attempts: i64 = row.get(6)?;
-            
+
             // Calculate uppercase penalty based on performance difference
             let uppercase_penalty = if uppercase_attempts > 0 {
                 let time_penalty = (uppercase_avg_time - avg_time).max(0.0) / avg_time;
@@ -457,15 +461,18 @@ impl StatsDb {
                 0.5 // Default penalty when no uppercase data
             };
 
-            Ok((character, CharacterDifficulty {
-                miss_rate,
-                avg_time_ms: avg_time,
-                total_attempts,
-                uppercase_miss_rate,
-                uppercase_avg_time,
-                uppercase_attempts,
-                uppercase_penalty,
-            }))
+            Ok((
+                character,
+                CharacterDifficulty {
+                    miss_rate,
+                    avg_time_ms: avg_time,
+                    total_attempts,
+                    uppercase_miss_rate,
+                    uppercase_avg_time,
+                    uppercase_attempts,
+                    uppercase_penalty,
+                },
+            ))
         })?;
 
         let mut difficulties = HashMap::new();
@@ -480,26 +487,20 @@ impl StatsDb {
 
 /// Helper function to calculate time difference in milliseconds
 pub fn time_diff_ms(start: SystemTime, end: SystemTime) -> u64 {
-    end.duration_since(start)
-        .unwrap_or_default()
-        .as_millis() as u64
+    end.duration_since(start).unwrap_or_default().as_millis() as u64
 }
 
 /// Helper function to extract context around a character position
 pub fn extract_context(text: &str, position: usize, context_size: usize) -> (String, String) {
     let chars: Vec<char> = text.chars().collect();
-    
-    let before_start = if position >= context_size {
-        position - context_size
-    } else {
-        0
-    };
-    
+
+    let before_start = position.saturating_sub(context_size);
+
     let after_end = std::cmp::min(position + context_size + 1, chars.len());
-    
+
     let before: String = chars[before_start..position].iter().collect();
     let after: String = chars[position + 1..after_end].iter().collect();
-    
+
     (before, after)
 }
 
@@ -510,7 +511,7 @@ mod tests {
     fn create_test_db() -> StatsDb {
         // Create an in-memory database for testing
         let conn = Connection::open_in_memory().unwrap();
-        
+
         conn.execute(
             r#"
             CREATE TABLE IF NOT EXISTS char_session_stats (
@@ -531,8 +532,9 @@ mod tests {
             )
             "#,
             [],
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_char_session_stats_char ON char_session_stats(character)",
             [],
@@ -542,10 +544,10 @@ mod tests {
             "CREATE INDEX IF NOT EXISTS idx_char_session_stats_date ON char_session_stats(session_date)",
             [],
         ).unwrap();
-        
-        StatsDb { 
-            conn, 
-            session_buffer: HashMap::new() 
+
+        StatsDb {
+            conn,
+            session_buffer: HashMap::new(),
         }
     }
 
@@ -554,7 +556,7 @@ mod tests {
         let start = SystemTime::now();
         std::thread::sleep(std::time::Duration::from_millis(10));
         let end = SystemTime::now();
-        
+
         let diff = time_diff_ms(start, end);
         assert!(diff >= 8); // Allow some timing variance
         assert!(diff < 100); // More generous upper bound for slower systems
@@ -564,7 +566,7 @@ mod tests {
     fn test_extract_context() {
         let text = "hello world test";
         let (before, after) = extract_context(text, 6, 3);
-        
+
         assert_eq!(before, "lo ");
         assert_eq!(after, "orl");
     }
@@ -573,7 +575,7 @@ mod tests {
     fn test_extract_context_at_beginning() {
         let text = "hello world";
         let (before, after) = extract_context(text, 0, 3);
-        
+
         assert_eq!(before, "");
         assert_eq!(after, "ell");
     }
@@ -582,7 +584,7 @@ mod tests {
     fn test_extract_context_at_end() {
         let text = "hello world";
         let (before, after) = extract_context(text, 10, 3);
-        
+
         assert_eq!(before, "orl");
         assert_eq!(after, "");
     }
@@ -590,7 +592,7 @@ mod tests {
     #[test]
     fn test_record_and_retrieve_aggregated_stats() {
         let mut db = create_test_db();
-        
+
         let stats = vec![
             CharStat {
                 character: 'h',
@@ -613,7 +615,7 @@ mod tests {
         ];
 
         db.record_char_stats_batch(&stats).unwrap();
-        
+
         let avg = db.get_avg_time_to_press('h').unwrap();
         assert_eq!(avg, Some(135.0)); // (150 + 120) / 2
     }
@@ -621,7 +623,7 @@ mod tests {
     #[test]
     fn test_session_aggregation() {
         let mut db = create_test_db();
-        
+
         let stats = vec![
             CharStat {
                 character: 't',
@@ -656,7 +658,7 @@ mod tests {
 
         let miss_rate = db.get_miss_rate('t').unwrap();
         assert!((miss_rate - 33.33).abs() < 0.1); // 1 out of 3 = 33.33%
-        
+
         let avg_time = db.get_avg_time_to_press('t').unwrap();
         assert_eq!(avg_time, Some(110.0)); // (100 + 120) / 2 (only correct attempts)
     }
@@ -664,7 +666,7 @@ mod tests {
     #[test]
     fn test_clear_all_stats() {
         let mut db = create_test_db();
-        
+
         let stat = CharStat {
             character: 'x',
             time_to_press_ms: 100,
@@ -687,7 +689,7 @@ mod tests {
     #[test]
     fn test_flush() {
         let mut db = create_test_db();
-        
+
         let stat = CharStat {
             character: 'f',
             time_to_press_ms: 120,
@@ -699,13 +701,13 @@ mod tests {
         };
 
         db.record_char_stat(&stat).unwrap();
-        
+
         // Before flush, no stats in database
         let summary_before = db.get_all_char_summary().unwrap();
         assert_eq!(summary_before.len(), 0);
-        
+
         db.flush().unwrap();
-        
+
         // After flush, stats are in database
         let summary_after = db.get_all_char_summary().unwrap();
         assert_eq!(summary_after.len(), 1);
@@ -716,7 +718,7 @@ mod tests {
     fn test_session_count() {
         let db = create_test_db();
         let session_count = db.get_session_count().unwrap();
-        
+
         // New database should have no entries
         assert_eq!(session_count, 0);
     }

@@ -27,23 +27,23 @@ impl TextFormatter for CapitalizationFormatter {
 
         let rng = &mut rand::thread_rng();
         let mut result = Vec::new();
-        
+
         for (i, word) in words.iter().enumerate() {
             let mut formatted_word = word.clone();
-            
+
             // Capitalize first word and randomly capitalize others (20% chance)
             if i == 0 || rng.gen_bool(0.2) {
                 formatted_word = capitalize_first_letter(&formatted_word);
             }
-            
+
             result.push(formatted_word);
-            
+
             // Add commas between words (15% chance)
             if i < words.len() - 1 && rng.gen_bool(0.15) {
                 result.push(",".to_string());
             }
         }
-        
+
         // Add final punctuation
         let final_punct = match rng.gen_range(0..100) {
             0..=79 => ".",
@@ -51,7 +51,7 @@ impl TextFormatter for CapitalizationFormatter {
             _ => "?",
         };
         result.push(final_punct.to_string());
-        
+
         // Clean up spacing around punctuation
         let mut text = result.join(" ");
         text = text.replace(" ,", ",");
@@ -73,15 +73,15 @@ impl TextFormatter for SymbolFormatter {
 
         let rng = &mut rand::thread_rng();
         let mut result = Vec::new();
-        
+
         // Define symbol sets for different contexts
         let mathematical = ["+", "-", "*", "/", "=", "<", ">"];
         let programming = ["@", "#", "$", "%", "^", "&", "|", "\\", "~", "`"];
         let punctuation_symbols = [":", ";", "\"", "'"];
-        
+
         for (i, word) in words.iter().enumerate() {
             let mut formatted_word = word.clone();
-            
+
             // Add symbols around words (25% chance)
             if rng.gen_bool(0.25) {
                 let symbol_type = rng.gen_range(0..4);
@@ -94,7 +94,7 @@ impl TextFormatter for SymbolFormatter {
                             1 => formatted_word = format!("[{}]", formatted_word),
                             _ => formatted_word = format!("{{{}}}", formatted_word),
                         }
-                    },
+                    }
                     1 => {
                         // Mathematical symbols - prefix or suffix
                         let symbol = mathematical.choose(rng).unwrap();
@@ -103,12 +103,12 @@ impl TextFormatter for SymbolFormatter {
                         } else {
                             formatted_word = format!("{}{}", formatted_word, symbol);
                         }
-                    },
+                    }
                     2 => {
                         // Programming symbols - usually prefix
                         let symbol = programming.choose(rng).unwrap();
                         formatted_word = format!("{}{}", symbol, formatted_word);
-                    },
+                    }
                     _ => {
                         // Punctuation symbols - usually suffix
                         let symbol = punctuation_symbols.choose(rng).unwrap();
@@ -116,9 +116,9 @@ impl TextFormatter for SymbolFormatter {
                     }
                 }
             }
-            
+
             result.push(formatted_word);
-            
+
             // Add special separators between words (20% chance)
             if i < words.len() - 1 {
                 let separator_choice = rng.gen_range(0..10);
@@ -129,7 +129,7 @@ impl TextFormatter for SymbolFormatter {
                 }
             }
         }
-        
+
         // Add final punctuation with more variety
         let final_punct = match rng.gen_range(0..100) {
             0..=50 => ".",
@@ -140,7 +140,7 @@ impl TextFormatter for SymbolFormatter {
             _ => "...",
         };
         result.push(final_punct.to_string());
-        
+
         // Clean up spacing around punctuation
         let mut text = result.join(" ");
         text = text.replace(" ,", ",");
@@ -158,6 +158,12 @@ pub struct CompositeFormatter {
     formatters: Vec<Box<dyn TextFormatter>>,
 }
 
+impl Default for CompositeFormatter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CompositeFormatter {
     pub fn new() -> Self {
         Self {
@@ -170,13 +176,16 @@ impl CompositeFormatter {
         self
     }
 
-    pub fn build_from_flags(include_capitalize: bool, include_symbols: bool) -> Box<dyn TextFormatter> {
+    pub fn build_from_flags(
+        include_capitalize: bool,
+        include_symbols: bool,
+    ) -> Box<dyn TextFormatter> {
         if !include_capitalize && !include_symbols {
             return Box::new(BasicFormatter);
         }
 
         let mut composite = CompositeFormatter::new();
-        
+
         if include_capitalize && include_symbols {
             // For combined formatting, use the original advanced formatting logic
             composite = composite.add_formatter(Box::new(CombinedFormatter));
@@ -193,12 +202,17 @@ impl CompositeFormatter {
 impl TextFormatter for CompositeFormatter {
     fn format(&self, words: Vec<String>) -> String {
         // Apply formatters in sequence
-        self.formatters.iter().fold(words, |current_words, formatter| {
-            // For sequential application, we need to split the formatted text back to words
-            // This is a simplification - in practice, you might want more sophisticated chaining
-            let formatted = formatter.format(current_words);
-            vec![formatted]
-        }).into_iter().next().unwrap_or_default()
+        self.formatters
+            .iter()
+            .fold(words, |current_words, formatter| {
+                // For sequential application, we need to split the formatted text back to words
+                // This is a simplification - in practice, you might want more sophisticated chaining
+                let formatted = formatter.format(current_words);
+                vec![formatted]
+            })
+            .into_iter()
+            .next()
+            .unwrap_or_default()
     }
 }
 
@@ -214,20 +228,20 @@ impl TextFormatter for CombinedFormatter {
 
         let rng = &mut rand::thread_rng();
         let mut result = Vec::new();
-        
+
         // Define symbol sets for different contexts
         let mathematical = ["+", "-", "*", "/", "=", "<", ">"];
         let programming = ["@", "#", "$", "%", "^", "&", "|", "\\", "~", "`"];
         let punctuation_symbols = [":", ";", "\"", "'"];
-        
+
         for (i, word) in words.iter().enumerate() {
             let mut formatted_word = word.clone();
-            
+
             // Capitalize first word and randomly capitalize others (20% chance)
             if i == 0 || rng.gen_bool(0.2) {
                 formatted_word = capitalize_first_letter(&formatted_word);
             }
-            
+
             // Add symbols around words (25% chance)
             if rng.gen_bool(0.25) {
                 let symbol_type = rng.gen_range(0..4);
@@ -240,7 +254,7 @@ impl TextFormatter for CombinedFormatter {
                             1 => formatted_word = format!("[{}]", formatted_word),
                             _ => formatted_word = format!("{{{}}}", formatted_word),
                         }
-                    },
+                    }
                     1 => {
                         // Mathematical symbols - prefix or suffix
                         let symbol = mathematical.choose(rng).unwrap();
@@ -249,12 +263,12 @@ impl TextFormatter for CombinedFormatter {
                         } else {
                             formatted_word = format!("{}{}", formatted_word, symbol);
                         }
-                    },
+                    }
                     2 => {
                         // Programming symbols - usually prefix
                         let symbol = programming.choose(rng).unwrap();
                         formatted_word = format!("{}{}", symbol, formatted_word);
-                    },
+                    }
                     _ => {
                         // Punctuation symbols - usually suffix
                         let symbol = punctuation_symbols.choose(rng).unwrap();
@@ -262,9 +276,9 @@ impl TextFormatter for CombinedFormatter {
                     }
                 }
             }
-            
+
             result.push(formatted_word);
-            
+
             // Add punctuation between words
             if i < words.len() - 1 {
                 // With symbols enabled, more variety in separators (20% chance for special separator)
@@ -276,7 +290,7 @@ impl TextFormatter for CombinedFormatter {
                 }
             }
         }
-        
+
         // Add final punctuation with more variety
         let final_punct = match rng.gen_range(0..100) {
             0..=50 => ".",
@@ -287,7 +301,7 @@ impl TextFormatter for CombinedFormatter {
             _ => "...",
         };
         result.push(final_punct.to_string());
-        
+
         // Clean up spacing around punctuation
         let mut text = result.join(" ");
         text = text.replace(" ,", ",");
@@ -317,7 +331,7 @@ mod tests {
     fn test_basic_formatter() {
         let formatter = BasicFormatter;
         let words = vec!["hello".to_string(), "world".to_string()];
-        
+
         let result = formatter.format(words);
         assert_eq!(result, "hello world");
     }
@@ -326,9 +340,9 @@ mod tests {
     fn test_capitalization_formatter() {
         let formatter = CapitalizationFormatter;
         let words = vec!["hello".to_string(), "world".to_string()];
-        
+
         let result = formatter.format(words);
-        
+
         // Should start with capital letter
         assert!(result.chars().next().unwrap().is_uppercase());
         // Should end with punctuation
@@ -339,12 +353,18 @@ mod tests {
     fn test_symbol_formatter() {
         let formatter = SymbolFormatter;
         let words = vec!["hello".to_string(), "world".to_string()];
-        
+
         let result = formatter.format(words);
-        
+
         // Should end with punctuation
-        assert!(result.ends_with('.') || result.ends_with('!') || result.ends_with('?') || 
-                result.ends_with(';') || result.ends_with(':') || result.ends_with("..."));
+        assert!(
+            result.ends_with('.')
+                || result.ends_with('!')
+                || result.ends_with('?')
+                || result.ends_with(';')
+                || result.ends_with(':')
+                || result.ends_with("...")
+        );
         // Should contain the original words
         let lowercase_result = result.to_lowercase();
         assert!(lowercase_result.contains("hello"));
@@ -354,22 +374,22 @@ mod tests {
     #[test]
     fn test_composite_formatter_build_from_flags() {
         let words = vec!["hello".to_string(), "world".to_string()];
-        
+
         // Test basic (no flags)
         let basic_formatter = CompositeFormatter::build_from_flags(false, false);
         let basic_result = basic_formatter.format(words.clone());
         assert_eq!(basic_result, "hello world");
-        
+
         // Test capitalization only
         let cap_formatter = CompositeFormatter::build_from_flags(true, false);
         let cap_result = cap_formatter.format(words.clone());
         assert!(cap_result.chars().next().unwrap().is_uppercase());
-        
+
         // Test symbols only
         let sym_formatter = CompositeFormatter::build_from_flags(false, true);
         let sym_result = sym_formatter.format(words.clone());
         assert!(!sym_result.is_empty());
-        
+
         // Test combined
         let combined_formatter = CompositeFormatter::build_from_flags(true, true);
         let combined_result = combined_formatter.format(words);
@@ -392,7 +412,7 @@ mod tests {
     #[test]
     fn test_formatters_with_empty_input() {
         let empty_words = vec![];
-        
+
         assert_eq!(BasicFormatter.format(empty_words.clone()), "");
         assert_eq!(CapitalizationFormatter.format(empty_words.clone()), "");
         assert_eq!(SymbolFormatter.format(empty_words.clone()), "");
@@ -401,23 +421,24 @@ mod tests {
     #[test]
     fn test_formatters_with_single_word() {
         let single_word = vec!["test".to_string()];
-        
+
         let basic_result = BasicFormatter.format(single_word.clone());
         assert_eq!(basic_result, "test");
-        
+
         let cap_result = CapitalizationFormatter.format(single_word.clone());
         assert!(cap_result.starts_with("Test"));
-        assert!(cap_result.ends_with('.') || cap_result.ends_with('!') || cap_result.ends_with('?'));
-        
+        assert!(
+            cap_result.ends_with('.') || cap_result.ends_with('!') || cap_result.ends_with('?')
+        );
+
         let sym_result = SymbolFormatter.format(single_word);
         assert!(!sym_result.is_empty());
     }
 
     #[test]
     fn test_composite_formatter_new_and_add() {
-        let composite = CompositeFormatter::new()
-            .add_formatter(Box::new(BasicFormatter));
-        
+        let composite = CompositeFormatter::new().add_formatter(Box::new(BasicFormatter));
+
         let words = vec!["hello".to_string(), "world".to_string()];
         let result = composite.format(words);
         assert_eq!(result, "hello world");
@@ -427,7 +448,7 @@ mod tests {
     fn test_combined_formatter_empty_input() {
         let combined = CombinedFormatter;
         let empty_words = vec![];
-        
+
         let result = combined.format(empty_words);
         assert_eq!(result, "");
     }
@@ -436,16 +457,22 @@ mod tests {
     fn test_combined_formatter_functionality() {
         let combined = CombinedFormatter;
         let words = vec!["hello".to_string(), "world".to_string()];
-        
+
         let result = combined.format(words);
-        
+
         // Should have capitalization (first alphabetic character should be uppercase)
         let first_alpha_char = result.chars().find(|c| c.is_alphabetic());
         if let Some(first_char) = first_alpha_char {
             assert!(first_char.is_uppercase());
         }
         // Should end with punctuation
-        assert!(result.ends_with('.') || result.ends_with('!') || result.ends_with('?') || 
-                result.ends_with(';') || result.ends_with(':') || result.ends_with("..."));
+        assert!(
+            result.ends_with('.')
+                || result.ends_with('!')
+                || result.ends_with('?')
+                || result.ends_with(';')
+                || result.ends_with(':')
+                || result.ends_with("...")
+        );
     }
 }

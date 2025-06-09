@@ -42,7 +42,7 @@ mod tests {
         let lang = Language::new("english".to_string());
 
         assert_eq!(lang.name, "english");
-        assert!(lang.words.len() > 0);
+        assert!(!lang.words.is_empty());
         assert!(lang.size > 0);
     }
 
@@ -51,7 +51,7 @@ mod tests {
         let lang = Language::new("english1k".to_string());
 
         assert_eq!(lang.name, "english_1k");
-        assert!(lang.words.len() > 0);
+        assert!(!lang.words.is_empty());
         assert!(lang.size > 0);
     }
 
@@ -60,7 +60,7 @@ mod tests {
         let lang = Language::new("english10k".to_string());
 
         assert_eq!(lang.name, "english_10k");
-        assert!(lang.words.len() > 0);
+        assert!(!lang.words.is_empty());
         assert!(lang.size > 0);
     }
 
@@ -91,7 +91,7 @@ mod tests {
 
         let lang = result.unwrap();
         assert_eq!(lang.name, "english");
-        assert!(lang.words.len() > 0);
+        assert!(!lang.words.is_empty());
     }
 
     #[test]
