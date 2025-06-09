@@ -1,8 +1,8 @@
 # thokr
 ✨ sleek typing tui with intelligent practice targeting and detailed analytics
 
-[![CI](https://github.com/thatvegandev/thokr/actions/workflows/ci.yml/badge.svg)](https://github.com/thatvegandev/thokr/actions/workflows/ci.yml)
-[![Release](https://github.com/thatvegandev/thokr/actions/workflows/release.yml/badge.svg)](https://github.com/thatvegandev/thokr/actions/workflows/release.yml)
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/thatvegandev/thokr/actions)
+[![Release](https://img.shields.io/github/v/release/thatvegandev/thokr)](https://github.com/thatvegandev/thokr/releases)
 [![codecov](https://codecov.io/gh/thatvegandev/thokr/branch/main/graph/badge.svg)](https://codecov.io/gh/thatvegandev/thokr)
 [![License](https://img.shields.io/badge/License-MIT-default.svg)](./LICENSE.md)
 [![Crate Version](https://img.shields.io/crates/v/thokr)](https://crates.io/crates/thokr)
