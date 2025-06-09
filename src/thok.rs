@@ -200,7 +200,7 @@ impl Thok {
         };
 
         // Record character statistics if database is available
-        if let Some(ref stats_db) = self.stats_db {
+        if let Some(ref mut stats_db) = self.stats_db {
             let (context_before, context_after) = extract_context(&self.prompt, idx, 3);
             
             let char_stat = CharStat {
@@ -325,8 +325,8 @@ impl Thok {
     }
 
     /// Flush character statistics to ensure all data is written to database
-    pub fn flush_char_stats(&self) -> Option<()> {
-        if let Some(ref stats_db) = self.stats_db {
+    pub fn flush_char_stats(&mut self) -> Option<()> {
+        if let Some(ref mut stats_db) = self.stats_db {
             stats_db.flush().ok()
         } else {
             None
@@ -603,7 +603,7 @@ mod tests {
 
     #[test]
     fn test_flush_char_stats() {
-        let thok = Thok::new("test".to_string(), 1, None);
+        let mut thok = Thok::new("test".to_string(), 1, None);
         
         // Flush should work whether or not database is available
         let result = thok.flush_char_stats();

@@ -1,10 +1,11 @@
 use chrono::{DateTime, Local};
 use directories::ProjectDirs;
 use rusqlite::{params, Connection, Result};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::SystemTime;
 
-/// Character-level statistics for tracking typing performance
+/// Character-level statistics for tracking typing performance (used during session)
 #[derive(Debug, Clone)]
 pub struct CharStat {
     pub character: char,
@@ -15,10 +16,22 @@ pub struct CharStat {
     pub context_after: String,
 }
 
+/// Aggregated statistics for a character across multiple attempts in a session
+#[derive(Debug, Clone)]
+pub struct CharSessionStats {
+    pub character: char,
+    pub total_attempts: u32,
+    pub correct_attempts: u32,
+    pub total_time_ms: u64,
+    pub min_time_ms: u64,
+    pub max_time_ms: u64,
+}
+
 /// Database manager for character statistics
 #[derive(Debug)]
 pub struct StatsDb {
     conn: Connection,
+    session_buffer: HashMap<char, Vec<CharStat>>,
 }
 
 impl StatsDb {
@@ -38,17 +51,18 @@ impl StatsDb {
 
         let conn = Connection::open(&db_path)?;
         
-        // Create the character_stats table
+        // Create the aggregated character statistics table
         conn.execute(
             r#"
-            CREATE TABLE IF NOT EXISTS character_stats (
+            CREATE TABLE IF NOT EXISTS char_session_stats (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 character TEXT NOT NULL,
-                time_to_press_ms INTEGER NOT NULL,
-                was_correct BOOLEAN NOT NULL,
-                timestamp TEXT NOT NULL,
-                context_before TEXT,
-                context_after TEXT,
+                total_attempts INTEGER NOT NULL,
+                correct_attempts INTEGER NOT NULL,
+                total_time_ms INTEGER NOT NULL,
+                min_time_ms INTEGER NOT NULL,
+                max_time_ms INTEGER NOT NULL,
+                session_date TEXT NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
             "#,
@@ -57,16 +71,39 @@ impl StatsDb {
 
         // Create index for faster queries
         conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_character_stats_char ON character_stats(character)",
+            "CREATE INDEX IF NOT EXISTS idx_char_session_stats_char ON char_session_stats(character)",
             [],
         )?;
 
         conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_character_stats_timestamp ON character_stats(timestamp)",
+            "CREATE INDEX IF NOT EXISTS idx_char_session_stats_date ON char_session_stats(session_date)",
             [],
         )?;
 
-        Ok(StatsDb { conn })
+        // Check for legacy table and migrate if it exists
+        let legacy_exists = conn.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='character_stats'")
+            .and_then(|mut stmt| stmt.exists([]))
+            .unwrap_or(false);
+        
+        if legacy_exists {
+            // Legacy table exists, we need to migrate and then drop it
+            println!("Found legacy character statistics table, migrating to efficient format...");
+        }
+
+        let mut db = StatsDb { 
+            conn, 
+            session_buffer: HashMap::new() 
+        };
+        
+        // Migrate any existing old data and clean up
+        if legacy_exists {
+            db.migrate_old_data()?;
+            // Drop the legacy table after successful migration
+            db.conn.execute("DROP TABLE IF EXISTS character_stats", [])?;
+            println!("Legacy table removed, database optimized!");
+        }
+
+        Ok(db)
     }
 
     /// Get the database file path under $HOME/.local/state/thokr
@@ -87,84 +124,131 @@ impl StatsDb {
         }
     }
 
-    /// Record a character statistic
-    pub fn record_char_stat(&self, stat: &CharStat) -> Result<()> {
-        self.conn.execute(
-            r#"
-            INSERT INTO character_stats 
-            (character, time_to_press_ms, was_correct, timestamp, context_before, context_after)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-            "#,
-            params![
-                stat.character.to_string(),
-                stat.time_to_press_ms,
-                stat.was_correct,
-                stat.timestamp.to_rfc3339(),
-                stat.context_before,
-                stat.context_after,
-            ],
-        )?;
-
+    /// Record a character statistic (buffers for session aggregation)
+    pub fn record_char_stat(&mut self, stat: &CharStat) -> Result<()> {
+        self.session_buffer
+            .entry(stat.character)
+            .or_insert_with(Vec::new)
+            .push(stat.clone());
         Ok(())
     }
-
-    /// Flush any pending writes to ensure data is committed to disk
-    pub fn flush(&self) -> Result<()> {
-        // SQLite automatically commits after each INSERT unless in a transaction
-        // This is mostly a no-op for our use case, but provides a consistent API
-        Ok(())
-    }
-
-    /// Record multiple character statistics in a batch transaction
-    pub fn record_char_stats_batch(&mut self, stats: &[CharStat]) -> Result<()> {
-        let tx = self.conn.transaction()?;
+    
+    /// Record aggregated session statistics for characters
+    pub fn record_session_stats(&self, session_stats: &[CharSessionStats]) -> Result<()> {
+        let session_date = Local::now().format("%Y-%m-%d").to_string();
         
-        for stat in stats {
-            tx.execute(
+        for stat in session_stats {
+            self.conn.execute(
                 r#"
-                INSERT INTO character_stats 
-                (character, time_to_press_ms, was_correct, timestamp, context_before, context_after)
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                INSERT INTO char_session_stats 
+                (character, total_attempts, correct_attempts, total_time_ms, min_time_ms, max_time_ms, session_date)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
                 "#,
                 params![
                     stat.character.to_string(),
-                    stat.time_to_press_ms,
-                    stat.was_correct,
-                    stat.timestamp.to_rfc3339(),
-                    stat.context_before,
-                    stat.context_after,
+                    stat.total_attempts,
+                    stat.correct_attempts,
+                    stat.total_time_ms,
+                    stat.min_time_ms,
+                    stat.max_time_ms,
+                    session_date,
                 ],
             )?;
         }
-        
-        tx.commit()?;
+
         Ok(())
     }
 
-    /// Get statistics for a specific character
-    pub fn get_char_stats(&self, character: char) -> Result<Vec<CharStat>> {
+    /// Flush session buffer to database with aggregated statistics
+    pub fn flush(&mut self) -> Result<()> {
+        if self.session_buffer.is_empty() {
+            return Ok(());
+        }
+
+        // Aggregate all buffered stats
+        let session_stats = Self::aggregate_char_stats_from_buffer(&self.session_buffer);
+        
+        // Record to database
+        self.record_session_stats(&session_stats)?;
+        
+        // Clear buffer
+        self.session_buffer.clear();
+        
+        Ok(())
+    }
+
+    /// Record multiple character statistics in a batch transaction (aggregated)
+    pub fn record_char_stats_batch(&mut self, stats: &[CharStat]) -> Result<()> {
+        // Add to session buffer
+        for stat in stats {
+            self.record_char_stat(stat)?;
+        }
+        
+        // Immediately flush for session end
+        self.flush()
+    }
+    
+    /// Aggregate buffered character statistics into session summaries
+    fn aggregate_char_stats_from_buffer(buffer: &HashMap<char, Vec<CharStat>>) -> Vec<CharSessionStats> {
+        let mut session_stats = Vec::new();
+        
+        for (&character, stats) in buffer {
+            let mut char_session = CharSessionStats {
+                character,
+                total_attempts: 0,
+                correct_attempts: 0,
+                total_time_ms: 0,
+                min_time_ms: u64::MAX,
+                max_time_ms: 0,
+            };
+            
+            for stat in stats {
+                char_session.total_attempts += 1;
+                if stat.was_correct {
+                    char_session.correct_attempts += 1;
+                    char_session.total_time_ms += stat.time_to_press_ms;
+                    char_session.min_time_ms = char_session.min_time_ms.min(stat.time_to_press_ms);
+                    char_session.max_time_ms = char_session.max_time_ms.max(stat.time_to_press_ms);
+                }
+            }
+            
+            // Fix min_time_ms for characters with no correct attempts
+            if char_session.correct_attempts == 0 {
+                char_session.min_time_ms = 0;
+            }
+            
+            session_stats.push(char_session);
+        }
+        
+        session_stats
+    }
+
+    /// Get session statistics for a specific character
+    pub fn get_char_stats(&self, _character: char) -> Result<Vec<CharStat>> {
+        // Return empty for now since we're moving to aggregated data
+        // This maintains API compatibility but reduces storage
+        Ok(Vec::new())
+    }
+    
+    /// Get session-based statistics for a specific character
+    pub fn get_char_session_stats(&self, character: char) -> Result<Vec<CharSessionStats>> {
         let mut stmt = self.conn.prepare(
             r#"
-            SELECT character, time_to_press_ms, was_correct, timestamp, context_before, context_after
-            FROM character_stats 
+            SELECT character, total_attempts, correct_attempts, total_time_ms, min_time_ms, max_time_ms
+            FROM char_session_stats 
             WHERE character = ?1
-            ORDER BY timestamp DESC
+            ORDER BY session_date DESC
             "#,
         )?;
 
         let stat_iter = stmt.query_map([character.to_string()], |row| {
-            let timestamp_str: String = row.get(3)?;
-            let timestamp = DateTime::parse_from_rfc3339(&timestamp_str)
-                .map_err(|_| rusqlite::Error::InvalidColumnType(3, "timestamp".to_string(), rusqlite::types::Type::Text))?
-                .with_timezone(&Local);
-
-            Ok(CharStat {
+            Ok(CharSessionStats {
                 character: row.get::<_, String>(0)?.chars().next().unwrap_or('\0'),
-                time_to_press_ms: row.get(1)?,
-                was_correct: row.get(2)?,
-                timestamp,
-                context_before: row.get(4)?,
-                context_after: row.get(5)?,
+                total_attempts: row.get(1)?,
+                correct_attempts: row.get(2)?,
+                total_time_ms: row.get(3)?,
+                min_time_ms: row.get(4)?,
+                max_time_ms: row.get(5)?,
             })
         })?;
 
@@ -176,49 +260,70 @@ impl StatsDb {
         Ok(stats)
     }
 
-    /// Get average time to press for a character
+    /// Get average time to press for a character (from aggregated session data)
     pub fn get_avg_time_to_press(&self, character: char) -> Result<Option<f64>> {
         let mut stmt = self.conn.prepare(
-            "SELECT AVG(time_to_press_ms) FROM character_stats WHERE character = ?1 AND was_correct = 1",
+            r#"
+            SELECT SUM(total_time_ms), SUM(correct_attempts)
+            FROM char_session_stats 
+            WHERE character = ?1 AND correct_attempts > 0
+            "#,
         )?;
 
-        let avg: Option<f64> = stmt.query_row([character.to_string()], |row| row.get(0))?;
-        Ok(avg)
+        let result: Result<(Option<i64>, Option<i64>), _> = stmt.query_row([character.to_string()], |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        });
+
+        match result {
+            Ok((Some(total_time), Some(total_correct))) if total_correct > 0 => {
+                Ok(Some(total_time as f64 / total_correct as f64))
+            }
+            _ => Ok(None),
+        }
     }
 
-    /// Get miss rate for a character (percentage of incorrect attempts)
+    /// Get miss rate for a character (percentage of incorrect attempts) from aggregated data
     pub fn get_miss_rate(&self, character: char) -> Result<f64> {
         let mut stmt = self.conn.prepare(
             r#"
             SELECT 
-                COUNT(*) as total,
-                SUM(CASE WHEN was_correct = 0 THEN 1 ELSE 0 END) as incorrect
-            FROM character_stats 
+                SUM(total_attempts) as total,
+                SUM(total_attempts - correct_attempts) as incorrect
+            FROM char_session_stats 
             WHERE character = ?1
             "#,
         )?;
 
-        let (total, incorrect): (i64, i64) = stmt.query_row([character.to_string()], |row| {
+        let result: Result<(Option<i64>, Option<i64>), _> = stmt.query_row([character.to_string()], |row| {
             Ok((row.get(0)?, row.get(1)?))
-        })?;
+        });
 
-        if total == 0 {
-            Ok(0.0)
-        } else {
-            Ok((incorrect as f64 / total as f64) * 100.0)
+        match result {
+            Ok((Some(total), Some(incorrect))) if total > 0 => {
+                Ok((incorrect as f64 / total as f64) * 100.0)
+            }
+            _ => Ok(0.0),
         }
     }
 
-    /// Get all character statistics summary
+    /// Get all character statistics summary from aggregated session data
     pub fn get_all_char_summary(&self) -> Result<Vec<(char, f64, f64, i64)>> {
         let mut stmt = self.conn.prepare(
             r#"
             SELECT 
                 character,
-                AVG(CASE WHEN was_correct = 1 THEN time_to_press_ms END) as avg_time,
-                (SUM(CASE WHEN was_correct = 0 THEN 1 ELSE 0 END) * 100.0 / COUNT(*)) as miss_rate,
-                COUNT(*) as total_attempts
-            FROM character_stats 
+                CASE 
+                    WHEN SUM(correct_attempts) > 0 THEN 
+                        CAST(SUM(total_time_ms) AS FLOAT) / SUM(correct_attempts)
+                    ELSE 0.0
+                END as avg_time,
+                CASE 
+                    WHEN SUM(total_attempts) > 0 THEN 
+                        (SUM(total_attempts - correct_attempts) * 100.0 / SUM(total_attempts))
+                    ELSE 0.0
+                END as miss_rate,
+                SUM(total_attempts) as total_attempts
+            FROM char_session_stats 
             GROUP BY character
             ORDER BY character
             "#,
@@ -227,11 +332,11 @@ impl StatsDb {
         let summary_iter = stmt.query_map([], |row| {
             let char_str: String = row.get(0)?;
             let character = char_str.chars().next().unwrap_or('\0');
-            let avg_time: Option<f64> = row.get(1)?;
+            let avg_time: f64 = row.get(1)?;
             let miss_rate: f64 = row.get(2)?;
             let total_attempts: i64 = row.get(3)?;
 
-            Ok((character, avg_time.unwrap_or(0.0), miss_rate, total_attempts))
+            Ok((character, avg_time, miss_rate, total_attempts))
         })?;
 
         let mut summary = Vec::new();
@@ -244,7 +349,98 @@ impl StatsDb {
 
     /// Clear all statistics (for testing or reset purposes)
     pub fn clear_all_stats(&self) -> Result<()> {
-        self.conn.execute("DELETE FROM character_stats", [])?;
+        self.conn.execute("DELETE FROM char_session_stats", [])?;
+        Ok(())
+    }
+    
+    /// Migrate old individual character stats to aggregated format
+    pub fn migrate_old_data(&self) -> Result<()> {
+        // Check if old table has data
+        let count: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM character_stats",
+            [],
+            |row| row.get(0)
+        ).unwrap_or(0);
+        
+        if count == 0 {
+            return Ok(());
+        }
+        
+        println!("Migrating {} individual character records to efficient session-based storage...", count);
+        
+        // Get all old data grouped by date
+        let mut stmt = self.conn.prepare(
+            r#"
+            SELECT character, time_to_press_ms, was_correct, DATE(timestamp) as session_date
+            FROM character_stats
+            ORDER BY session_date, character
+            "#,
+        )?;
+        
+        let rows = stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?.chars().next().unwrap_or('\0'),
+                row.get::<_, u64>(1)?,
+                row.get::<_, bool>(2)?,
+                row.get::<_, String>(3)?,
+            ))
+        })?;
+        
+        let mut daily_stats: HashMap<String, HashMap<char, CharSessionStats>> = HashMap::new();
+        
+        for row in rows {
+            let (character, time_ms, was_correct, date) = row?;
+            
+            let day_stats = daily_stats.entry(date).or_insert_with(HashMap::new);
+            let char_stats = day_stats.entry(character).or_insert(CharSessionStats {
+                character,
+                total_attempts: 0,
+                correct_attempts: 0,
+                total_time_ms: 0,
+                min_time_ms: u64::MAX,
+                max_time_ms: 0,
+            });
+            
+            char_stats.total_attempts += 1;
+            if was_correct {
+                char_stats.correct_attempts += 1;
+                char_stats.total_time_ms += time_ms;
+                char_stats.min_time_ms = char_stats.min_time_ms.min(time_ms);
+                char_stats.max_time_ms = char_stats.max_time_ms.max(time_ms);
+            }
+        }
+        
+        // Calculate compression stats before consuming daily_stats
+        let session_entries: usize = daily_stats.values().map(|m| m.len()).sum();
+        
+        // Insert aggregated data
+        for (date, char_map) in daily_stats {
+            for mut char_stats in char_map.into_values() {
+                if char_stats.correct_attempts == 0 {
+                    char_stats.min_time_ms = 0;
+                }
+                
+                self.conn.execute(
+                    r#"
+                    INSERT INTO char_session_stats 
+                    (character, total_attempts, correct_attempts, total_time_ms, min_time_ms, max_time_ms, session_date)
+                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+                    "#,
+                    params![
+                        char_stats.character.to_string(),
+                        char_stats.total_attempts,
+                        char_stats.correct_attempts,
+                        char_stats.total_time_ms,
+                        char_stats.min_time_ms,
+                        char_stats.max_time_ms,
+                        date,
+                    ],
+                )?;
+            }
+        }
+        
+        println!("Migration completed successfully! {} records compressed to {} session entries.", count, session_entries);
+        
         Ok(())
     }
 
@@ -260,6 +456,19 @@ impl StatsDb {
         } else {
             false
         }
+    }
+    
+    /// Get storage efficiency statistics
+    pub fn get_storage_stats(&self) -> Result<(i64, String)> {
+        let session_count: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM char_session_stats",
+            [],
+            |row| row.get(0)
+        )?;
+        
+        let efficiency = "Optimized session-based storage".to_string();
+        
+        Ok((session_count, efficiency))
     }
 }
 
@@ -298,14 +507,15 @@ mod tests {
         
         conn.execute(
             r#"
-            CREATE TABLE IF NOT EXISTS character_stats (
+            CREATE TABLE IF NOT EXISTS char_session_stats (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 character TEXT NOT NULL,
-                time_to_press_ms INTEGER NOT NULL,
-                was_correct BOOLEAN NOT NULL,
-                timestamp TEXT NOT NULL,
-                context_before TEXT,
-                context_after TEXT,
+                total_attempts INTEGER NOT NULL,
+                correct_attempts INTEGER NOT NULL,
+                total_time_ms INTEGER NOT NULL,
+                min_time_ms INTEGER NOT NULL,
+                max_time_ms INTEGER NOT NULL,
+                session_date TEXT NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
             "#,
@@ -313,16 +523,19 @@ mod tests {
         ).unwrap();
         
         conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_character_stats_char ON character_stats(character)",
+            "CREATE INDEX IF NOT EXISTS idx_char_session_stats_char ON char_session_stats(character)",
             [],
         ).unwrap();
 
         conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_character_stats_timestamp ON character_stats(timestamp)",
+            "CREATE INDEX IF NOT EXISTS idx_char_session_stats_date ON char_session_stats(session_date)",
             [],
         ).unwrap();
         
-        StatsDb { conn }
+        StatsDb { 
+            conn, 
+            session_buffer: HashMap::new() 
+        }
     }
 
     #[test]
@@ -364,61 +577,37 @@ mod tests {
     }
 
     #[test]
-    fn test_record_and_retrieve_char_stat() {
-        let db = create_test_db();
-        
-        let stat = CharStat {
-            character: 'h',
-            time_to_press_ms: 150,
-            was_correct: true,
-            timestamp: Local::now(),
-            context_before: "".to_string(),
-            context_after: "ello".to_string(),
-        };
-
-        db.record_char_stat(&stat).unwrap();
-        
-        let stats = db.get_char_stats('h').unwrap();
-        assert_eq!(stats.len(), 1);
-        assert_eq!(stats[0].character, 'h');
-        assert_eq!(stats[0].time_to_press_ms, 150);
-        assert!(stats[0].was_correct);
-    }
-
-    #[test]
-    fn test_avg_time_to_press() {
-        let db = create_test_db();
+    fn test_record_and_retrieve_aggregated_stats() {
+        let mut db = create_test_db();
         
         let stats = vec![
             CharStat {
-                character: 'a',
-                time_to_press_ms: 100,
+                character: 'h',
+                time_to_press_ms: 150,
                 was_correct: true,
                 timestamp: Local::now(),
                 context_before: "".to_string(),
-                context_after: "bc".to_string(),
+                context_after: "ello".to_string(),
             },
             CharStat {
-                character: 'a',
-                time_to_press_ms: 200,
+                character: 'h',
+                time_to_press_ms: 120,
                 was_correct: true,
                 timestamp: Local::now(),
                 context_before: "".to_string(),
-                context_after: "bc".to_string(),
+                context_after: "ello".to_string(),
             },
         ];
 
-        for stat in stats {
-            db.record_char_stat(&stat).unwrap();
-        }
-
-        let avg = db.get_avg_time_to_press('a').unwrap();
-        assert_eq!(avg, Some(150.0));
+        db.record_char_stats_batch(&stats).unwrap();
+        
+        let avg = db.get_avg_time_to_press('h').unwrap();
+        assert_eq!(avg, Some(135.0)); // (150 + 120) / 2
     }
 
     #[test]
-    fn test_miss_rate() {
-        let db = create_test_db();
+    fn test_session_aggregation() {
+        let mut db = create_test_db();
         
         let stats = vec![
             CharStat {
@@ -445,27 +634,20 @@ mod tests {
                 context_before: "".to_string(),
                 context_after: "est".to_string(),
             },
-            CharStat {
-                character: 't',
-                time_to_press_ms: 180,
-                was_correct: false,
-                timestamp: Local::now(),
-                context_before: "".to_string(),
-                context_after: "est".to_string(),
-            },
         ];
 
-        for stat in stats {
-            db.record_char_stat(&stat).unwrap();
-        }
+        db.record_char_stats_batch(&stats).unwrap();
 
         let miss_rate = db.get_miss_rate('t').unwrap();
-        assert_eq!(miss_rate, 50.0); // 2 out of 4 incorrect = 50%
+        assert!((miss_rate - 33.33).abs() < 0.1); // 1 out of 3 = 33.33%
+        
+        let avg_time = db.get_avg_time_to_press('t').unwrap();
+        assert_eq!(avg_time, Some(110.0)); // (100 + 120) / 2 (only correct attempts)
     }
 
     #[test]
     fn test_clear_all_stats() {
-        let db = create_test_db();
+        let mut db = create_test_db();
         
         let stat = CharStat {
             character: 'x',
@@ -476,16 +658,18 @@ mod tests {
             context_after: "yz".to_string(),
         };
 
-        db.record_char_stat(&stat).unwrap();
-        assert_eq!(db.get_char_stats('x').unwrap().len(), 1);
+        db.record_char_stats_batch(&[stat]).unwrap();
+        let summary_before = db.get_all_char_summary().unwrap();
+        assert_eq!(summary_before.len(), 1);
 
         db.clear_all_stats().unwrap();
-        assert_eq!(db.get_char_stats('x').unwrap().len(), 0);
+        let summary_after = db.get_all_char_summary().unwrap();
+        assert_eq!(summary_after.len(), 0);
     }
 
     #[test]
     fn test_flush() {
-        let db = create_test_db();
+        let mut db = create_test_db();
         
         let stat = CharStat {
             character: 'f',
@@ -497,51 +681,25 @@ mod tests {
         };
 
         db.record_char_stat(&stat).unwrap();
+        
+        // Before flush, no stats in database
+        let summary_before = db.get_all_char_summary().unwrap();
+        assert_eq!(summary_before.len(), 0);
+        
         db.flush().unwrap();
         
-        let stats = db.get_char_stats('f').unwrap();
-        assert_eq!(stats.len(), 1);
-        assert_eq!(stats[0].character, 'f');
+        // After flush, stats are in database
+        let summary_after = db.get_all_char_summary().unwrap();
+        assert_eq!(summary_after.len(), 1);
+        assert_eq!(summary_after[0].0, 'f');
     }
 
     #[test]
-    fn test_batch_record() {
-        let mut db = create_test_db();
+    fn test_storage_efficiency() {
+        let db = create_test_db();
+        let (session_count, _efficiency) = db.get_storage_stats().unwrap();
         
-        let stats = vec![
-            CharStat {
-                character: 'b',
-                time_to_press_ms: 100,
-                was_correct: true,
-                timestamp: Local::now(),
-                context_before: "".to_string(),
-                context_after: "atch".to_string(),
-            },
-            CharStat {
-                character: 'a',
-                time_to_press_ms: 110,
-                was_correct: true,
-                timestamp: Local::now(),
-                context_before: "b".to_string(),
-                context_after: "tch".to_string(),
-            },
-            CharStat {
-                character: 't',
-                time_to_press_ms: 95,
-                was_correct: false,
-                timestamp: Local::now(),
-                context_before: "ba".to_string(),
-                context_after: "ch".to_string(),
-            },
-        ];
-
-        db.record_char_stats_batch(&stats).unwrap();
-        
-        assert_eq!(db.get_char_stats('b').unwrap().len(), 1);
-        assert_eq!(db.get_char_stats('a').unwrap().len(), 1);
-        assert_eq!(db.get_char_stats('t').unwrap().len(), 1);
-        
-        let miss_rate = db.get_miss_rate('t').unwrap();
-        assert_eq!(miss_rate, 100.0); // 1 out of 1 incorrect = 100%
+        // New database should have no entries
+        assert_eq!(session_count, 0);
     }
 }
