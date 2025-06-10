@@ -33,8 +33,21 @@ impl Widget for &Thok {
 
         let magenta_style = Style::default().fg(Color::Magenta);
 
-        match !self.has_finished() {
-            true => {
+        match (!self.has_finished(), self.is_idle) {
+            (true, true) => {
+                // Idle state - show idle message
+                let idle_message = Paragraph::new(Span::styled(
+                    "IDLE - Press any key to continue typing",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD | Modifier::ITALIC),
+                ))
+                .alignment(Alignment::Center)
+                .wrap(Wrap { trim: true });
+
+                idle_message.render(area, buf);
+            }
+            (true, false) => {
                 let max_chars_per_line = area.width - (HORIZONTAL_MARGIN * 2);
                 let mut prompt_occupied_lines =
                     ((self.prompt.width() as f64 / max_chars_per_line as f64).ceil() + 1.0) as u16;
@@ -128,7 +141,7 @@ impl Widget for &Thok {
                     timer.render(chunks[1], buf);
                 }
             }
-            false => {
+            (false, _) => {
                 let chunks = Layout::default()
                     .direction(Direction::Vertical)
                     .horizontal_margin(HORIZONTAL_MARGIN)

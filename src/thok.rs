@@ -47,6 +47,9 @@ pub struct Thok {
     pub strict_mode: bool,
     pub corrected_positions: std::collections::HashSet<usize>, // Track positions that had errors
     pub celebration: CelebrationAnimation,
+    pub last_activity: Option<SystemTime>,
+    pub is_idle: bool,
+    pub idle_timeout_secs: f64,
 }
 
 impl Thok {
@@ -75,6 +78,9 @@ impl Thok {
             strict_mode,
             corrected_positions: HashSet::new(),
             celebration: CelebrationAnimation::default(),
+            last_activity: None,
+            is_idle: false,
+            idle_timeout_secs: 30.0, // 30 seconds idle timeout
         }
     }
 
@@ -82,6 +88,49 @@ impl Thok {
         if let Some(remaining) = self.seconds_remaining {
             self.seconds_remaining = Some(remaining - (TICK_RATE_MS as f64 / 1000_f64));
         }
+        
+        // Check for idle timeout
+        self.check_idle_timeout();
+    }
+    
+    /// Check if the user has been idle and set idle state accordingly
+    fn check_idle_timeout(&mut self) {
+        if let Some(last_activity) = self.last_activity {
+            let now = SystemTime::now();
+            if let Ok(duration) = now.duration_since(last_activity) {
+                let idle_duration = duration.as_secs_f64();
+                if idle_duration >= self.idle_timeout_secs && !self.is_idle {
+                    self.is_idle = true;
+                    // Pause timers when going idle
+                    if self.has_started() && !self.has_finished() {
+                        if let Some(started_at) = self.started_at {
+                            if let Ok(elapsed) = last_activity.duration_since(started_at) {
+                                // Store the elapsed time up to when user went idle
+                                self.started_at = Some(now.checked_sub(elapsed).unwrap_or(now));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    /// Mark activity and exit idle state if necessary
+    pub fn mark_activity(&mut self) {
+        let now = SystemTime::now();
+        
+        if self.is_idle {
+            // Exiting idle state - restart timers
+            self.is_idle = false;
+            if self.has_started() && !self.has_finished() {
+                // Reset started_at to effectively restart the session timer
+                self.started_at = Some(now);
+                // Reset remaining time for timed sessions
+                self.seconds_remaining = self.number_of_secs;
+            }
+        }
+        
+        self.last_activity = Some(now);
     }
 
     pub fn get_expected_char(&self, idx: usize) -> char {
@@ -196,6 +245,8 @@ impl Thok {
     }
 
     pub fn backspace(&mut self) {
+        self.mark_activity();
+        
         if self.strict_mode {
             // In strict mode, backspace should reset the current position to allow retry
             if self.cursor_pos > 0 {
@@ -234,6 +285,8 @@ impl Thok {
     }
 
     pub fn write(&mut self, c: char) {
+        self.mark_activity();
+        
         let idx = if self.strict_mode {
             // In strict mode, use cursor position instead of input length
             self.cursor_pos

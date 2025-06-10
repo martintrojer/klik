@@ -1,0 +1,3 @@
+   - [ ] TODO: add idle timeout in the typing ui. if exceeded blank the secreen with an 'idle' message and restart sesion timers upon key press
+   - [ ] TODO: in strict mode, when a wrongly types char we show the char to be typed twice. show the actual typed wrong char instead as the 'the extra char' in the ui
+   - [ ] TODO: make the celebrational screen a bit more sparse somehow, trigger on perfect runs that also improve the stats in a meaningful way

@@ -266,6 +266,11 @@ fn start_tui<B: Backend>(
                     terminal.draw(|f| ui(app, f))?;
                 }
                 ThokEvent::Key(key) => {
+                    // Mark activity for any key press during typing to exit idle state
+                    if app.state == AppState::Typing && !app.thok.has_finished() {
+                        app.thok.mark_activity();
+                    }
+                    
                     match key.code {
                         KeyCode::Esc => {
                             break;
