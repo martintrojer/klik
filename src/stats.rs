@@ -384,6 +384,51 @@ impl StatsDb {
         Ok(summary)
     }
 
+    /// Get historical character statistics summary excluding today's session
+    /// This is used for delta calculations to compare against truly historical data
+    pub fn get_historical_char_summary(&self) -> Result<Vec<(char, f64, f64, i64)>> {
+        let today = Local::now().format("%Y-%m-%d").to_string();
+
+        let mut stmt = self.conn.prepare(
+            r#"
+            SELECT 
+                character,
+                CASE 
+                    WHEN SUM(correct_attempts) > 0 THEN 
+                        CAST(SUM(total_time_ms) AS FLOAT) / SUM(correct_attempts)
+                    ELSE 0.0
+                END as avg_time,
+                CASE 
+                    WHEN SUM(total_attempts) > 0 THEN 
+                        (SUM(total_attempts - correct_attempts) * 100.0 / SUM(total_attempts))
+                    ELSE 0.0
+                END as miss_rate,
+                SUM(total_attempts) as total_attempts
+            FROM char_session_stats 
+            WHERE session_date != ?1
+            GROUP BY character
+            ORDER BY character
+            "#,
+        )?;
+
+        let summary_iter = stmt.query_map([today], |row| {
+            let char_str: String = row.get(0)?;
+            let character = char_str.chars().next().unwrap_or('\0');
+            let avg_time: f64 = row.get(1)?;
+            let miss_rate: f64 = row.get(2)?;
+            let total_attempts: i64 = row.get(3)?;
+
+            Ok((character, avg_time, miss_rate, total_attempts))
+        })?;
+
+        let mut summary = Vec::new();
+        for item in summary_iter {
+            summary.push(item?);
+        }
+
+        Ok(summary)
+    }
+
     /// Get session statistics from the current session buffer
     pub fn get_current_session_summary(&self) -> Vec<(char, f64, f64, i64)> {
         let mut summary = Vec::new();
@@ -417,12 +462,65 @@ impl StatsDb {
         summary
     }
 
+    /// Get session statistics from the most recent session in the database
+    /// This is used for delta calculations after the session buffer has been flushed
+    pub fn get_latest_session_summary(&self) -> Result<Vec<(char, f64, f64, i64)>> {
+        let today = Local::now().format("%Y-%m-%d").to_string();
+
+        let mut stmt = self.conn.prepare(
+            r#"
+            SELECT 
+                character,
+                CASE 
+                    WHEN correct_attempts > 0 THEN 
+                        CAST(total_time_ms AS FLOAT) / correct_attempts
+                    ELSE 0.0
+                END as avg_time,
+                CASE 
+                    WHEN total_attempts > 0 THEN 
+                        (total_attempts - correct_attempts) * 100.0 / total_attempts
+                    ELSE 0.0
+                END as miss_rate,
+                total_attempts
+            FROM char_session_stats 
+            WHERE session_date = ?1
+            ORDER BY character
+            "#,
+        )?;
+
+        let summary_iter = stmt.query_map([today], |row| {
+            let char_str: String = row.get(0)?;
+            let character = char_str.chars().next().unwrap_or('\0');
+            let avg_time: f64 = row.get(1)?;
+            let miss_rate: f64 = row.get(2)?;
+            let total_attempts: i64 = row.get(3)?;
+
+            Ok((character, avg_time, miss_rate, total_attempts))
+        })?;
+
+        let mut summary = Vec::new();
+        for item in summary_iter {
+            summary.push(item?);
+        }
+
+        Ok(summary)
+    }
+
     /// Get character statistics with session deltas
     /// Returns: (char, historical_avg_time, historical_miss_rate, historical_attempts,
     ///          session_avg_time_delta, session_miss_rate_delta, session_attempts_delta)
     pub fn get_char_summary_with_deltas(&self) -> Result<Vec<CharSummaryWithDeltas>> {
-        let historical_summary = self.get_all_char_summary()?;
-        let session_summary = self.get_current_session_summary();
+        let historical_summary = self.get_historical_char_summary()?;
+
+        // Try current session buffer first, fallback to latest session from database
+        let session_summary = if self.session_buffer.is_empty() {
+            // Session buffer is empty (already flushed), get latest session from database
+            self.get_latest_session_summary()
+                .unwrap_or_else(|_| Vec::new())
+        } else {
+            // Session buffer has data, use it
+            self.get_current_session_summary()
+        };
 
         let mut combined_summary = Vec::new();
 
