@@ -1,6 +1,6 @@
 use chrono::{DateTime, Local};
 use directories::ProjectDirs;
-use rusqlite::{params, Connection, Result, OptionalExtension};
+use rusqlite::{params, Connection, OptionalExtension, Result};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::SystemTime;
@@ -388,14 +388,13 @@ impl StatsDb {
     /// This is used for delta calculations to compare against truly historical data
     pub fn get_historical_char_summary(&self) -> Result<Vec<(char, f64, f64, i64)>> {
         // Get the timestamp of the most recent session
-        let mut max_stmt = self.conn.prepare(
-            "SELECT MAX(created_at) FROM char_session_stats"
-        )?;
-        
-        let latest_timestamp: Option<String> = max_stmt.query_row([], |row| {
-            row.get(0)
-        }).optional()?;
-        
+        let mut max_stmt = self
+            .conn
+            .prepare("SELECT MAX(created_at) FROM char_session_stats")?;
+
+        let latest_timestamp: Option<String> =
+            max_stmt.query_row([], |row| row.get(0)).optional()?;
+
         let mut stmt = self.conn.prepare(
             r#"
             SELECT 
@@ -473,14 +472,13 @@ impl StatsDb {
     /// This is used for delta calculations after the session buffer has been flushed
     pub fn get_latest_session_summary(&self) -> Result<Vec<(char, f64, f64, i64)>> {
         // Get the timestamp of the most recent session
-        let mut max_stmt = self.conn.prepare(
-            "SELECT MAX(created_at) FROM char_session_stats"
-        )?;
-        
-        let latest_timestamp: Option<String> = max_stmt.query_row([], |row| {
-            row.get(0)
-        }).optional()?;
-        
+        let mut max_stmt = self
+            .conn
+            .prepare("SELECT MAX(created_at) FROM char_session_stats")?;
+
+        let latest_timestamp: Option<String> =
+            max_stmt.query_row([], |row| row.get(0)).optional()?;
+
         if latest_timestamp.is_none() {
             return Ok(Vec::new());
         }
