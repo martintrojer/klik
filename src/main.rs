@@ -628,6 +628,8 @@ fn render_character_stats(app: &mut App, f: &mut Frame) {
                         } else {
                             format!("{:.1} ↑{:.0}", avg_time, delta)
                         }
+                    } else if *session_attempts > 0 {
+                        format!("{:.1} •", avg_time) // • indicates new character this session
                     } else {
                         format!("{:.1}", avg_time)
                     };
@@ -641,6 +643,8 @@ fn render_character_stats(app: &mut App, f: &mut Frame) {
                         } else {
                             format!("{:.1} ↑{:.1}", miss_rate, delta)
                         }
+                    } else if *session_attempts > 0 {
+                        format!("{:.1} •", miss_rate) // • indicates new character this session
                     } else {
                         format!("{:.1}", miss_rate)
                     };
@@ -726,8 +730,24 @@ fn render_character_stats(app: &mut App, f: &mut Frame) {
         f.render_widget(no_data, chunks[1]);
     }
 
-    // Instructions
-    let instructions = Paragraph::new("Historical stats with session deltas: ↓=improvement ↑=regression (+n)=session attempts\nSort: (1)Char (2)Time (3)Miss (4)Attempts | (Space)Toggle | ↑/↓ PgUp/PgDn | (b)ack (esc)ape")
+    // Instructions with delta information
+    let delta_count = if let Some(ref summary) = app.thok.get_char_summary_with_deltas() {
+        let deltas_available = summary
+            .iter()
+            .filter(|(_, _, _, _, time_delta, miss_delta, session_attempts)| {
+                *session_attempts > 0 && (time_delta.is_some() || miss_delta.is_some())
+            })
+            .count();
+        if deltas_available > 0 {
+            format!("Historical stats with session deltas: ↓=improvement ↑=regression •=new/first-time (+n)=session attempts | {} chars with deltas", deltas_available)
+        } else {
+            "Historical stats: Type more sessions to see performance deltas | •=first time typing this character".to_string()
+        }
+    } else {
+        "Historical stats: Database not available".to_string()
+    };
+
+    let instructions = Paragraph::new(format!("{}\nSort: (1)Char (2)Time (3)Miss (4)Attempts | (Space)Toggle | ↑/↓ PgUp/PgDn | (b)ack (esc)ape", delta_count))
         .block(Block::default().borders(Borders::ALL))
         .style(Style::default().fg(Color::Gray).add_modifier(Modifier::ITALIC))
         .alignment(Alignment::Center);

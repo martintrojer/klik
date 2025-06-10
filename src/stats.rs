@@ -1228,6 +1228,11 @@ mod tests {
         // Delta: 0 - 20 = -20% (improvement)
         assert!(miss_delta.is_some());
         assert_eq!(miss_delta.unwrap(), -20.0);
+
+        println!(
+            "✅ Delta test: time_delta={:?}, miss_delta={:?}",
+            time_delta, miss_delta
+        );
     }
 
     #[test]
