@@ -25,14 +25,14 @@ impl CelebrationParticle {
         Self {
             x,
             y,
-            vel_x: rng.gen_range(-1.5..1.5), // Reduced velocity for calmer animation
-            vel_y: rng.gen_range(-2.0..-0.5),
+            vel_x: rng.gen_range(-3.0..3.0), // Increased velocity for visible movement
+            vel_y: rng.gen_range(-4.0..-1.0),
             symbol: *['✨', '🎉', '⭐', '💫', '🌟', '✓', '🎊']
                 .choose(&mut rng)
                 .unwrap_or(&'✨'),
             color_index: rng.gen_range(0..7),
             age: 0.0,
-            max_age: rng.gen_range(1.5..2.5),
+            max_age: rng.gen_range(2.0..4.0),
             is_text: false,
             target_x: x,
             target_y: y,
@@ -58,7 +58,7 @@ impl CelebrationParticle {
             symbol,
             color_index: color,
             age: 0.0,
-            max_age: rng.gen_range(2.0..3.0), // Text particles last longer but more controlled
+            max_age: rng.gen_range(3.0..5.0), // Text particles last longer
             is_text: true,
             target_x,
             target_y,
@@ -146,7 +146,7 @@ impl CelebrationAnimation {
         self.create_text_particles(chosen_word, center_x, center_y, &mut rng);
 
         // Add some decorative particles around the text with more spread
-        for _ in 0..12 {
+        for _ in 0..25 {
             let offset_x = rng.gen_range(-15.0..15.0);
             let offset_y = rng.gen_range(-8.0..8.0);
             self.particles.push(CelebrationParticle::new(
