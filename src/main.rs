@@ -270,7 +270,7 @@ fn start_tui<B: Backend>(
                     if app.state == AppState::Typing && !app.thok.has_finished() {
                         app.thok.mark_activity();
                     }
-                    
+
                     match key.code {
                         KeyCode::Esc => {
                             break;

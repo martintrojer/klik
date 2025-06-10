@@ -88,11 +88,11 @@ impl Thok {
         if let Some(remaining) = self.seconds_remaining {
             self.seconds_remaining = Some(remaining - (TICK_RATE_MS as f64 / 1000_f64));
         }
-        
+
         // Check for idle timeout
         self.check_idle_timeout();
     }
-    
+
     /// Check if the user has been idle and set idle state accordingly
     fn check_idle_timeout(&mut self) {
         if let Some(last_activity) = self.last_activity {
@@ -114,11 +114,11 @@ impl Thok {
             }
         }
     }
-    
+
     /// Mark activity and exit idle state if necessary
     pub fn mark_activity(&mut self) {
         let now = SystemTime::now();
-        
+
         if self.is_idle {
             // Exiting idle state - restart timers
             self.is_idle = false;
@@ -129,7 +129,7 @@ impl Thok {
                 self.seconds_remaining = self.number_of_secs;
             }
         }
-        
+
         self.last_activity = Some(now);
     }
 
@@ -239,7 +239,7 @@ impl Thok {
         }
 
         let mut should_celebrate = false;
-        
+
         // Always celebrate perfect sessions
         if self.accuracy >= 100.0 {
             should_celebrate = true;
@@ -253,7 +253,7 @@ impl Thok {
             for (_, _, _, _, time_delta, miss_delta, session_attempts) in &deltas {
                 if *session_attempts > 0 {
                     total_chars_with_deltas += 1;
-                    
+
                     if let Some(time_d) = time_delta {
                         avg_time_improvement += time_d;
                         // Significant time improvement: >10ms faster
@@ -261,7 +261,7 @@ impl Thok {
                             significant_improvements += 1;
                         }
                     }
-                    
+
                     if let Some(miss_d) = miss_delta {
                         avg_accuracy_improvement += miss_d;
                         // Significant accuracy improvement: >5% better
@@ -275,13 +275,14 @@ impl Thok {
             if total_chars_with_deltas > 0 {
                 avg_time_improvement /= total_chars_with_deltas as f64;
                 avg_accuracy_improvement /= total_chars_with_deltas as f64;
-                
+
                 // Trigger celebration if:
                 // 1. Multiple characters show significant improvement, OR
                 // 2. Overall session shows substantial improvement (>15ms faster or >10% more accurate)
-                if significant_improvements >= 3 
-                    || avg_time_improvement < -15.0 
-                    || avg_accuracy_improvement < -10.0 {
+                if significant_improvements >= 3
+                    || avg_time_improvement < -15.0
+                    || avg_accuracy_improvement < -10.0
+                {
                     should_celebrate = true;
                 }
             }
@@ -302,7 +303,7 @@ impl Thok {
 
     pub fn backspace(&mut self) {
         self.mark_activity();
-        
+
         if self.strict_mode {
             // In strict mode, backspace should reset the current position to allow retry
             if self.cursor_pos > 0 {
@@ -342,7 +343,7 @@ impl Thok {
 
     pub fn write(&mut self, c: char) {
         self.mark_activity();
-        
+
         let idx = if self.strict_mode {
             // In strict mode, use cursor position instead of input length
             self.cursor_pos
