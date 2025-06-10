@@ -217,6 +217,21 @@ cargo test
 - **Testing**: Maintain >90% coverage on business logic
 - **Documentation**: Update CLAUDE.md for architectural changes
 
+### Development Task Completion Checklist
+
+**IMPORTANT**: Always complete these steps at the end of each development task:
+
+1. **Format Code**: Run `cargo fmt` to ensure consistent formatting
+2. **Lint Code**: Run `cargo clippy` and fix all warnings
+3. **Test Changes**: Run `cargo test` to verify no regressions
+4. **Build Check**: Run `cargo build --release` to ensure clean compilation
+
+**Code Quality Standards:**
+- All clippy warnings must be resolved before considering a task complete
+- Code formatting must be consistent (automated by `cargo fmt`)
+- New functionality must include comprehensive tests
+- Type complexity warnings should be addressed with type aliases when needed
+
 ### Continuous Integration
 
 **Modern GitHub Actions CI Pipeline:**

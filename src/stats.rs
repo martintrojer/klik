@@ -7,6 +7,11 @@ use std::time::SystemTime;
 
 use crate::language::CharacterDifficulty;
 
+/// Type alias for character statistics with session deltas
+/// (char, historical_avg_time, historical_miss_rate, historical_attempts, 
+///  session_avg_time_delta, session_miss_rate_delta, session_attempts_delta)
+pub type CharSummaryWithDeltas = (char, f64, f64, i64, Option<f64>, Option<f64>, i64);
+
 /// Character-level statistics for tracking typing performance (used during session)
 #[derive(Debug, Clone)]
 pub struct CharStat {
@@ -377,6 +382,111 @@ impl StatsDb {
         }
 
         Ok(summary)
+    }
+
+    /// Get session statistics from the current session buffer
+    pub fn get_current_session_summary(&self) -> Vec<(char, f64, f64, i64)> {
+        let mut summary = Vec::new();
+
+        for (&character, stats) in &self.session_buffer {
+            let total_attempts = stats.len() as i64;
+            let correct_attempts = stats.iter().filter(|s| s.was_correct).count();
+
+            let avg_time = if correct_attempts > 0 {
+                let total_time: u64 = stats
+                    .iter()
+                    .filter(|s| s.was_correct)
+                    .map(|s| s.time_to_press_ms)
+                    .sum();
+                total_time as f64 / correct_attempts as f64
+            } else {
+                0.0
+            };
+
+            let miss_rate = if total_attempts > 0 {
+                let incorrect_attempts = total_attempts - correct_attempts as i64;
+                (incorrect_attempts as f64 / total_attempts as f64) * 100.0
+            } else {
+                0.0
+            };
+
+            summary.push((character, avg_time, miss_rate, total_attempts));
+        }
+
+        summary.sort_by(|a, b| a.0.cmp(&b.0));
+        summary
+    }
+
+    /// Get character statistics with session deltas
+    /// Returns: (char, historical_avg_time, historical_miss_rate, historical_attempts,
+    ///          session_avg_time_delta, session_miss_rate_delta, session_attempts_delta)
+    pub fn get_char_summary_with_deltas(&self) -> Result<Vec<CharSummaryWithDeltas>> {
+        let historical_summary = self.get_all_char_summary()?;
+        let session_summary = self.get_current_session_summary();
+
+        let mut combined_summary = Vec::new();
+
+        // Create a map of session data for quick lookup
+        let session_map: std::collections::HashMap<char, (f64, f64, i64)> = session_summary
+            .iter()
+            .map(|(c, avg_time, miss_rate, attempts)| (*c, (*avg_time, *miss_rate, *attempts)))
+            .collect();
+
+        // Process historical data and add session deltas
+        for (character, hist_avg_time, hist_miss_rate, hist_attempts) in historical_summary {
+            let (session_avg_delta, session_miss_delta, session_attempts) = if let Some(&(
+                session_avg,
+                session_miss,
+                session_att,
+            )) =
+                session_map.get(&character)
+            {
+                // Calculate deltas: negative means improvement for time/miss_rate
+                let avg_delta = if session_avg > 0.0 && hist_avg_time > 0.0 {
+                    Some(session_avg - hist_avg_time)
+                } else {
+                    None
+                };
+                let miss_delta = if hist_attempts > 0 {
+                    Some(session_miss - hist_miss_rate)
+                } else {
+                    None
+                };
+                (avg_delta, miss_delta, session_att)
+            } else {
+                (None, None, 0)
+            };
+
+            combined_summary.push((
+                character,
+                hist_avg_time,
+                hist_miss_rate,
+                hist_attempts,
+                session_avg_delta,
+                session_miss_delta,
+                session_attempts,
+            ));
+        }
+
+        // Add characters that are only in the current session (new characters)
+        for (character, session_avg, session_miss, session_attempts) in &session_summary {
+            if !combined_summary
+                .iter()
+                .any(|(c, _, _, _, _, _, _)| c == character)
+            {
+                combined_summary.push((
+                    *character,
+                    *session_avg, // Use session data as historical since it's new
+                    *session_miss,
+                    *session_attempts,
+                    None, // No delta for new characters
+                    None,
+                    *session_attempts,
+                ));
+            }
+        }
+
+        Ok(combined_summary)
     }
 
     /// Clear all statistics (for testing or reset purposes)
@@ -980,5 +1090,185 @@ mod tests {
 
         let session_count_after = db.get_session_count().unwrap();
         assert_eq!(session_count_before, session_count_after);
+    }
+
+    #[test]
+    fn test_current_session_summary() {
+        let mut db = create_test_db();
+
+        // Add some stats to the session buffer
+        let stats = vec![
+            CharStat {
+                character: 'a',
+                time_to_press_ms: 100,
+                was_correct: true,
+                was_uppercase: false,
+                timestamp: Local::now(),
+                context_before: "".to_string(),
+                context_after: "bc".to_string(),
+            },
+            CharStat {
+                character: 'a',
+                time_to_press_ms: 150,
+                was_correct: false,
+                was_uppercase: false,
+                timestamp: Local::now(),
+                context_before: "".to_string(),
+                context_after: "bc".to_string(),
+            },
+            CharStat {
+                character: 'b',
+                time_to_press_ms: 120,
+                was_correct: true,
+                was_uppercase: false,
+                timestamp: Local::now(),
+                context_before: "a".to_string(),
+                context_after: "c".to_string(),
+            },
+        ];
+
+        for stat in stats {
+            db.record_char_stat(&stat).unwrap();
+        }
+
+        let session_summary = db.get_current_session_summary();
+
+        assert_eq!(session_summary.len(), 2); // 'a' and 'b'
+
+        // Find character 'a' in summary
+        let a_stats = session_summary
+            .iter()
+            .find(|(c, _, _, _)| *c == 'a')
+            .unwrap();
+        assert_eq!(a_stats.1, 100.0); // avg_time (only correct attempts)
+        assert_eq!(a_stats.2, 50.0); // miss_rate (1 out of 2)
+        assert_eq!(a_stats.3, 2); // total_attempts
+
+        // Find character 'b' in summary
+        let b_stats = session_summary
+            .iter()
+            .find(|(c, _, _, _)| *c == 'b')
+            .unwrap();
+        assert_eq!(b_stats.1, 120.0); // avg_time
+        assert_eq!(b_stats.2, 0.0); // miss_rate (0 out of 1)
+        assert_eq!(b_stats.3, 1); // total_attempts
+    }
+
+    #[test]
+    fn test_char_summary_with_deltas() {
+        let mut db = create_test_db();
+
+        // Add historical data to the database
+        let conn = &db.conn;
+        conn.execute(
+            r#"
+            INSERT INTO char_session_stats (
+                character, total_attempts, correct_attempts, total_time_ms,
+                min_time_ms, max_time_ms, uppercase_attempts, uppercase_correct,
+                uppercase_time_ms, uppercase_min_time, uppercase_max_time, session_date
+            )
+            VALUES ('a', 10, 8, 1600, 100, 250, 2, 1, 200, 120, 250, '2024-01-01')
+            "#,
+            [],
+        )
+        .unwrap();
+
+        // Add session data to the buffer
+        let session_stats = vec![
+            CharStat {
+                character: 'a',
+                time_to_press_ms: 150, // Faster than historical (200ms avg)
+                was_correct: true,
+                was_uppercase: false,
+                timestamp: Local::now(),
+                context_before: "".to_string(),
+                context_after: "bc".to_string(),
+            },
+            CharStat {
+                character: 'a',
+                time_to_press_ms: 170,
+                was_correct: true,
+                was_uppercase: false,
+                timestamp: Local::now(),
+                context_before: "".to_string(),
+                context_after: "bc".to_string(),
+            },
+        ];
+
+        for stat in session_stats {
+            db.record_char_stat(&stat).unwrap();
+        }
+
+        let summary_with_deltas = db.get_char_summary_with_deltas().unwrap();
+
+        assert_eq!(summary_with_deltas.len(), 1);
+
+        let (
+            character,
+            hist_avg,
+            hist_miss,
+            hist_attempts,
+            time_delta,
+            miss_delta,
+            session_attempts,
+        ) = &summary_with_deltas[0];
+
+        assert_eq!(*character, 'a');
+        assert_eq!(*hist_avg, 200.0); // 1600 / 8
+        assert_eq!(*hist_miss, 20.0); // (10-8)/10 * 100
+        assert_eq!(*hist_attempts, 10);
+        assert_eq!(*session_attempts, 2);
+
+        // Session average: (150+170)/2 = 160ms
+        // Delta: 160 - 200 = -40ms (improvement)
+        assert!(time_delta.is_some());
+        assert_eq!(time_delta.unwrap(), -40.0);
+
+        // Session miss rate: 0% (both correct)
+        // Delta: 0 - 20 = -20% (improvement)
+        assert!(miss_delta.is_some());
+        assert_eq!(miss_delta.unwrap(), -20.0);
+    }
+
+    #[test]
+    fn test_char_summary_with_new_character() {
+        let mut db = create_test_db();
+
+        // Add session data for a character not in historical data
+        let session_stat = CharStat {
+            character: 'z',
+            time_to_press_ms: 180,
+            was_correct: true,
+            was_uppercase: false,
+            timestamp: Local::now(),
+            context_before: "".to_string(),
+            context_after: "".to_string(),
+        };
+
+        db.record_char_stat(&session_stat).unwrap();
+
+        let summary_with_deltas = db.get_char_summary_with_deltas().unwrap();
+
+        assert_eq!(summary_with_deltas.len(), 1);
+
+        let (
+            character,
+            hist_avg,
+            hist_miss,
+            hist_attempts,
+            time_delta,
+            miss_delta,
+            session_attempts,
+        ) = &summary_with_deltas[0];
+
+        assert_eq!(*character, 'z');
+        assert_eq!(*hist_avg, 180.0); // Uses session data as historical
+        assert_eq!(*hist_miss, 0.0); // Uses session data as historical
+        assert_eq!(*hist_attempts, 1); // Uses session data as historical
+        assert_eq!(*session_attempts, 1);
+
+        // No deltas for new characters
+        assert!(time_delta.is_none());
+        assert!(miss_delta.is_none());
     }
 }

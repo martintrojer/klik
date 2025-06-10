@@ -225,10 +225,8 @@ fn start_tui<B: Backend>(
     terminal: &mut Terminal<B>,
     mut app: &mut App,
 ) -> Result<(), Box<dyn Error>> {
-    let cli = app.cli.clone();
-
-    // Enable ticking if there's a time limit OR if we might need celebration animation
-    let should_tick = cli.unwrap().number_of_secs.unwrap_or(0) > 0 || true; // Always tick for animations
+    // Always enable ticking for celebration animations and timed sessions
+    let should_tick = true;
 
     let thok_events = get_thok_events(should_tick);
 
@@ -248,16 +246,19 @@ fn start_tui<B: Backend>(
                             app.thok.calc_results();
                             // Get terminal size for celebration
                             let size = terminal.size().unwrap_or_default();
-                            app.thok.start_celebration_if_perfect(size.width, size.height);
+                            app.thok
+                                .start_celebration_if_perfect(size.width, size.height);
                             app.state = AppState::Results;
                         }
                     }
-                    
+
                     // Always update celebration animation if active
                     app.thok.update_celebration();
-                    
+
                     // Draw on every tick if there's active animation or during typing
-                    if app.thok.celebration.is_active || (app.thok.has_started() && !app.thok.has_finished()) {
+                    if app.thok.celebration.is_active
+                        || (app.thok.has_started() && !app.thok.has_finished())
+                    {
                         terminal.draw(|f| ui(app, f))?;
                     }
                 }
@@ -300,7 +301,10 @@ fn start_tui<B: Backend>(
                                             app.thok.calc_results();
                                             // Get terminal size for celebration
                                             let size = terminal.size().unwrap_or_default();
-                                            app.thok.start_celebration_if_perfect(size.width, size.height);
+                                            app.thok.start_celebration_if_perfect(
+                                                size.width,
+                                                size.height,
+                                            );
                                             app.state = AppState::Results;
                                         }
                                     }
@@ -488,8 +492,8 @@ fn render_character_stats(app: &mut App, f: &mut Frame) {
         .alignment(Alignment::Center);
     f.render_widget(title, chunks[0]);
 
-    // Get character statistics
-    if let Some(mut summary) = app.thok.get_all_char_summary() {
+    // Get character statistics with session deltas
+    if let Some(mut summary) = app.thok.get_char_summary_with_deltas() {
         // Sort the data based on current sort criteria
         match app.char_stats_state.sort_by {
             SortBy::Character => {
@@ -583,36 +587,104 @@ fn render_character_stats(app: &mut App, f: &mut Frame) {
             .iter()
             .skip(app.char_stats_state.scroll_offset)
             .take(table_height)
-            .map(|(character, avg_time, miss_rate, attempts)| {
-                let char_display = if *character == ' ' {
-                    "SPACE".to_string()
-                } else {
-                    character.to_string()
-                };
+            .map(
+                |(
+                    character,
+                    avg_time,
+                    miss_rate,
+                    attempts,
+                    time_delta,
+                    miss_delta,
+                    session_attempts,
+                )| {
+                    let char_display = if *character == ' ' {
+                        "SPACE".to_string()
+                    } else {
+                        character.to_string()
+                    };
 
-                let time_color = if *avg_time < 150.0 {
-                    Color::Green
-                } else if *avg_time < 250.0 {
-                    Color::Yellow
-                } else {
-                    Color::Red
-                };
+                    let time_color = if *avg_time < 150.0 {
+                        Color::Green
+                    } else if *avg_time < 250.0 {
+                        Color::Yellow
+                    } else {
+                        Color::Red
+                    };
 
-                let miss_color = if *miss_rate == 0.0 {
-                    Color::Green
-                } else if *miss_rate < 10.0 {
-                    Color::Yellow
-                } else {
-                    Color::Red
-                };
+                    let miss_color = if *miss_rate == 0.0 {
+                        Color::Green
+                    } else if *miss_rate < 10.0 {
+                        Color::Yellow
+                    } else {
+                        Color::Red
+                    };
 
-                Row::new(vec![
-                    Cell::from(char_display),
-                    Cell::from(format!("{:.1}", avg_time)).style(Style::default().fg(time_color)),
-                    Cell::from(format!("{:.1}", miss_rate)).style(Style::default().fg(miss_color)),
-                    Cell::from(attempts.to_string()),
-                ])
-            })
+                    // Format time with delta
+                    let time_display = if let Some(delta) = time_delta {
+                        if delta.abs() < 1.0 {
+                            format!("{:.1}", avg_time)
+                        } else if *delta < 0.0 {
+                            format!("{:.1} ↓{:.0}", avg_time, delta.abs())
+                        } else {
+                            format!("{:.1} ↑{:.0}", avg_time, delta)
+                        }
+                    } else {
+                        format!("{:.1}", avg_time)
+                    };
+
+                    // Format miss rate with delta
+                    let miss_display = if let Some(delta) = miss_delta {
+                        if delta.abs() < 0.5 {
+                            format!("{:.1}", miss_rate)
+                        } else if *delta < 0.0 {
+                            format!("{:.1} ↓{:.1}", miss_rate, delta.abs())
+                        } else {
+                            format!("{:.1} ↑{:.1}", miss_rate, delta)
+                        }
+                    } else {
+                        format!("{:.1}", miss_rate)
+                    };
+
+                    // Format attempts with session info
+                    let attempts_display = if *session_attempts > 0 {
+                        format!("{} (+{})", attempts, session_attempts)
+                    } else {
+                        attempts.to_string()
+                    };
+
+                    // Color deltas: green for improvement, red for regression
+                    let time_style = if let Some(delta) = time_delta {
+                        if *delta < -5.0 {
+                            Style::default().fg(Color::Green)
+                        } else if *delta > 5.0 {
+                            Style::default().fg(Color::Red)
+                        } else {
+                            Style::default().fg(time_color)
+                        }
+                    } else {
+                        Style::default().fg(time_color)
+                    };
+
+                    let miss_style = if let Some(delta) = miss_delta {
+                        if *delta < -2.0 {
+                            Style::default().fg(Color::Green)
+                        } else if *delta > 2.0 {
+                            Style::default().fg(Color::Red)
+                        } else {
+                            Style::default().fg(miss_color)
+                        }
+                    } else {
+                        Style::default().fg(miss_color)
+                    };
+
+                    Row::new(vec![
+                        Cell::from(char_display),
+                        Cell::from(time_display).style(time_style),
+                        Cell::from(miss_display).style(miss_style),
+                        Cell::from(attempts_display),
+                    ])
+                },
+            )
             .collect();
 
         // Show scroll position in title if there are more rows than visible
@@ -629,10 +701,10 @@ fn render_character_stats(app: &mut App, f: &mut Frame) {
         let table = Table::new(
             visible_rows,
             &[
-                Constraint::Length(8),
-                Constraint::Length(18),
-                Constraint::Length(18),
-                Constraint::Length(12),
+                Constraint::Length(8),  // Character
+                Constraint::Length(22), // Avg Time with delta (expanded)
+                Constraint::Length(22), // Miss Rate with delta (expanded)
+                Constraint::Length(16), // Attempts with session info (expanded)
             ],
         )
         .header(header)
@@ -655,7 +727,7 @@ fn render_character_stats(app: &mut App, f: &mut Frame) {
     }
 
     // Instructions
-    let instructions = Paragraph::new("Sort: (1)Char (2)Time (3)Miss (4)Attempts | (Space)Toggle direction\nScroll: ↑/↓ PgUp/PgDn Home | (b)ack (r)etry (n)ew (esc)ape")
+    let instructions = Paragraph::new("Historical stats with session deltas: ↓=improvement ↑=regression (+n)=session attempts\nSort: (1)Char (2)Time (3)Miss (4)Attempts | (Space)Toggle | ↑/↓ PgUp/PgDn | (b)ack (esc)ape")
         .block(Block::default().borders(Borders::ALL))
         .style(Style::default().fg(Color::Gray).add_modifier(Modifier::ITALIC))
         .alignment(Alignment::Center);

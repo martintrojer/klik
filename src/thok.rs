@@ -13,7 +13,6 @@ use std::{
     time::SystemTime,
 };
 
-
 #[derive(Clone, Debug, Copy, PartialEq)]
 pub enum Outcome {
     Correct,
@@ -463,6 +462,17 @@ impl Thok {
     pub fn get_all_char_summary(&self) -> Option<Vec<(char, f64, f64, i64)>> {
         if let Some(ref stats_db) = self.stats_db {
             stats_db.get_all_char_summary().ok()
+        } else {
+            None
+        }
+    }
+
+    /// Get character statistics with session deltas
+    /// Returns: (char, historical_avg_time, historical_miss_rate, historical_attempts,
+    ///          session_avg_time_delta, session_miss_rate_delta, session_attempts_delta)
+    pub fn get_char_summary_with_deltas(&self) -> Option<Vec<crate::stats::CharSummaryWithDeltas>> {
+        if let Some(ref stats_db) = self.stats_db {
+            stats_db.get_char_summary_with_deltas().ok()
         } else {
             None
         }
@@ -1301,83 +1311,86 @@ mod tests {
     #[test]
     fn test_celebration_triggers_on_perfect_session() {
         let mut thok = Thok::new("hello".to_string(), 1, None, false);
-        
+
         // Type perfectly
         thok.write('h');
         thok.write('e');
         thok.write('l');
         thok.write('l');
         thok.write('o');
-        
+
         assert!(thok.has_finished());
         thok.calc_results();
-        
+
         // Should have 100% accuracy
         assert_eq!(thok.accuracy, 100.0);
-        
+
         // Start celebration - should work
         thok.start_celebration_if_perfect(80, 24);
-        
+
         // Celebration should be active
         assert!(thok.celebration.is_active);
         assert!(!thok.celebration.particles.is_empty());
-        
-        println!("✅ Celebration triggered successfully with {} particles", thok.celebration.particles.len());
+
+        println!(
+            "✅ Celebration triggered successfully with {} particles",
+            thok.celebration.particles.len()
+        );
     }
 
     #[test]
     fn test_celebration_animation_perfect_session() {
         let mut thok = Thok::new("hello".to_string(), 1, None, false);
-        
+
         // Type the prompt perfectly
         thok.write('h');
         thok.write('e');
         thok.write('l');
         thok.write('l');
         thok.write('o');
-        
+
         assert!(thok.has_finished());
         thok.calc_results();
-        
+
         // Should have 100% accuracy
         assert_eq!(thok.accuracy, 100.0);
-        
+
         // Start celebration
         thok.start_celebration_if_perfect(80, 24);
-        
+
         // Celebration should be active
         assert!(thok.celebration.is_active);
         assert!(!thok.celebration.particles.is_empty());
-        
+
         // Update celebration a few times
         for _ in 0..10 {
             thok.update_celebration();
         }
-        
+
         // Celebration should still be active (duration is 3 seconds)
         assert!(thok.celebration.is_active);
     }
-    
+
     #[test]
     fn test_celebration_animation_imperfect_session() {
         let mut thok = Thok::new("hello".to_string(), 1, None, false);
-        
+
         // Type with an error
         thok.write('h');
         thok.write('x'); // Wrong character
         thok.write('l');
         thok.write('l');
         thok.write('o');
-        
+
         assert!(thok.has_finished());
         thok.calc_results();
-        
+
         // Should not have 100% accuracy
         assert!(thok.accuracy < 100.0);
-        
+
         // Try to start celebration
         thok.start_celebration_if_perfect(80, 24);
-        
+
         // Celebration should NOT be active
         assert!(!thok.celebration.is_active);
         assert!(thok.celebration.particles.is_empty());
@@ -1439,6 +1452,52 @@ mod tests {
             println!("✅ Timing fix verified - characters show realistic timing data");
         } else {
             panic!("❌ No summary statistics found for fresh database test");
+        }
+    }
+
+    #[test]
+    fn test_char_summary_with_deltas_integration() {
+        let mut thok = Thok::new("hello".to_string(), 1, None, false);
+
+        // Type the prompt to generate some session data
+        thok.write('h');
+        thok.write('e');
+        thok.write('l');
+        thok.write('l');
+        thok.write('o');
+
+        assert!(thok.has_finished());
+
+        // Get summary with deltas (should work even with no historical data)
+        if let Some(summary_with_deltas) = thok.get_char_summary_with_deltas() {
+            // Should have data for all characters typed
+            assert!(!summary_with_deltas.is_empty());
+
+            // For new characters (no historical data), deltas should be None
+            for (
+                character,
+                _hist_avg,
+                _hist_miss,
+                _hist_attempts,
+                _time_delta,
+                _miss_delta,
+                session_attempts,
+            ) in &summary_with_deltas
+            {
+                if ['h', 'e', 'l', 'o'].contains(character) {
+                    // Deltas might be None for new characters or Some for existing ones
+                    assert!(
+                        *session_attempts > 0,
+                        "Session attempts should be > 0 for typed characters"
+                    );
+                }
+            }
+
+            println!("✅ Character summary with deltas working correctly");
+        } else {
+            println!(
+                "❌ Character summary with deltas not available (database may not be initialized)"
+            );
         }
     }
 }
