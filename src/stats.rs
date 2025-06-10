@@ -8,7 +8,7 @@ use std::time::SystemTime;
 use crate::language::CharacterDifficulty;
 
 /// Type alias for character statistics with session deltas
-/// (char, historical_avg_time, historical_miss_rate, historical_attempts, 
+/// (char, historical_avg_time, historical_miss_rate, historical_attempts,
 ///  session_avg_time_delta, session_miss_rate_delta, session_attempts_delta)
 pub type CharSummaryWithDeltas = (char, f64, f64, i64, Option<f64>, Option<f64>, i64);
 
