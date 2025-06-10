@@ -85,9 +85,9 @@ impl Widget for &Thok {
 
                         match input.outcome {
                             Outcome::Incorrect => Span::styled(
-                                match expected.as_str() {
-                                    " " => "·".to_owned(),
-                                    _ => expected,
+                                match input.char {
+                                    ' ' => "·".to_owned(),
+                                    c => c.to_string(),
                                 },
                                 red_bold_style,
                             ),
