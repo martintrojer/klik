@@ -244,8 +244,18 @@ fn start_tui<B: Backend>(
 
                         if app.thok.has_finished() {
                             app.thok.calc_results();
+                            // Get terminal size for celebration
+                            let size = terminal.size().unwrap_or_default();
+                            app.thok.start_celebration_if_perfect(size.width, size.height);
                             app.state = AppState::Results;
                         }
+                    }
+                    
+                    // Always update celebration animation if active
+                    app.thok.update_celebration();
+                    
+                    // Draw on every tick if there's active animation or during typing
+                    if app.thok.celebration.is_active || (app.thok.has_started() && !app.thok.has_finished()) {
                         terminal.draw(|f| ui(app, f))?;
                     }
                 }
@@ -286,6 +296,9 @@ fn start_tui<B: Backend>(
                                         app.thok.write(c);
                                         if app.thok.has_finished() {
                                             app.thok.calc_results();
+                                            // Get terminal size for celebration
+                                            let size = terminal.size().unwrap_or_default();
+                                            app.thok.start_celebration_if_perfect(size.width, size.height);
                                             app.state = AppState::Results;
                                         }
                                     }

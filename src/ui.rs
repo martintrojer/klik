@@ -212,6 +212,54 @@ impl Widget for &Thok {
                 ));
 
                 legend.render(chunks[3], buf);
+
+                // Render celebration animation if active
+                if self.celebration.is_active {
+                    render_celebration_particles(&self.celebration, area, buf);
+                }
+            }
+        }
+    }
+}
+
+/// Render celebration particles on top of the results screen
+fn render_celebration_particles(
+    celebration: &crate::thok::CelebrationAnimation,
+    area: Rect,
+    buf: &mut Buffer,
+) {
+    let colors = [
+        Color::Yellow,
+        Color::Magenta,
+        Color::Cyan,
+        Color::Green,
+        Color::Red,
+        Color::Blue,
+        Color::LightYellow,
+    ];
+
+    for particle in &celebration.particles {
+        let x = particle.x as u16;
+        let y = particle.y as u16;
+
+        // Check bounds
+        if x < area.width && y < area.height {
+            let color = colors[particle.color_index % colors.len()];
+            
+            // Calculate alpha based on particle age for fade effect
+            let alpha = 1.0 - (particle.age / particle.max_age);
+            let style = if alpha > 0.7 {
+                Style::default().fg(color).add_modifier(Modifier::BOLD)
+            } else if alpha > 0.3 {
+                Style::default().fg(color)
+            } else {
+                Style::default().fg(color).add_modifier(Modifier::DIM)
+            };
+
+            // Set the particle character in the buffer
+            if let Some(cell) = buf.cell_mut((area.x + x, area.y + y)) {
+                cell.set_symbol(&particle.symbol.to_string());
+                cell.set_style(style);
             }
         }
     }
@@ -626,5 +674,30 @@ mod tests {
         (&thok).render(area, &mut buffer);
 
         assert!(*buffer.area() == area);
+    }
+
+    #[test]
+    fn test_celebration_animation_rendering() {
+        let mut thok = create_test_thok("test", true);
+        
+        // Manually set up celebration
+        thok.accuracy = 100.0;
+        thok.celebration.start(80, 24);
+        
+        // Ensure celebration is active
+        assert!(thok.celebration.is_active);
+        assert!(!thok.celebration.particles.is_empty());
+        
+        let area = Rect::new(0, 0, 80, 24);
+        let mut buffer = Buffer::empty(area);
+
+        // Render with celebration
+        (&thok).render(area, &mut buffer);
+
+        // Should render without panicking
+        assert!(*buffer.area() == area);
+        
+        // The buffer should contain content (hard to test specific particles due to randomness)
+        assert!(!buffer.content().is_empty());
     }
 }

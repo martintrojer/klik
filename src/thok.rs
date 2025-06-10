@@ -4,6 +4,7 @@ use crate::TICK_RATE_MS;
 use chrono::prelude::*;
 use directories::ProjectDirs;
 use itertools::Itertools;
+use rand::seq::SliceRandom;
 use std::fs::OpenOptions;
 use std::io::{self, Write};
 use std::{
@@ -11,6 +12,112 @@ use std::{
     collections::{HashMap, HashSet},
     time::SystemTime,
 };
+
+/// Particle for celebration animation
+#[derive(Debug, Clone)]
+pub struct CelebrationParticle {
+    pub x: f64,
+    pub y: f64,
+    pub vel_x: f64,
+    pub vel_y: f64,
+    pub symbol: char,
+    pub color_index: usize,
+    pub age: f64,
+    pub max_age: f64,
+}
+
+impl CelebrationParticle {
+    fn new(x: f64, y: f64) -> Self {
+        use rand::Rng;
+        let mut rng = rand::thread_rng();
+        
+        Self {
+            x,
+            y,
+            vel_x: rng.gen_range(-3.0..3.0),
+            vel_y: rng.gen_range(-4.0..-1.0),
+            symbol: *['✨', '🎉', '⭐', '💫', '🌟', '✓', '🎊'].choose(&mut rng).unwrap_or(&'✨'),
+            color_index: rng.gen_range(0..7), // For cycling through colors
+            age: 0.0,
+            max_age: rng.gen_range(2.0..4.0),
+        }
+    }
+    
+    fn update(&mut self, dt: f64) -> bool {
+        self.x += self.vel_x * dt;
+        self.y += self.vel_y * dt;
+        self.vel_y += 9.8 * dt; // Gravity
+        self.age += dt;
+        
+        self.age < self.max_age
+    }
+}
+
+/// Animation state for celebration
+#[derive(Debug)]
+pub struct CelebrationAnimation {
+    pub particles: Vec<CelebrationParticle>,
+    pub start_time: SystemTime,
+    pub duration: f64, // seconds
+    pub is_active: bool,
+}
+
+impl CelebrationAnimation {
+    fn new() -> Self {
+        Self {
+            particles: Vec::new(),
+            start_time: SystemTime::now(),
+            duration: 3.0, // 3 second celebration
+            is_active: false,
+        }
+    }
+    
+    pub fn start(&mut self, width: u16, height: u16) {
+        use rand::Rng;
+        let mut rng = rand::thread_rng();
+        
+        self.particles.clear();
+        self.start_time = SystemTime::now();
+        self.is_active = true;
+        
+        // Create burst of particles from center and edges
+        let center_x = width as f64 / 2.0;
+        let center_y = height as f64 / 2.0;
+        
+        // Center burst
+        for _ in 0..20 {
+            let offset_x = rng.gen_range(-5.0..5.0);
+            let offset_y = rng.gen_range(-3.0..3.0);
+            self.particles.push(CelebrationParticle::new(
+                center_x + offset_x,
+                center_y + offset_y,
+            ));
+        }
+        
+        // Edge particles
+        for _ in 0..15 {
+            let x = rng.gen_range(5.0..(width as f64 - 5.0));
+            let y = rng.gen_range(5.0..(height as f64 - 5.0));
+            self.particles.push(CelebrationParticle::new(x, y));
+        }
+    }
+    
+    fn update(&mut self) {
+        if !self.is_active {
+            return;
+        }
+        
+        let elapsed = self.start_time.elapsed().unwrap_or_default().as_secs_f64();
+        if elapsed >= self.duration {
+            self.is_active = false;
+            self.particles.clear();
+            return;
+        }
+        
+        let dt = 0.1; // Fixed timestep for animation
+        self.particles.retain_mut(|particle| particle.update(dt));
+    }
+}
 
 #[derive(Clone, Debug, Copy, PartialEq)]
 pub enum Outcome {
@@ -45,6 +152,7 @@ pub struct Thok {
     pub keypress_start_time: Option<SystemTime>,
     pub strict_mode: bool,
     pub corrected_positions: std::collections::HashSet<usize>, // Track positions that had errors
+    pub celebration: CelebrationAnimation,
 }
 
 impl Thok {
@@ -72,6 +180,7 @@ impl Thok {
             keypress_start_time: None,
             strict_mode,
             corrected_positions: HashSet::new(),
+            celebration: CelebrationAnimation::new(),
         }
     }
 
@@ -177,6 +286,18 @@ impl Thok {
             // Perform automatic database compaction if needed
             self.auto_compact_database();
         };
+    }
+
+    /// Start celebration animation if the session was perfect (100% accuracy)
+    pub fn start_celebration_if_perfect(&mut self, terminal_width: u16, terminal_height: u16) {
+        if self.accuracy >= 100.0 && !self.input.is_empty() {
+            self.celebration.start(terminal_width, terminal_height);
+        }
+    }
+
+    /// Update celebration animation (should be called on each frame/tick)
+    pub fn update_celebration(&mut self) {
+        self.celebration.update();
     }
 
     pub fn backspace(&mut self) {
@@ -1279,6 +1400,83 @@ mod tests {
         } else {
             panic!("❌ No summary statistics found for inter-keystroke timing test");
         }
+    }
+
+    #[test]
+    fn test_celebration_animation_perfect_session() {
+        let mut thok = Thok::new("hello".to_string(), 1, None, false);
+        
+        // Type the prompt perfectly
+        thok.write('h');
+        thok.write('e');
+        thok.write('l');
+        thok.write('l');
+        thok.write('o');
+        
+        assert!(thok.has_finished());
+        thok.calc_results();
+        
+        // Should have 100% accuracy
+        assert_eq!(thok.accuracy, 100.0);
+        
+        // Start celebration
+        thok.start_celebration_if_perfect(80, 24);
+        
+        // Celebration should be active
+        assert!(thok.celebration.is_active);
+        assert!(!thok.celebration.particles.is_empty());
+        
+        // Update celebration a few times
+        for _ in 0..10 {
+            thok.update_celebration();
+        }
+        
+        // Celebration should still be active (duration is 3 seconds)
+        assert!(thok.celebration.is_active);
+    }
+    
+    #[test]
+    fn test_celebration_animation_imperfect_session() {
+        let mut thok = Thok::new("hello".to_string(), 1, None, false);
+        
+        // Type with an error
+        thok.write('h');
+        thok.write('x'); // Wrong character
+        thok.write('l');
+        thok.write('l');
+        thok.write('o');
+        
+        assert!(thok.has_finished());
+        thok.calc_results();
+        
+        // Should not have 100% accuracy
+        assert!(thok.accuracy < 100.0);
+        
+        // Try to start celebration
+        thok.start_celebration_if_perfect(80, 24);
+        
+        // Celebration should NOT be active
+        assert!(!thok.celebration.is_active);
+        assert!(thok.celebration.particles.is_empty());
+    }
+    
+    #[test]
+    fn test_celebration_particle_physics() {
+        let mut particle = CelebrationParticle::new(10.0, 10.0);
+        let initial_y = particle.y;
+        let initial_vel_y = particle.vel_y;
+        
+        // Update particle with physics
+        let still_alive = particle.update(0.1);
+        
+        // Particle should still be alive
+        assert!(still_alive);
+        
+        // Y position should change due to velocity
+        assert_ne!(particle.y, initial_y);
+        
+        // Y velocity should increase due to gravity
+        assert!(particle.vel_y > initial_vel_y);
     }
 
     #[test]
