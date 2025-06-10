@@ -1,10 +1,10 @@
+use crate::celebration::CelebrationAnimation;
 use crate::stats::{extract_context, time_diff_ms, CharStat, StatsDb};
 use crate::util::std_dev;
 use crate::TICK_RATE_MS;
 use chrono::prelude::*;
 use directories::ProjectDirs;
 use itertools::Itertools;
-use rand::seq::SliceRandom;
 use std::fs::OpenOptions;
 use std::io::{self, Write};
 use std::{
@@ -13,111 +13,6 @@ use std::{
     time::SystemTime,
 };
 
-/// Particle for celebration animation
-#[derive(Debug, Clone)]
-pub struct CelebrationParticle {
-    pub x: f64,
-    pub y: f64,
-    pub vel_x: f64,
-    pub vel_y: f64,
-    pub symbol: char,
-    pub color_index: usize,
-    pub age: f64,
-    pub max_age: f64,
-}
-
-impl CelebrationParticle {
-    fn new(x: f64, y: f64) -> Self {
-        use rand::Rng;
-        let mut rng = rand::thread_rng();
-        
-        Self {
-            x,
-            y,
-            vel_x: rng.gen_range(-3.0..3.0),
-            vel_y: rng.gen_range(-4.0..-1.0),
-            symbol: *['✨', '🎉', '⭐', '💫', '🌟', '✓', '🎊'].choose(&mut rng).unwrap_or(&'✨'),
-            color_index: rng.gen_range(0..7), // For cycling through colors
-            age: 0.0,
-            max_age: rng.gen_range(2.0..4.0),
-        }
-    }
-    
-    fn update(&mut self, dt: f64) -> bool {
-        self.x += self.vel_x * dt;
-        self.y += self.vel_y * dt;
-        self.vel_y += 9.8 * dt; // Gravity
-        self.age += dt;
-        
-        self.age < self.max_age
-    }
-}
-
-/// Animation state for celebration
-#[derive(Debug)]
-pub struct CelebrationAnimation {
-    pub particles: Vec<CelebrationParticle>,
-    pub start_time: SystemTime,
-    pub duration: f64, // seconds
-    pub is_active: bool,
-}
-
-impl CelebrationAnimation {
-    fn new() -> Self {
-        Self {
-            particles: Vec::new(),
-            start_time: SystemTime::now(),
-            duration: 3.0, // 3 second celebration
-            is_active: false,
-        }
-    }
-    
-    pub fn start(&mut self, width: u16, height: u16) {
-        use rand::Rng;
-        let mut rng = rand::thread_rng();
-        
-        self.particles.clear();
-        self.start_time = SystemTime::now();
-        self.is_active = true;
-        
-        // Create burst of particles from center and edges
-        let center_x = width as f64 / 2.0;
-        let center_y = height as f64 / 2.0;
-        
-        // Center burst
-        for _ in 0..20 {
-            let offset_x = rng.gen_range(-5.0..5.0);
-            let offset_y = rng.gen_range(-3.0..3.0);
-            self.particles.push(CelebrationParticle::new(
-                center_x + offset_x,
-                center_y + offset_y,
-            ));
-        }
-        
-        // Edge particles
-        for _ in 0..15 {
-            let x = rng.gen_range(5.0..(width as f64 - 5.0));
-            let y = rng.gen_range(5.0..(height as f64 - 5.0));
-            self.particles.push(CelebrationParticle::new(x, y));
-        }
-    }
-    
-    fn update(&mut self) {
-        if !self.is_active {
-            return;
-        }
-        
-        let elapsed = self.start_time.elapsed().unwrap_or_default().as_secs_f64();
-        if elapsed >= self.duration {
-            self.is_active = false;
-            self.particles.clear();
-            return;
-        }
-        
-        let dt = 0.1; // Fixed timestep for animation
-        self.particles.retain_mut(|particle| particle.update(dt));
-    }
-}
 
 #[derive(Clone, Debug, Copy, PartialEq)]
 pub enum Outcome {
@@ -180,13 +75,14 @@ impl Thok {
             keypress_start_time: None,
             strict_mode,
             corrected_positions: HashSet::new(),
-            celebration: CelebrationAnimation::new(),
+            celebration: CelebrationAnimation::default(),
         }
     }
 
     pub fn on_tick(&mut self) {
-        self.seconds_remaining =
-            Some(self.seconds_remaining.unwrap() - (TICK_RATE_MS as f64 / 1000_f64));
+        if let Some(remaining) = self.seconds_remaining {
+            self.seconds_remaining = Some(remaining - (TICK_RATE_MS as f64 / 1000_f64));
+        }
     }
 
     pub fn get_expected_char(&self, idx: usize) -> char {
@@ -1403,6 +1299,33 @@ mod tests {
     }
 
     #[test]
+    fn test_celebration_triggers_on_perfect_session() {
+        let mut thok = Thok::new("hello".to_string(), 1, None, false);
+        
+        // Type perfectly
+        thok.write('h');
+        thok.write('e');
+        thok.write('l');
+        thok.write('l');
+        thok.write('o');
+        
+        assert!(thok.has_finished());
+        thok.calc_results();
+        
+        // Should have 100% accuracy
+        assert_eq!(thok.accuracy, 100.0);
+        
+        // Start celebration - should work
+        thok.start_celebration_if_perfect(80, 24);
+        
+        // Celebration should be active
+        assert!(thok.celebration.is_active);
+        assert!(!thok.celebration.particles.is_empty());
+        
+        println!("✅ Celebration triggered successfully with {} particles", thok.celebration.particles.len());
+    }
+
+    #[test]
     fn test_celebration_animation_perfect_session() {
         let mut thok = Thok::new("hello".to_string(), 1, None, false);
         
@@ -1458,25 +1381,6 @@ mod tests {
         // Celebration should NOT be active
         assert!(!thok.celebration.is_active);
         assert!(thok.celebration.particles.is_empty());
-    }
-    
-    #[test]
-    fn test_celebration_particle_physics() {
-        let mut particle = CelebrationParticle::new(10.0, 10.0);
-        let initial_y = particle.y;
-        let initial_vel_y = particle.vel_y;
-        
-        // Update particle with physics
-        let still_alive = particle.update(0.1);
-        
-        // Particle should still be alive
-        assert!(still_alive);
-        
-        // Y position should change due to velocity
-        assert_ne!(particle.y, initial_y);
-        
-        // Y velocity should increase due to gravity
-        assert!(particle.vel_y > initial_vel_y);
     }
 
     #[test]

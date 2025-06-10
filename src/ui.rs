@@ -224,7 +224,7 @@ impl Widget for &Thok {
 
 /// Render celebration particles on top of the results screen
 fn render_celebration_particles(
-    celebration: &crate::thok::CelebrationAnimation,
+    celebration: &crate::celebration::CelebrationAnimation,
     area: Rect,
     buf: &mut Buffer,
 ) {
@@ -248,12 +248,25 @@ fn render_celebration_particles(
             
             // Calculate alpha based on particle age for fade effect
             let alpha = 1.0 - (particle.age / particle.max_age);
-            let style = if alpha > 0.7 {
-                Style::default().fg(color).add_modifier(Modifier::BOLD)
-            } else if alpha > 0.3 {
-                Style::default().fg(color)
+            
+            let style = if particle.is_text {
+                // Text particles are always bold and bright
+                if alpha > 0.8 {
+                    Style::default().fg(color).add_modifier(Modifier::BOLD)
+                } else if alpha > 0.4 {
+                    Style::default().fg(color).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(color)
+                }
             } else {
-                Style::default().fg(color).add_modifier(Modifier::DIM)
+                // Regular decorative particles with normal fade
+                if alpha > 0.7 {
+                    Style::default().fg(color).add_modifier(Modifier::BOLD)
+                } else if alpha > 0.3 {
+                    Style::default().fg(color)
+                } else {
+                    Style::default().fg(color).add_modifier(Modifier::DIM)
+                }
             };
 
             // Set the particle character in the buffer
@@ -678,10 +691,13 @@ mod tests {
 
     #[test]
     fn test_celebration_animation_rendering() {
+        use crate::celebration::CelebrationAnimation;
+        
         let mut thok = create_test_thok("test", true);
         
         // Manually set up celebration
         thok.accuracy = 100.0;
+        thok.celebration = CelebrationAnimation::default();
         thok.celebration.start(80, 24);
         
         // Ensure celebration is active

@@ -1,3 +1,4 @@
+pub mod celebration;
 pub mod language;
 pub mod stats;
 pub mod thok;
@@ -226,7 +227,8 @@ fn start_tui<B: Backend>(
 ) -> Result<(), Box<dyn Error>> {
     let cli = app.cli.clone();
 
-    let should_tick = cli.unwrap().number_of_secs.unwrap_or(0) > 0;
+    // Enable ticking if there's a time limit OR if we might need celebration animation
+    let should_tick = cli.unwrap().number_of_secs.unwrap_or(0) > 0 || true; // Always tick for animations
 
     let thok_events = get_thok_events(should_tick);
 
