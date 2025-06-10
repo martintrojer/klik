@@ -1,6 +1,6 @@
 use chrono::{DateTime, Local};
 use directories::ProjectDirs;
-use rusqlite::{params, Connection, Result};
+use rusqlite::{params, Connection, Result, OptionalExtension};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::SystemTime;
@@ -387,8 +387,15 @@ impl StatsDb {
     /// Get historical character statistics summary excluding today's session
     /// This is used for delta calculations to compare against truly historical data
     pub fn get_historical_char_summary(&self) -> Result<Vec<(char, f64, f64, i64)>> {
-        let today = Local::now().format("%Y-%m-%d").to_string();
-
+        // Get the timestamp of the most recent session
+        let mut max_stmt = self.conn.prepare(
+            "SELECT MAX(created_at) FROM char_session_stats"
+        )?;
+        
+        let latest_timestamp: Option<String> = max_stmt.query_row([], |row| {
+            row.get(0)
+        }).optional()?;
+        
         let mut stmt = self.conn.prepare(
             r#"
             SELECT 
@@ -405,13 +412,13 @@ impl StatsDb {
                 END as miss_rate,
                 SUM(total_attempts) as total_attempts
             FROM char_session_stats 
-            WHERE session_date != ?1
+            WHERE created_at < ?1 OR ?1 IS NULL
             GROUP BY character
             ORDER BY character
             "#,
         )?;
 
-        let summary_iter = stmt.query_map([today], |row| {
+        let summary_iter = stmt.query_map([latest_timestamp], |row| {
             let char_str: String = row.get(0)?;
             let character = char_str.chars().next().unwrap_or('\0');
             let avg_time: f64 = row.get(1)?;
@@ -465,7 +472,18 @@ impl StatsDb {
     /// Get session statistics from the most recent session in the database
     /// This is used for delta calculations after the session buffer has been flushed
     pub fn get_latest_session_summary(&self) -> Result<Vec<(char, f64, f64, i64)>> {
-        let today = Local::now().format("%Y-%m-%d").to_string();
+        // Get the timestamp of the most recent session
+        let mut max_stmt = self.conn.prepare(
+            "SELECT MAX(created_at) FROM char_session_stats"
+        )?;
+        
+        let latest_timestamp: Option<String> = max_stmt.query_row([], |row| {
+            row.get(0)
+        }).optional()?;
+        
+        if latest_timestamp.is_none() {
+            return Ok(Vec::new());
+        }
 
         let mut stmt = self.conn.prepare(
             r#"
@@ -483,12 +501,12 @@ impl StatsDb {
                 END as miss_rate,
                 total_attempts
             FROM char_session_stats 
-            WHERE session_date = ?1
+            WHERE created_at = ?1
             ORDER BY character
             "#,
         )?;
 
-        let summary_iter = stmt.query_map([today], |row| {
+        let summary_iter = stmt.query_map([latest_timestamp], |row| {
             let char_str: String = row.get(0)?;
             let character = char_str.chars().next().unwrap_or('\0');
             let avg_time: f64 = row.get(1)?;
