@@ -51,7 +51,7 @@ pub struct StatsDb {
 impl StatsDb {
     /// Initialize the database connection and create tables if needed
     pub fn new() -> Result<Self> {
-        let db_path = Self::get_db_path().unwrap_or_else(|| PathBuf::from("thokr_stats.db"));
+        let db_path = Self::get_db_path().unwrap_or_else(|| PathBuf::from("klik_stats.db"));
 
         // Create parent directory if it doesn't exist
         if let Some(parent) = db_path.parent() {
@@ -105,16 +105,16 @@ impl StatsDb {
         })
     }
 
-    /// Get the database file path under $HOME/.local/state/thokr
+    /// Get the database file path under $HOME/.local/state/klik
     fn get_db_path() -> Option<PathBuf> {
         // Try to use the XDG-compliant ~/.local/state directory first
         if let Ok(home) = std::env::var("HOME") {
             let state_dir = PathBuf::from(home)
                 .join(".local")
                 .join("state")
-                .join("thokr");
+                .join("klik");
             Some(state_dir.join("stats.db"))
-        } else if let Some(proj_dirs) = ProjectDirs::from("", "", "thokr") {
+        } else if let Some(proj_dirs) = ProjectDirs::from("", "", "klik") {
             // Fallback to system-specific directory
             let state_dir = proj_dirs.data_local_dir();
             Some(state_dir.join("stats.db"))

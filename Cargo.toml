@@ -1,15 +1,15 @@
 [package]
-name = "thokr"
-description = "sleek typing tui with visualized results and historical logging"
-version = "0.4.1"
+name = "klik"
+description = "sleek typing tui with visualized results, intelligent practice, and comprehensive analytics"
+version = "0.5.0"
 readme = "README.md"
-repository = "https://github.com/thatvegandev/thokr.git"
-homepage = "https://github.com/thatvegandev/thokr"
+repository = "https://github.com/martintrojer/klik.git"
+homepage = "https://github.com/martintrojer/klik"
 license = "MIT"
 authors = ["Colby Thomas <thatvegandev@gmail.com>"]
 edition = "2021"
 exclude = [".github", "*.log"]
-keywords = ["tui", "terminal", "typing"]
+keywords = ["tui", "terminal", "typing", "keyboard", "mechanical"]
 
 [dependencies]
 ratatui = { version = "0.29", default-features = false, features = ['crossterm'] }

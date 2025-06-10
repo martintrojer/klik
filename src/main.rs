@@ -36,12 +36,12 @@ use webbrowser::Browser;
 
 const TICK_RATE_MS: u64 = 100;
 
-/// sleek typing tui with visualized results and intelligent practice
+/// sleek typing tui with visualized results, intelligent practice, and comprehensive analytics
 #[derive(Parser, Debug, Clone)]
 #[clap(
     version,
     about,
-    long_about = "A sleek typing TUI with intelligent word selection that adapts to your weaknesses, detailed performance analytics, and historical progress tracking."
+    long_about = "klik - A sleek typing TUI with intelligent word selection that adapts to your weaknesses, detailed performance analytics, and historical progress tracking. Named after the satisfying click sound of mechanical keyboards."
 )]
 pub struct Cli {
     /// number of words to use in test
@@ -312,7 +312,7 @@ fn start_tui<B: Backend>(
                                 AppState::Results => match key.code {
                                     KeyCode::Char('t') => {
                                         if Browser::is_available() {
-                                            webbrowser::open(&format!("https://twitter.com/intent/tweet?text={}%20wpm%20%2F%20{}%25%20acc%20%2F%20{:.2}%20sd%0A%0Ahttps%3A%2F%2Fgithub.com%thatvegandev%2Fthokr", app.thok.wpm, app.thok.accuracy, app.thok.std_dev))
+                                            webbrowser::open(&format!("https://twitter.com/intent/tweet?text={}%20wpm%20%2F%20{}%25%20acc%20%2F%20{:.2}%20sd%0A%0Ahttps%3A%2F%2Fgithub.com%martintrojer%2Fklik", app.thok.wpm, app.thok.accuracy, app.thok.std_dev))
                                         .unwrap_or_default();
                                         }
                                     }
@@ -772,7 +772,7 @@ mod tests {
 
     #[test]
     fn test_cli_default_values() {
-        let cli = Cli::parse_from(["thokr"]);
+        let cli = Cli::parse_from(["klik"]);
 
         assert_eq!(cli.number_of_words, 15);
         assert_eq!(cli.number_of_sentences, None);
@@ -783,52 +783,52 @@ mod tests {
 
     #[test]
     fn test_cli_number_of_words() {
-        let cli = Cli::parse_from(["thokr", "-w", "25"]);
+        let cli = Cli::parse_from(["klik", "-w", "25"]);
         assert_eq!(cli.number_of_words, 25);
 
-        let cli = Cli::parse_from(["thokr", "--number-of-words", "50"]);
+        let cli = Cli::parse_from(["klik", "--number-of-words", "50"]);
         assert_eq!(cli.number_of_words, 50);
     }
 
     #[test]
     fn test_cli_number_of_sentences() {
-        let cli = Cli::parse_from(["thokr", "-f", "3"]);
+        let cli = Cli::parse_from(["klik", "-f", "3"]);
         assert_eq!(cli.number_of_sentences, Some(3));
 
-        let cli = Cli::parse_from(["thokr", "--full-sentences", "5"]);
+        let cli = Cli::parse_from(["klik", "--full-sentences", "5"]);
         assert_eq!(cli.number_of_sentences, Some(5));
     }
 
     #[test]
     fn test_cli_number_of_secs() {
-        let cli = Cli::parse_from(["thokr", "-s", "60"]);
+        let cli = Cli::parse_from(["klik", "-s", "60"]);
         assert_eq!(cli.number_of_secs, Some(60));
 
-        let cli = Cli::parse_from(["thokr", "--number-of-secs", "120"]);
+        let cli = Cli::parse_from(["klik", "--number-of-secs", "120"]);
         assert_eq!(cli.number_of_secs, Some(120));
     }
 
     #[test]
     fn test_cli_custom_prompt() {
-        let cli = Cli::parse_from(["thokr", "-p", "hello world"]);
+        let cli = Cli::parse_from(["klik", "-p", "hello world"]);
         assert_eq!(cli.prompt, Some("hello world".to_string()));
 
-        let cli = Cli::parse_from(["thokr", "--prompt", "custom text"]);
+        let cli = Cli::parse_from(["klik", "--prompt", "custom text"]);
         assert_eq!(cli.prompt, Some("custom text".to_string()));
     }
 
     #[test]
     fn test_cli_supported_language() {
-        let cli = Cli::parse_from(["thokr", "-l", "english"]);
+        let cli = Cli::parse_from(["klik", "-l", "english"]);
         assert!(matches!(cli.supported_language, SupportedLanguage::English));
 
-        let cli = Cli::parse_from(["thokr", "--supported-language", "english1k"]);
+        let cli = Cli::parse_from(["klik", "--supported-language", "english1k"]);
         assert!(matches!(
             cli.supported_language,
             SupportedLanguage::English1k
         ));
 
-        let cli = Cli::parse_from(["thokr", "--supported-language", "english10k"]);
+        let cli = Cli::parse_from(["klik", "--supported-language", "english10k"]);
         assert!(matches!(
             cli.supported_language,
             SupportedLanguage::English10k

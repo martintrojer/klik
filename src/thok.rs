@@ -391,7 +391,7 @@ impl Thok {
     }
 
     pub fn save_results(&self) -> io::Result<()> {
-        if let Some(proj_dirs) = ProjectDirs::from("", "", "thokr") {
+        if let Some(proj_dirs) = ProjectDirs::from("", "", "klik") {
             let config_dir = proj_dirs.config_dir();
             let log_path = config_dir.join("log.csv");
 
@@ -1326,7 +1326,7 @@ mod tests {
 
         let path = path.unwrap();
         assert!(
-            path.to_string_lossy().contains("thokr") || path.to_string_lossy().contains("stats")
+            path.to_string_lossy().contains("klik") || path.to_string_lossy().contains("stats")
         );
     }
 

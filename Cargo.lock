@@ -710,6 +710,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "klik"
+version = "0.5.0"
+dependencies = [
+ "assert_matches",
+ "cgisf_lib",
+ "chrono",
+ "clap",
+ "crossterm",
+ "directories",
+ "include_dir",
+ "itertools",
+ "rand",
+ "ratatui",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "strum_macros",
+ "tempfile",
+ "unicode-width 0.2.0",
+ "webbrowser",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.172"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1243,29 +1266,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "thokr"
-version = "0.4.1"
-dependencies = [
- "assert_matches",
- "cgisf_lib",
- "chrono",
- "clap",
- "crossterm",
- "directories",
- "include_dir",
- "itertools",
- "rand",
- "ratatui",
- "rusqlite",
- "serde",
- "serde_json",
- "strum_macros",
- "tempfile",
- "unicode-width 0.2.0",
- "webbrowser",
 ]
 
 [[package]]

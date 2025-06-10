@@ -1,10 +1,10 @@
 # CLAUDE.md - Development Notes
 
-This file contains essential notes and context for future development work on the thokr codebase.
+This file contains essential notes and context for future development work on the klik codebase.
 
 ## Project Overview
 
-**thokr** is a sleek typing TUI (Terminal User Interface) application written in Rust that provides:
+**klik** is a sleek typing TUI (Terminal User Interface) application written in Rust that provides:
 - Real-time typing speed (WPM) measurement
 - Accuracy tracking with visual feedback
 - Multiple language support (English, English1k, English10k)
@@ -464,7 +464,7 @@ valgrind --tool=memcheck cargo run
 
 ## Contact and Resources
 
-- **Repository**: https://github.com/thatvegandev/thokr
+- **Repository**: https://github.com/martintrojer/klik
 - **Issues**: Report bugs and feature requests on GitHub
 - **Documentation**: This file and TESTING.md for comprehensive coverage
 - **Dependencies**: Check Cargo.toml for current version requirements

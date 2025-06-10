@@ -1,20 +1,20 @@
-# thokr
+# klik
 ✨ sleek typing tui with intelligent practice targeting and detailed analytics
 
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/thatvegandev/thokr/actions)
-[![Release](https://img.shields.io/github/v/release/thatvegandev/thokr)](https://github.com/thatvegandev/thokr/releases)
-[![codecov](https://codecov.io/gh/thatvegandev/thokr/branch/main/graph/badge.svg)](https://codecov.io/gh/thatvegandev/thokr)
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/martintrojer/klik/actions)
+[![Release](https://img.shields.io/github/v/release/martintrojer/klik)](https://github.com/martintrojer/klik/releases)
+[![codecov](https://codecov.io/gh/martintrojer/klik/branch/main/graph/badge.svg)](https://codecov.io/gh/martintrojer/klik)
 [![License](https://img.shields.io/badge/License-MIT-default.svg)](./LICENSE.md)
-[![Crate Version](https://img.shields.io/crates/v/thokr)](https://crates.io/crates/thokr)
-[![Github Stars](https://img.shields.io/github/stars/thatvegandev/thokr)](https://github.com/thatvegandev/thokr/stargazers)
+[![Crate Version](https://img.shields.io/crates/v/klik)](https://crates.io/crates/klik)
+[![Github Stars](https://img.shields.io/github/stars/martintrojer/klik)](https://github.com/martintrojer/klik/stargazers)
 
-![demo](https://github.com/thatvegandev/assets/raw/main/thokr/demo.gif)
+![demo](https://github.com/martintrojer/assets/raw/main/klik/demo.gif)
 
 ## 🧠 Intelligent Word Selection
 
-**thokr now features smart word selection that adapts to your typing weaknesses!**
+**klik now features smart word selection that adapts to your typing weaknesses!**
 
-By default, thokr analyzes your character-level performance and intelligently selects practice words containing the letters you struggle with most. This targeted approach helps you improve faster by focusing on your specific weak points.
+By default, klik analyzes your character-level performance and intelligently selects practice words containing the letters you struggle with most. This targeted approach helps you improve faster by focusing on your specific weak points.
 
 ### How it works:
 - **Character Analysis**: Tracks your miss rate and timing for each character
@@ -77,12 +77,12 @@ The `--substitute` flag creates "almost English" words by strategically replacin
 
 ## Usage
 
-For detailed usage run `thokr -h`.
+For detailed usage run `klik -h`.
 
 ```
 A sleek typing TUI with intelligent word selection that adapts to your weaknesses, detailed performance analytics, and historical progress tracking.
 
-Usage: thokr [OPTIONS]
+Usage: klik [OPTIONS]
 
 Options:
   -w, --number-of-words <NUMBER_OF_WORDS>
@@ -133,36 +133,36 @@ Options:
 ### Cargo
 
 ```sh
-$ cargo install thokr
+$ cargo install klik
 ```
 
 ### Arch Linux
 
-Install `thokr-git` from the AUR
+Install `klik-git` from the AUR
 
 ## Usage
 
-For detailed usage run `thokr -h`.
+For detailed usage run `klik -h`.
 
 ### Examples
 
 | command                        |                                                    test contents |
 |:-------------------------------|-----------------------------------------------------------------:|
-| `thokr`                        |   15 intelligently selected words targeting your weakest letters |
-| `thokr -w 100`                 |  100 intelligently selected words from common English vocabulary |
-| `thokr -w 100 -l english1k`    |  100 intelligent words from the 1000 most common English words |
-| `thokr --substitute`           |  15 "almost English" words with weak characters substituted in |
-| `thokr --capitalize`           |  15 intelligent words with capitalization, punctuation, and commas |
-| `thokr --symbols`              |  15 intelligent words with brackets, operators, and special characters |
-| `thokr --substitute --capitalize` |  15 substituted words with capitalization and punctuation |
-| `thokr --substitute --symbols` |  15 substituted words with symbols and special characters |
-| `thokr --capitalize --symbols` |  15 intelligent words with both capitalization and symbols |
-| `thokr --substitute --capitalize --symbols` |  15 substituted words with full formatting |
-| `thokr --strict`               |  15 intelligent words in strict mode (stop on errors, require correction) |
-| `thokr --random-words`         |                  15 randomly selected words (legacy behavior) |
-| `thokr -w 10 -s 5`             |  10 intelligent words with hard stop at 5 seconds |
-| `thokr -p "$(cat foo.txt)"`    |                   custom prompt with the output of `cat foo.txt` |
-| `thokr -f 4`                   | 4 grammatical sentences with full stops; overrides word settings |
+| `klik`                        |   15 intelligently selected words targeting your weakest letters |
+| `klik -w 100`                 |  100 intelligently selected words from common English vocabulary |
+| `klik -w 100 -l english1k`    |  100 intelligent words from the 1000 most common English words |
+| `klik --substitute`           |  15 "almost English" words with weak characters substituted in |
+| `klik --capitalize`           |  15 intelligent words with capitalization, punctuation, and commas |
+| `klik --symbols`              |  15 intelligent words with brackets, operators, and special characters |
+| `klik --substitute --capitalize` |  15 substituted words with capitalization and punctuation |
+| `klik --substitute --symbols` |  15 substituted words with symbols and special characters |
+| `klik --capitalize --symbols` |  15 intelligent words with both capitalization and symbols |
+| `klik --substitute --capitalize --symbols` |  15 substituted words with full formatting |
+| `klik --strict`               |  15 intelligent words in strict mode (stop on errors, require correction) |
+| `klik --random-words`         |                  15 randomly selected words (legacy behavior) |
+| `klik -w 10 -s 5`             |  10 intelligent words with hard stop at 5 seconds |
+| `klik -p "$(cat foo.txt)"`    |                   custom prompt with the output of `cat foo.txt` |
+| `klik -f 4`                   | 4 grammatical sentences with full stops; overrides word settings |
 
 _During a test you can press ← to start over or → to see a new prompt (assuming
 you didn't supply a custom one)_
@@ -171,7 +171,7 @@ you didn't supply a custom one)_
 
 All formatting and mode flags (`--substitute`, `--capitalize`, `--symbols`, `--strict`) work independently:
 
-- **Combine freely**: `thokr --substitute --capitalize --symbols` works exactly as expected
+- **Combine freely**: `klik --substitute --capitalize --symbols` works exactly as expected
 - **No side effects**: `--substitute` won't automatically add capitalization or symbols  
 - **Predictable behavior**: Each flag only controls its documented feature
 - **Flexible practice**: Mix and match flags to create your ideal practice environment
@@ -188,7 +188,7 @@ The following languages are available by default:
 
 ## 📊 Performance Analytics
 
-thokr provides detailed character-level analytics to help you understand and improve your typing:
+klik provides detailed character-level analytics to help you understand and improve your typing:
 
 ### Character Statistics View
 - **Miss Rate**: Percentage of incorrect attempts per character
@@ -206,7 +206,7 @@ Press `s` on the results screen to view detailed character statistics and identi
 
 ## 💾 Data Storage
 
-thokr automatically tracks your typing performance with two complementary systems:
+klik automatically tracks your typing performance with two complementary systems:
 
 ### CSV Logging
 Upon completion of each test, a summary row is appended to `log.csv` for long-term progress tracking.
@@ -218,9 +218,9 @@ Detailed character-level performance data is stored in a SQLite database (`stats
 
 | platform | value                                                            |                                        example |
 | :------- | ---------------------------------------------------------------- | ---------------------------------------------: |
-| Linux    | $HOME/.local/state/thokr/ or fallback to config directory       |                      /home/colby/.local/state/thokr |
-| macOS    | $HOME/Library/Application Support/_project_path_                 | /Users/Colby/Library/Application Support/thokr |
-| Windows  | {FOLDERID*RoamingAppData}\_project_path*\config                  |    C:\Users\Colby\AppData\Roaming\thokr\config |
+| Linux    | $HOME/.local/state/klik/ or fallback to config directory       |                      /home/colby/.local/state/klik |
+| macOS    | $HOME/Library/Application Support/_project_path_                 | /Users/Colby/Library/Application Support/klik |
+| Windows  | {FOLDERID*RoamingAppData}\_project_path*\config                  |    C:\Users\Colby\AppData\Roaming\klik\config |
 
 ## Roadmap
 
@@ -263,8 +263,8 @@ Detailed character-level performance data is stored in a SQLite database (`stats
 
 All contributions are **greatly appreciated**.
 
-If you have a suggestion that would make thokr better, please fork the repo and
-create a [pull request](https://github.com/thatvegandev/thokr/pulls). You can
+If you have a suggestion that would make klik better, please fork the repo and
+create a [pull request](https://github.com/martintrojer/klik/pulls). You can
 also simply open an issue and select `Feature Request`
 
 1. Fork the repo
@@ -274,7 +274,7 @@ also simply open an issue and select `Feature Request`
 5. Push to your branch (`git push origin [your_username]/xyz`)
 6. Fill out pull request template
 
-See the [open issues](https://github.com/thatvegandev/thokr/issues) for a full
+See the [open issues](https://github.com/martintrojer/klik/issues) for a full
 list of proposed features (and known issues).
 
 ## License
@@ -284,7 +284,7 @@ information.
 
 ## Acknowledgments
 
-Check out these amazing projects that inspired thokr!
+Check out these amazing projects that inspired klik!
 
 - [monkeytype](https://github.com/Miodec/monkeytype)
 - [tui-rs](https://github.com/fdehau/tui-rs)
