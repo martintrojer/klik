@@ -247,7 +247,7 @@ fn start_tui<B: Backend>(
                             // Get terminal size for celebration
                             let size = terminal.size().unwrap_or_default();
                             app.thok
-                                .start_celebration_if_perfect(size.width, size.height);
+                                .start_celebration_if_worthy(size.width, size.height);
                             app.state = AppState::Results;
                         }
                     }
@@ -306,7 +306,7 @@ fn start_tui<B: Backend>(
                                             app.thok.calc_results();
                                             // Get terminal size for celebration
                                             let size = terminal.size().unwrap_or_default();
-                                            app.thok.start_celebration_if_perfect(
+                                            app.thok.start_celebration_if_worthy(
                                                 size.width,
                                                 size.height,
                                             );
