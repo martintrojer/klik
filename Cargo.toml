@@ -6,7 +6,10 @@ readme = "README.md"
 repository = "https://github.com/martintrojer/klik.git"
 homepage = "https://github.com/martintrojer/klik"
 license = "MIT"
-authors = ["Colby Thomas <thatvegandev@gmail.com>"]
+authors = [
+    "Martin Trojer <martin.trojer@gmail.com>",
+    "Colby Thomas <thatvegandev@gmail.com>"
+]
 edition = "2021"
 exclude = [".github", "*.log"]
 keywords = ["tui", "terminal", "typing", "keyboard", "mechanical"]

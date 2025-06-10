@@ -10,288 +10,124 @@
 
 ![demo](https://github.com/martintrojer/assets/raw/main/klik/demo.gif)
 
-## 🧠 Intelligent Word Selection
+> **Note**: klik is a fork of [thokr](https://github.com/jrnxf/thokr) with significant enhancements including intelligent word selection, character-level analytics, session delta tracking, and comprehensive performance insights.
 
-**klik now features smart word selection that adapts to your typing weaknesses!**
+## Features
 
-By default, klik analyzes your character-level performance and intelligently selects practice words containing the letters you struggle with most. This targeted approach helps you improve faster by focusing on your specific weak points.
+- **🧠 Intelligent Word Selection**: Adapts to your typing weaknesses by analyzing character-level performance
+- **📊 Detailed Analytics**: Character statistics with session deltas and historical comparison
+- **🔀 Character Substitution**: "Almost English" words with strategic character replacement for targeted practice
+- **🎛️ Flexible Modes**: Support for capitalization, symbols, strict mode, and custom prompts
+- **💾 Smart Storage**: SQLite database with automatic compaction and CSV logging
+- **🎨 Rich TUI**: Real-time WPM tracking, accuracy display, and celebration animations
 
-### How it works:
-- **Character Analysis**: Tracks your miss rate and timing for each character
-- **Smart Scoring**: Words are scored based on difficulty of their characters  
-- **Adaptive Selection**: Prioritizes words with your most problematic letters
-- **Balanced Practice**: Selects from top 30% of difficult words to avoid repetition
+## Quick Start
 
-### Controls:
-- **Default**: Intelligent selection targets your weakest characters
-- **Legacy mode**: Use `--random-words` flag for traditional random selection
-- **Substitution mode**: Use `--substitute` flag for "almost English" words with weak characters substituted in
-- **Realistic practice**: Use `--capitalize` flag for capitalization, punctuation, and commas
-- **Strict mode**: Use `--strict` flag to stop on errors and require correction before proceeding
-- **Symbol practice**: Use `--symbols` flag to include brackets, operators, and special characters
-
-**Note**: All flags work independently and can be combined. Each flag only controls its specific feature without automatically enabling others.
-
-## 🔀 Character Substitution Mode
-
-**For ultra-targeted practice, try the new substitution mode!**
-
-The `--substitute` flag creates "almost English" words by strategically replacing characters in real words with ones you need to practice most. This innovative approach provides:
-
-### Benefits:
-- **Intensive Training**: Higher concentration of your problematic characters
-- **Familiar Structure**: Maintains word patterns and muscle memory from real English
-- **Balanced Difficulty**: 30% substitution rate keeps words recognizable yet challenging
-- **Context Preservation**: Maintains capitalization, punctuation, and word boundaries
-- **Adaptive Practice**: Automatically targets your current weak points
-- **Flag Independence**: Works alone or combines with `--capitalize` and `--symbols` for additional formatting
-
-### How it works:
-1. Selects random English words as base templates
-2. Identifies your top 10 most difficult characters from performance data
-3. Strategically replaces ~30% of alphabetic characters with weak ones
-4. Preserves word structure, case, and punctuation for realistic practice
-
-**Example**: "hello world" might become "zqllo worzd" - challenging your weak characters while maintaining familiar word patterns.
-
-## 🎛️ Flag Combinations
-
-**All flags work independently and can be combined for customized practice:**
-
-| Flag Combination | Word Selection | Capitalization | Symbols | Character Substitution |
-|------------------|---------------|----------------|---------|----------------------|
-| (none) | Intelligent | ❌ | ❌ | ❌ |
-| `--substitute` | Random base | ❌ | ❌ | ✅ |
-| `--capitalize` | Intelligent | ✅ | ❌ | ❌ |
-| `--symbols` | Intelligent | ❌ | ✅ | ❌ |
-| `--substitute --capitalize` | Random base | ✅ | ❌ | ✅ |
-| `--substitute --symbols` | Random base | ❌ | ✅ | ✅ |
-| `--capitalize --symbols` | Intelligent | ✅ | ✅ | ❌ |
-| `--substitute --capitalize --symbols` | Random base | ✅ | ✅ | ✅ |
-
-**Key Points**:
-- Each flag controls only its specific feature
-- Flags can be combined in any combination
-- `--substitute` uses random words as base templates, then applies character substitution
-- `--capitalize` and `--symbols` are applied after word selection/substitution
-
-## Usage
-
-For detailed usage run `klik -h`.
-
-```
-A sleek typing TUI with intelligent word selection that adapts to your weaknesses, detailed performance analytics, and historical progress tracking.
-
-Usage: klik [OPTIONS]
-
-Options:
-  -w, --number-of-words <NUMBER_OF_WORDS>
-          number of words to use in test
-          
-          [default: 15]
-
-  -f, --full-sentences <NUMBER_OF_SENTENCES>
-          number of sentences to use in test
-
-  -s, --number-of-secs <NUMBER_OF_SECS>
-          number of seconds to run test
-
-  -p, --prompt <PROMPT>
-          custom prompt to use
-
-  -l, --supported-language <SUPPORTED_LANGUAGE>
-          language to pull words from
-          
-          [default: english]
-          [possible values: english, english1k, english10k]
-
-      --random-words
-          use random word selection instead of intelligent character-based selection (default: intelligent selection that targets your weakest characters)
-
-      --capitalize
-          enable capitalization, punctuation, and commas for realistic typing practice
-
-      --strict
-          enable strict mode: stop on errors and require correction before proceeding
-
-      --symbols
-          include symbols and special characters for comprehensive typing practice
-
-      --substitute
-          enable character substitution mode: create "almost English" words by replacing characters with ones that need most practice
-
-  -h, --help
-          Print help (see a summary with '-h')
-
-  -V, --version
-          Print version
-```
-
-
-## Installation
-
-### Cargo
+### Installation
 
 ```sh
-$ cargo install klik
+# Via Cargo
+cargo install klik
+
+# Arch Linux (AUR)
+yay -S klik-git
 ```
 
-### Arch Linux
+### Basic Usage
 
-Install `klik-git` from the AUR
+```sh
+# Intelligent word selection (default)
+klik
 
-## Usage
+# 50 words with capitalization and symbols
+klik -w 50 --capitalize --symbols
 
-For detailed usage run `klik -h`.
+# Character substitution mode for intensive practice
+klik --substitute
 
-### Examples
+# Strict mode (stop on errors)
+klik --strict
 
-| command                        |                                                    test contents |
-|:-------------------------------|-----------------------------------------------------------------:|
-| `klik`                        |   15 intelligently selected words targeting your weakest letters |
-| `klik -w 100`                 |  100 intelligently selected words from common English vocabulary |
-| `klik -w 100 -l english1k`    |  100 intelligent words from the 1000 most common English words |
-| `klik --substitute`           |  15 "almost English" words with weak characters substituted in |
-| `klik --capitalize`           |  15 intelligent words with capitalization, punctuation, and commas |
-| `klik --symbols`              |  15 intelligent words with brackets, operators, and special characters |
-| `klik --substitute --capitalize` |  15 substituted words with capitalization and punctuation |
-| `klik --substitute --symbols` |  15 substituted words with symbols and special characters |
-| `klik --capitalize --symbols` |  15 intelligent words with both capitalization and symbols |
-| `klik --substitute --capitalize --symbols` |  15 substituted words with full formatting |
-| `klik --strict`               |  15 intelligent words in strict mode (stop on errors, require correction) |
-| `klik --random-words`         |                  15 randomly selected words (legacy behavior) |
-| `klik -w 10 -s 5`             |  10 intelligent words with hard stop at 5 seconds |
-| `klik -p "$(cat foo.txt)"`    |                   custom prompt with the output of `cat foo.txt` |
-| `klik -f 4`                   | 4 grammatical sentences with full stops; overrides word settings |
+# Custom prompt
+klik -p "your custom text here"
 
-_During a test you can press ← to start over or → to see a new prompt (assuming
-you didn't supply a custom one)_
+# View detailed help
+klik -h
+```
 
-### Flag Independence
+## Usage Examples
 
-All formatting and mode flags (`--substitute`, `--capitalize`, `--symbols`, `--strict`) work independently:
+| Command | Description |
+|---------|-------------|
+| `klik` | 15 intelligently selected words targeting your weakest letters |
+| `klik -w 100` | 100 intelligent words from common English vocabulary |
+| `klik --substitute` | "Almost English" words with weak characters substituted in |
+| `klik --capitalize --symbols` | Words with capitalization, punctuation, and special characters |
+| `klik --strict` | Stop on errors and require correction before proceeding |
+| `klik -w 10 -s 60` | 10 words with 60-second time limit |
 
-- **Combine freely**: `klik --substitute --capitalize --symbols` works exactly as expected
-- **No side effects**: `--substitute` won't automatically add capitalization or symbols  
-- **Predictable behavior**: Each flag only controls its documented feature
-- **Flexible practice**: Mix and match flags to create your ideal practice environment
+### Navigation
+
+- **During typing**: `←` to restart, `→` for new prompt, `Esc` to quit
+- **Results screen**: `s` for character statistics, `r` to retry, `n` for new test, `t` to tweet
+
+## Intelligent Features
+
+### Adaptive Word Selection
+- Analyzes your character-level miss rate and timing
+- Scores words based on difficulty of their constituent characters
+- Prioritizes practice words containing your most problematic letters
+- Balances difficulty to avoid repetitive content
+
+### Character Analytics
+- **Real-time tracking**: Miss rate and average time per character
+- **Session deltas**: Compare current session performance vs historical data
+- **Visual indicators**: Color-coded performance levels (green/yellow/red)
+- **Historical trends**: SQLite database stores detailed performance metrics
+
+### Flexible Practice Modes
+- **Substitution mode** (`--substitute`): Strategic character replacement in real words
+- **Realistic practice** (`--capitalize`): Capitalization, punctuation, and commas
+- **Symbol training** (`--symbols`): Brackets, operators, and special characters
+- **Strict mode** (`--strict`): Must correct errors before proceeding
+- **Custom prompts** (`-p`): Practice with your own text
+
+All flags work independently and can be combined for customized practice sessions.
 
 ## Supported Languages
 
-The following languages are available by default:
-
-| name         |                     description |
-| :----------- | ------------------------------: |
-| `english`    |   200 most common English words |
-| `english1k`  |  1000 most common English words |
+| Language | Description |
+|----------|-------------|
+| `english` | 200 most common English words |
+| `english1k` | 1000 most common English words |
 | `english10k` | 10000 most common English words |
 
-## 📊 Performance Analytics
+Use with `-l` flag: `klik -l english1k`
 
-klik provides detailed character-level analytics to help you understand and improve your typing:
+## Data Storage
 
-### Character Statistics View
-- **Miss Rate**: Percentage of incorrect attempts per character
-- **Average Time**: Time taken to type each character
-- **Attempt Count**: Total practice attempts for each character
-- **Color Coding**: Visual indicators for performance levels (green/yellow/red)
+klik automatically tracks your performance:
 
-### Navigation & Sorting
-- **Sort Options**: Character, Average Time, Miss Rate, or Attempts
-- **Scroll Support**: Navigate through all tracked characters
-- **Real-time Updates**: Statistics update after each typing session
-
-### Access Analytics
-Press `s` on the results screen to view detailed character statistics and identify areas for improvement.
-
-## 💾 Data Storage
-
-klik automatically tracks your typing performance with two complementary systems:
-
-### CSV Logging
-Upon completion of each test, a summary row is appended to `log.csv` for long-term progress tracking.
-
-### Character Statistics Database
-Detailed character-level performance data is stored in a SQLite database (`stats.db`) to power intelligent word selection. The database uses an efficient session-based storage architecture that scales well with usage.
-
-**Storage locations:**
-
-| platform | value                                                            |                                        example |
-| :------- | ---------------------------------------------------------------- | ---------------------------------------------: |
-| Linux    | $HOME/.local/state/klik/ or fallback to config directory       |                      /home/colby/.local/state/klik |
-| macOS    | $HOME/Library/Application Support/_project_path_                 | /Users/Colby/Library/Application Support/klik |
-| Windows  | {FOLDERID*RoamingAppData}\_project_path*\config                  |    C:\Users\Colby\AppData\Roaming\klik\config |
-
-## Roadmap
-
-- [x] 🧠 **Intelligent Word Selection** *(completed)*
-  - Smart word selection based on character-level performance analysis
-  - Adaptive practice targeting your weakest typing areas
-  - Comprehensive character statistics and analytics dashboard
-
-- [x] 🔤 **Realistic Typing Practice** *(completed)*
-  - Capitalization, punctuation, and comma integration
-  - Case-sensitive difficulty tracking and scoring
-  - Advanced formatting for real-world typing scenarios
-
-- [x] 🔀 **Character Substitution Mode** *(completed)*
-  - "Almost English" words with strategic character replacement
-  - Ultra-targeted practice for problematic characters
-  - Maintains word structure while maximizing weak character exposure
-
-- [ ] ⚡️ Performance Optimizations
-  - Optimize TUI rendering for smoother experience at high tick rates
-  - Implement incremental rendering using StatefulWidget patterns
-  - Reduce computational overhead during active typing sessions
-
-- [ ] 🔠 Multi-language Support  
-  - Support for additional languages beyond English word sets
-  - Proper handling of accented characters and special symbols
-  - International keyboard layout compatibility improvements
-
-- [ ] 📈 Enhanced Analytics
-  - Progress tracking over time with trend visualization
-  - Session comparison and improvement metrics
-  - Advanced filtering and data export capabilities
-
-- [ ] 🎯 Personalized Training
-  - Custom difficulty curves based on individual progress
-  - Targeted exercises for specific character combinations
-  - Adaptive timing and word length recommendations
+- **CSV Logging**: Session summaries in `~/.config/klik/log.csv`
+- **Character Database**: Detailed statistics in `~/.local/state/klik/stats.db` (Linux/macOS)
+- **Automatic Compaction**: Database optimization for long-term usage
 
 ## Contributing
 
-All contributions are **greatly appreciated**.
+Contributions are welcome! Please feel free to submit pull requests or open issues.
 
-If you have a suggestion that would make klik better, please fork the repo and
-create a [pull request](https://github.com/martintrojer/klik/pulls). You can
-also simply open an issue and select `Feature Request`
-
-1. Fork the repo
-2. Create your feature branch (`git checkout -b [your_username]/xyz`)
-3. Commit your changes (`git commit -m 'add some xyz'`)
-4. Rebase off main (`git fetch --all && git rebase origin/main`)
-5. Push to your branch (`git push origin [your_username]/xyz`)
-6. Fill out pull request template
-
-See the [open issues](https://github.com/martintrojer/klik/issues) for a full
-list of proposed features (and known issues).
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ## License
 
-Distributed under the MIT License. See [LICENSE.md](./LICENSE.md) for more
-information.
+This project is licensed under the MIT License - see the [LICENSE.md](./LICENSE.md) file for details.
 
 ## Acknowledgments
 
-Check out these amazing projects that inspired klik!
-
-- [monkeytype](https://github.com/Miodec/monkeytype)
-- [tui-rs](https://github.com/fdehau/tui-rs)
-- [ttyper](https://github.com/max-niederman/ttyper)
-
-## Follow
-
-[![github](https://img.shields.io/github/followers/thatvegandev?style=social)](https://github.com/thatvegandev)
-[![twitter](https://img.shields.io/twitter/follow/thatvegandev?color=white&style=social)](https://twitter.com/thatvegandev)
-[![youtube](https://img.shields.io/youtube/channel/subscribers/UCEDfokz6igeN4bX7Whq49-g?style=social)](https://youtube.com/user/thatvegandev)
+- Original [thokr](https://github.com/jrnxf/thokr) project by jrnxf
+- [monkeytype](https://github.com/Miodec/monkeytype) for typing test inspiration
+- [ratatui](https://github.com/ratatui-org/ratatui) for the excellent TUI framework
