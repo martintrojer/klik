@@ -478,6 +478,71 @@ impl Thok {
         }
     }
 
+    /// Get a summary of session performance vs historical averages for display
+    pub fn get_session_delta_summary(&self) -> String {
+        if let Some(summary) = self.get_char_summary_with_deltas() {
+            let mut improvements = 0;
+            let mut regressions = 0;
+            let mut total_chars_with_deltas = 0;
+            let mut avg_time_improvement = 0.0;
+            let mut avg_miss_improvement = 0.0;
+
+            for (_, _, _, _, time_delta, miss_delta, session_attempts) in &summary {
+                // Only consider characters typed in this session
+                if *session_attempts > 0 {
+                    total_chars_with_deltas += 1;
+
+                    if let Some(time_d) = time_delta {
+                        if *time_d < -5.0 {
+                            improvements += 1;
+                        } else if *time_d > 5.0 {
+                            regressions += 1;
+                        }
+                        avg_time_improvement += time_d;
+                    }
+
+                    if let Some(miss_d) = miss_delta {
+                        avg_miss_improvement += miss_d;
+                    }
+                }
+            }
+
+            if total_chars_with_deltas > 0 {
+                avg_time_improvement /= total_chars_with_deltas as f64;
+                avg_miss_improvement /= total_chars_with_deltas as f64;
+
+                let time_summary = if avg_time_improvement < -5.0 {
+                    format!("↓{:.0}ms faster", avg_time_improvement.abs())
+                } else if avg_time_improvement > 5.0 {
+                    format!("↑{:.0}ms slower", avg_time_improvement)
+                } else {
+                    "similar speed".to_string()
+                };
+
+                let miss_summary = if avg_miss_improvement < -2.0 {
+                    format!("↓{:.1}% more accurate", avg_miss_improvement.abs())
+                } else if avg_miss_improvement > 2.0 {
+                    format!("↑{:.1}% less accurate", avg_miss_improvement)
+                } else {
+                    "similar accuracy".to_string()
+                };
+
+                if improvements > 0 || regressions > 0 {
+                    format!(
+                        "vs historical: {} • {} • ↑{} ↓{} chars",
+                        time_summary, miss_summary, improvements, regressions
+                    )
+                } else {
+                    format!("vs historical: {} • {}", time_summary, miss_summary)
+                }
+            } else {
+                "New session - no historical comparison available".to_string()
+            }
+        } else {
+            "No character statistics available".to_string()
+        }
+    }
+
     /// Flush character statistics to ensure all data is written to database
     pub fn flush_char_stats(&mut self) -> Option<()> {
         if let Some(ref mut stats_db) = self.stats_db {
@@ -1499,5 +1564,33 @@ mod tests {
                 "❌ Character summary with deltas not available (database may not be initialized)"
             );
         }
+    }
+
+    #[test]
+    fn test_session_delta_summary() {
+        let mut thok = Thok::new("test".to_string(), 1, None, false);
+
+        // Type the prompt to generate session data
+        thok.write('t');
+        thok.write('e');
+        thok.write('s');
+        thok.write('t');
+
+        assert!(thok.has_finished());
+
+        // Get the session delta summary
+        let summary = thok.get_session_delta_summary();
+
+        // Should return a string (content will depend on database availability)
+        assert!(!summary.is_empty());
+
+        // Should contain either historical comparison or no data message
+        assert!(
+            summary.contains("vs historical:")
+                || summary.contains("New session")
+                || summary.contains("No character statistics")
+        );
+
+        println!("✅ Session delta summary: {}", summary);
     }
 }

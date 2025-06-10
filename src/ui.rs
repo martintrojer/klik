@@ -137,6 +137,7 @@ impl Widget for &Thok {
                         [
                             Constraint::Min(1),
                             Constraint::Length(1),
+                            Constraint::Length(1), // for session delta summary
                             Constraint::Length(1), // for padding
                             Constraint::Length(1),
                         ]
@@ -202,6 +203,18 @@ impl Widget for &Thok {
 
                 stats.render(chunks[1], buf);
 
+                // Render session delta summary
+                let delta_summary = self.get_session_delta_summary();
+                let delta_widget = Paragraph::new(Span::styled(
+                    delta_summary,
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::ITALIC),
+                ))
+                .alignment(Alignment::Center);
+
+                delta_widget.render(chunks[2], buf);
+
                 let legend = Paragraph::new(Span::styled(
                     String::from(if Browser::is_available() {
                         "(r)etry / (n)ew / (s)tats / (t)weet / (esc)ape"
@@ -211,7 +224,7 @@ impl Widget for &Thok {
                     italic_style,
                 ));
 
-                legend.render(chunks[3], buf);
+                legend.render(chunks[4], buf);
 
                 // Render celebration animation if active
                 if self.celebration.is_active {
@@ -245,15 +258,13 @@ fn render_celebration_particles(
         // Check bounds
         if x < area.width && y < area.height {
             let color = colors[particle.color_index % colors.len()];
-            
+
             // Calculate alpha based on particle age for fade effect
             let alpha = 1.0 - (particle.age / particle.max_age);
-            
+
             let style = if particle.is_text {
                 // Text particles are always bold and bright
-                if alpha > 0.8 {
-                    Style::default().fg(color).add_modifier(Modifier::BOLD)
-                } else if alpha > 0.4 {
+                if alpha > 0.4 {
                     Style::default().fg(color).add_modifier(Modifier::BOLD)
                 } else {
                     Style::default().fg(color)
@@ -692,18 +703,18 @@ mod tests {
     #[test]
     fn test_celebration_animation_rendering() {
         use crate::celebration::CelebrationAnimation;
-        
+
         let mut thok = create_test_thok("test", true);
-        
+
         // Manually set up celebration
         thok.accuracy = 100.0;
         thok.celebration = CelebrationAnimation::default();
         thok.celebration.start(80, 24);
-        
+
         // Ensure celebration is active
         assert!(thok.celebration.is_active);
         assert!(!thok.celebration.particles.is_empty());
-        
+
         let area = Rect::new(0, 0, 80, 24);
         let mut buffer = Buffer::empty(area);
 
@@ -712,7 +723,7 @@ mod tests {
 
         // Should render without panicking
         assert!(*buffer.area() == area);
-        
+
         // The buffer should contain content (hard to test specific particles due to randomness)
         assert!(!buffer.content().is_empty());
     }
