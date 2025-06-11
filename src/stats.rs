@@ -526,8 +526,6 @@ impl StatsDb {
     /// Returns: (char, historical_avg_time, historical_miss_rate, historical_attempts,
     ///          session_avg_time_delta, session_miss_rate_delta, session_attempts_delta)
     pub fn get_char_summary_with_deltas(&self) -> Result<Vec<CharSummaryWithDeltas>> {
-        let historical_summary = self.get_historical_char_summary()?;
-
         // Try current session buffer first, fallback to latest session from database
         let session_summary = if self.session_buffer.is_empty() {
             // Session buffer is empty (already flushed), get latest session from database
@@ -536,6 +534,15 @@ impl StatsDb {
         } else {
             // Session buffer has data, use it
             self.get_current_session_summary()
+        };
+
+        // Get historical data based on whether we have session buffer data
+        let historical_summary = if self.session_buffer.is_empty() {
+            // No session buffer, so use the method that excludes latest database session
+            self.get_historical_char_summary()?
+        } else {
+            // Session buffer has data, so all database data is historical
+            self.get_all_char_summary()?
         };
 
         let mut combined_summary = Vec::new();
@@ -1272,22 +1279,26 @@ mod tests {
     fn test_char_summary_with_deltas() {
         let mut db = create_test_db();
 
-        // Add historical data to the database
-        let conn = &db.conn;
-        conn.execute(
-            r#"
-            INSERT INTO char_session_stats (
-                character, total_attempts, correct_attempts, total_time_ms,
-                min_time_ms, max_time_ms, uppercase_attempts, uppercase_correct,
-                uppercase_time_ms, uppercase_min_time, uppercase_max_time, session_date
-            )
-            VALUES ('a', 10, 8, 1600, 100, 250, 2, 1, 200, 120, 250, '2024-01-01')
-            "#,
-            [],
-        )
-        .unwrap();
+        // Add historical data to the database (first session)
+        let historical_stats = vec![CharStat {
+            character: 'a',
+            time_to_press_ms: 200, // This will be the historical average
+            was_correct: true,
+            was_uppercase: false,
+            timestamp: Local::now(),
+            context_before: "".to_string(),
+            context_after: "bc".to_string(),
+        }];
 
-        // Add session data to the buffer
+        for stat in historical_stats {
+            db.record_char_stat(&stat).unwrap();
+        }
+        db.flush().unwrap(); // Flush the first session to database
+
+        // Wait a moment to ensure different timestamps
+        std::thread::sleep(std::time::Duration::from_millis(10));
+
+        // Add session data to the buffer (second session)
         let session_stats = vec![
             CharStat {
                 character: 'a',
@@ -1328,9 +1339,9 @@ mod tests {
         ) = &summary_with_deltas[0];
 
         assert_eq!(*character, 'a');
-        assert_eq!(*hist_avg, 200.0); // 1600 / 8
-        assert_eq!(*hist_miss, 20.0); // (10-8)/10 * 100
-        assert_eq!(*hist_attempts, 10);
+        assert_eq!(*hist_avg, 200.0); // Historical session: 200ms
+        assert_eq!(*hist_miss, 0.0); // Historical session: 0% miss (1 correct attempt)
+        assert_eq!(*hist_attempts, 1); // Historical session: 1 attempt
         assert_eq!(*session_attempts, 2);
 
         // Session average: (150+170)/2 = 160ms
@@ -1339,14 +1350,9 @@ mod tests {
         assert_eq!(time_delta.unwrap(), -40.0);
 
         // Session miss rate: 0% (both correct)
-        // Delta: 0 - 20 = -20% (improvement)
+        // Delta: 0 - 0 = 0% (no change)
         assert!(miss_delta.is_some());
-        assert_eq!(miss_delta.unwrap(), -20.0);
-
-        println!(
-            "✅ Delta test: time_delta={:?}, miss_delta={:?}",
-            time_delta, miss_delta
-        );
+        assert_eq!(miss_delta.unwrap(), 0.0);
     }
 
     #[test]
@@ -1365,6 +1371,7 @@ mod tests {
         };
 
         db.record_char_stat(&session_stat).unwrap();
+        db.flush().unwrap(); // Flush to database before getting deltas
 
         let summary_with_deltas = db.get_char_summary_with_deltas().unwrap();
 

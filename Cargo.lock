@@ -711,7 +711,7 @@ dependencies = [
 
 [[package]]
 name = "klik"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "assert_matches",
  "cgisf_lib",
