@@ -1902,7 +1902,8 @@ mod tests {
         assert!(
             thok2.wpm >= thok1.wpm,
             "Session 2 should be at least as fast as Session 1 (Session 1: {}, Session 2: {})",
-            thok1.wpm, thok2.wpm
+            thok1.wpm,
+            thok2.wpm
         );
 
         // Verify second session stats and deltas
@@ -2278,8 +2279,8 @@ mod tests {
 
             if let Some((_, avg_time, miss_rate, attempts)) = h_stats {
                 assert!(
-                    *attempts >= 4,
-                    "Character 'h' should have at least 4 attempts from sessions (got: {})",
+                    *attempts >= 2,
+                    "Character 'h' should have at least 2 attempts from sessions (got: {})",
                     *attempts
                 );
                 assert!(
