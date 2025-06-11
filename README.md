@@ -28,9 +28,6 @@
 ```sh
 # Via Cargo
 cargo install klik
-
-# Arch Linux (AUR)
-yay -S klik-git
 ```
 
 ### Basic Usage
