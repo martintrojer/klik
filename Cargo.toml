@@ -1,7 +1,7 @@
 [package]
 name = "klik"
 description = "sleek typing tui with visualized results, intelligent practice, and comprehensive analytics"
-version = "0.6.0"
+version = "0.6.1"
 readme = "README.md"
 repository = "https://github.com/martintrojer/klik.git"
 homepage = "https://github.com/martintrojer/klik"
