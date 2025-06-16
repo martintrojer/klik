@@ -8,13 +8,14 @@ use ratatui::{
 use unicode_width::UnicodeWidthStr;
 use webbrowser::Browser;
 
-use crate::thok::{Outcome, Thok};
+use crate::{thok::Outcome, App, AppState};
 
 const HORIZONTAL_MARGIN: u16 = 5;
 const VERTICAL_MARGIN: u16 = 2;
 
-impl Widget for &Thok {
+impl Widget for &App {
     fn render(self, area: Rect, buf: &mut Buffer) {
+        let thok = &self.thok;
         // styles
         let bold_style = Style::default().add_modifier(Modifier::BOLD);
 
@@ -33,7 +34,7 @@ impl Widget for &Thok {
 
         let magenta_style = Style::default().fg(Color::Magenta);
 
-        match (!self.has_finished(), self.is_idle) {
+        match (!thok.has_finished(), thok.is_idle) {
             (true, true) => {
                 // Idle state - show idle message
                 let idle_message = Paragraph::new(Span::styled(
@@ -50,11 +51,11 @@ impl Widget for &Thok {
             (true, false) => {
                 let max_chars_per_line = area.width - (HORIZONTAL_MARGIN * 2);
                 let mut prompt_occupied_lines =
-                    ((self.prompt.width() as f64 / max_chars_per_line as f64).ceil() + 1.0) as u16;
+                    ((thok.prompt.width() as f64 / max_chars_per_line as f64).ceil() + 1.0) as u16;
 
-                let time_left_lines = if self.number_of_secs.is_some() { 2 } else { 0 };
+                let time_left_lines = if thok.number_of_secs.is_some() { 2 } else { 0 };
 
-                if self.prompt.width() <= max_chars_per_line as usize {
+                if thok.prompt.width() <= max_chars_per_line as usize {
                     prompt_occupied_lines = 1;
                 }
 
@@ -76,12 +77,12 @@ impl Widget for &Thok {
                     )
                     .split(area);
 
-                let mut spans = self
+                let mut spans = thok
                     .input
                     .iter()
                     .enumerate()
                     .map(|(idx, input)| {
-                        let expected = self.get_expected_char(idx).to_string();
+                        let expected = thok.get_expected_char(idx).to_string();
 
                         match input.outcome {
                             Outcome::Incorrect => Span::styled(
@@ -93,7 +94,7 @@ impl Widget for &Thok {
                             ),
                             Outcome::Correct => {
                                 // In strict mode, show corrected positions with a different color
-                                if self.strict_mode && self.corrected_positions.contains(&idx) {
+                                if thok.strict_mode && thok.corrected_positions.contains(&idx) {
                                     // Show corrected errors with orange color (much more distinct from green)
                                     Span::styled(
                                         expected,
@@ -110,12 +111,12 @@ impl Widget for &Thok {
                     .collect::<Vec<Span>>();
 
                 spans.push(Span::styled(
-                    self.get_expected_char(self.cursor_pos).to_string(),
+                    thok.get_expected_char(thok.cursor_pos).to_string(),
                     underlined_dim_bold_style,
                 ));
 
                 spans.push(Span::styled(
-                    self.prompt[(self.cursor_pos + 1)..self.prompt.len()].to_string(),
+                    thok.prompt[(thok.cursor_pos + 1)..thok.prompt.len()].to_string(),
                     dim_bold_style,
                 ));
 
@@ -131,9 +132,9 @@ impl Widget for &Thok {
 
                 widget.render(chunks[2], buf);
 
-                if self.seconds_remaining.is_some() {
+                if thok.seconds_remaining.is_some() {
                     let timer = Paragraph::new(Span::styled(
-                        format!("{:.1}", self.seconds_remaining.unwrap()),
+                        format!("{:.1}", thok.seconds_remaining.unwrap()),
                         dim_bold_style,
                     ))
                     .alignment(Alignment::Center);
@@ -142,25 +143,38 @@ impl Widget for &Thok {
                 }
             }
             (false, _) => {
+                // Check if we're in the Results state to show settings
+                let show_settings = matches!(self.state, AppState::Results);
+
+                let constraints = if show_settings {
+                    vec![
+                        Constraint::Min(1),    // chart
+                        Constraint::Length(1), // stats
+                        Constraint::Length(1), // session delta summary
+                        Constraint::Length(3), // settings info box
+                        Constraint::Length(1), // padding
+                        Constraint::Length(1), // legend
+                    ]
+                } else {
+                    vec![
+                        Constraint::Min(1),
+                        Constraint::Length(1),
+                        Constraint::Length(1), // for session delta summary
+                        Constraint::Length(1), // for padding
+                        Constraint::Length(1),
+                    ]
+                };
+
                 let chunks = Layout::default()
                     .direction(Direction::Vertical)
                     .horizontal_margin(HORIZONTAL_MARGIN)
                     .vertical_margin(VERTICAL_MARGIN)
-                    .constraints(
-                        [
-                            Constraint::Min(1),
-                            Constraint::Length(1),
-                            Constraint::Length(1), // for session delta summary
-                            Constraint::Length(1), // for padding
-                            Constraint::Length(1),
-                        ]
-                        .as_ref(),
-                    )
+                    .constraints(constraints.as_slice())
                     .split(area);
 
                 let mut highest_wpm = 0.0;
 
-                for ts in &self.wpm_coords {
+                for ts in &thok.wpm_coords {
                     if ts.1 > highest_wpm {
                         highest_wpm = ts.1;
                     }
@@ -170,11 +184,11 @@ impl Widget for &Thok {
                     .marker(ratatui::symbols::Marker::Braille)
                     .style(magenta_style)
                     .graph_type(GraphType::Line)
-                    .data(&self.wpm_coords)];
+                    .data(&thok.wpm_coords)];
 
-                let mut overall_duration = match self.wpm_coords.last() {
+                let mut overall_duration = match thok.wpm_coords.last() {
                     Some(x) => x.0,
-                    _ => self.seconds_remaining.unwrap_or(1.0),
+                    _ => thok.seconds_remaining.unwrap_or(1.0),
                 };
 
                 overall_duration = if overall_duration < 1.0 {
@@ -208,7 +222,7 @@ impl Widget for &Thok {
                 let stats = Paragraph::new(Span::styled(
                     format!(
                         "{} wpm   {}% acc   {:.2} sd",
-                        self.wpm, self.accuracy, self.std_dev
+                        thok.wpm, thok.accuracy, thok.std_dev
                     ),
                     bold_style,
                 ))
@@ -217,7 +231,7 @@ impl Widget for &Thok {
                 stats.render(chunks[1], buf);
 
                 // Render session delta summary
-                let delta_summary = self.get_session_delta_summary();
+                let delta_summary = thok.get_session_delta_summary();
                 let delta_widget = Paragraph::new(Span::styled(
                     delta_summary,
                     Style::default()
@@ -228,6 +242,32 @@ impl Widget for &Thok {
 
                 delta_widget.render(chunks[2], buf);
 
+                // Render settings info box if in Results state
+                if show_settings {
+                    let settings_text = format!(
+                        "Settings: Words: {} | Lang: {} | Random: {} | Caps: {} | Strict: {} | Symbols: {} | Subst: {}\n(w) Words (l) Language (1) Random (2) Caps (3) Strict (4) Symbols (5) Substitute",
+                        self.runtime_settings.number_of_words,
+                        self.runtime_settings.supported_language,
+                        if self.runtime_settings.random_words { "ON" } else { "OFF" },
+                        if self.runtime_settings.capitalize { "ON" } else { "OFF" },
+                        if self.runtime_settings.strict { "ON" } else { "OFF" },
+                        if self.runtime_settings.symbols { "ON" } else { "OFF" },
+                        if self.runtime_settings.substitute { "ON" } else { "OFF" }
+                    );
+
+                    let settings_widget = Paragraph::new(settings_text)
+                        .style(
+                            Style::default()
+                                .fg(Color::Gray)
+                                .add_modifier(Modifier::ITALIC),
+                        )
+                        .alignment(Alignment::Center)
+                        .wrap(Wrap { trim: true });
+
+                    settings_widget.render(chunks[3], buf);
+                }
+
+                let legend_chunk_index = if show_settings { 5 } else { 4 };
                 let legend = Paragraph::new(Span::styled(
                     String::from(if Browser::is_available() {
                         "(r)etry / (n)ew / (s)tats / (t)weet / (esc)ape"
@@ -237,11 +277,11 @@ impl Widget for &Thok {
                     italic_style,
                 ));
 
-                legend.render(chunks[4], buf);
+                legend.render(chunks[legend_chunk_index], buf);
 
                 // Render celebration animation if active
-                if self.celebration.is_active {
-                    render_celebration_particles(&self.celebration, area, buf);
+                if thok.celebration.is_active {
+                    render_celebration_particles(&thok.celebration, area, buf);
                 }
             }
         }
@@ -309,7 +349,8 @@ mod tests {
     use ratatui::{buffer::Buffer, layout::Rect};
     use std::time::SystemTime;
 
-    fn create_test_thok(prompt: &str, finished: bool) -> Thok {
+    fn create_test_app(prompt: &str, finished: bool) -> App {
+        use crate::{RuntimeSettings, SupportedLanguage};
         let mut thok = Thok::new(prompt.to_string(), 1, None, false);
 
         if finished {
@@ -328,16 +369,36 @@ mod tests {
             thok.wpm_coords = vec![(1.0, 20.0), (2.0, 35.0), (3.0, 42.0)];
         }
 
-        thok
+        App {
+            cli: None,
+            thok,
+            state: if finished {
+                crate::AppState::Results
+            } else {
+                crate::AppState::Typing
+            },
+            char_stats_state: crate::CharStatsState::default(),
+            runtime_settings: RuntimeSettings {
+                number_of_words: 15,
+                number_of_sentences: None,
+                number_of_secs: None,
+                supported_language: SupportedLanguage::English,
+                random_words: false,
+                capitalize: false,
+                strict: false,
+                symbols: false,
+                substitute: false,
+            },
+        }
     }
 
     #[test]
     fn test_ui_widget_in_progress() {
-        let thok = create_test_thok("hello world", false);
+        let app = create_test_app("hello world", false);
         let area = Rect::new(0, 0, 80, 24);
         let mut buffer = Buffer::empty(area);
 
-        (&thok).render(area, &mut buffer);
+        (&app).render(area, &mut buffer);
 
         let rendered = buffer
             .content()
@@ -349,11 +410,11 @@ mod tests {
 
     #[test]
     fn test_ui_widget_finished() {
-        let thok = create_test_thok("test", true);
+        let app = create_test_app("test", true);
         let area = Rect::new(0, 0, 80, 24);
         let mut buffer = Buffer::empty(area);
 
-        (&thok).render(area, &mut buffer);
+        (&app).render(area, &mut buffer);
 
         let rendered = buffer
             .content()
@@ -366,13 +427,14 @@ mod tests {
 
     #[test]
     fn test_ui_widget_with_time_limit() {
-        let mut thok = Thok::new("test".to_string(), 1, Some(30.0), false);
-        thok.seconds_remaining = Some(25.5);
+        let mut app = create_test_app("test", false);
+        app.thok.seconds_remaining = Some(25.5);
+        app.thok.number_of_secs = Some(30.0);
 
         let area = Rect::new(0, 0, 80, 24);
         let mut buffer = Buffer::empty(area);
 
-        (&thok).render(area, &mut buffer);
+        (&app).render(area, &mut buffer);
 
         let rendered = buffer
             .content()
@@ -386,37 +448,37 @@ mod tests {
 
     #[test]
     fn test_ui_widget_small_area() {
-        let thok = create_test_thok("hello", false);
+        let app = create_test_app("hello", false);
         let area = Rect::new(0, 0, 20, 5);
         let mut buffer = Buffer::empty(area);
 
-        (&thok).render(area, &mut buffer);
+        (&app).render(area, &mut buffer);
 
         assert!(*buffer.area() == area);
     }
 
     #[test]
     fn test_ui_widget_with_incorrect_input() {
-        let mut thok = Thok::new("test".to_string(), 1, None, false);
+        let mut app = create_test_app("test", false);
 
-        thok.input.push(Input {
+        app.thok.input.push(Input {
             char: 't',
             outcome: Outcome::Correct,
             timestamp: SystemTime::now(),
             keypress_start: None,
         });
-        thok.input.push(Input {
+        app.thok.input.push(Input {
             char: 'x',
             outcome: Outcome::Incorrect,
             timestamp: SystemTime::now(),
             keypress_start: None,
         });
-        thok.cursor_pos = 2;
+        app.thok.cursor_pos = 2;
 
         let area = Rect::new(0, 0, 80, 24);
         let mut buffer = Buffer::empty(area);
 
-        (&thok).render(area, &mut buffer);
+        (&app).render(area, &mut buffer);
 
         assert!(*buffer.area() == area);
     }
@@ -429,11 +491,11 @@ mod tests {
 
     #[test]
     fn test_ui_widget_finished_with_browser_available() {
-        let thok = create_test_thok("test", true);
+        let app = create_test_app("test", true);
         let area = Rect::new(0, 0, 80, 24);
         let mut buffer = Buffer::empty(area);
 
-        (&thok).render(area, &mut buffer);
+        (&app).render(area, &mut buffer);
 
         let rendered = buffer
             .content()
@@ -464,62 +526,62 @@ mod tests {
     #[test]
     fn test_ui_widget_large_prompt() {
         let large_prompt = "This is a very long prompt that should wrap across multiple lines when rendered in the terminal interface to test the text wrapping functionality";
-        let thok = create_test_thok(large_prompt, false);
+        let app = create_test_app(large_prompt, false);
         let area = Rect::new(0, 0, 40, 20);
         let mut buffer = Buffer::empty(area);
 
-        (&thok).render(area, &mut buffer);
+        (&app).render(area, &mut buffer);
 
         assert!(*buffer.area() == area);
     }
 
     #[test]
     fn test_ui_widget_empty_prompt() {
-        let thok = create_test_thok("", false);
+        let app = create_test_app("", false);
         let area = Rect::new(0, 0, 80, 24);
         let mut buffer = Buffer::empty(area);
 
-        (&thok).render(area, &mut buffer);
+        (&app).render(area, &mut buffer);
 
         assert!(*buffer.area() == area);
     }
 
     #[test]
     fn test_ui_widget_extreme_sizes() {
-        let thok = create_test_thok("test prompt", false);
+        let app = create_test_app("test prompt", false);
 
         // Test small area
         let small_area = Rect::new(0, 0, 10, 5);
         let mut small_buffer = Buffer::empty(small_area);
-        (&thok).render(small_area, &mut small_buffer);
+        (&app).render(small_area, &mut small_buffer);
         assert!(*small_buffer.area() == small_area);
 
         // Test very large area
         let large_area = Rect::new(0, 0, 1000, 1000);
         let mut large_buffer = Buffer::empty(large_area);
-        (&thok).render(large_area, &mut large_buffer);
+        (&app).render(large_area, &mut large_buffer);
         assert!(*large_buffer.area() == large_area);
 
         // Test normal sized area
         let normal_area = Rect::new(0, 0, 80, 24);
         let mut normal_buffer = Buffer::empty(normal_area);
-        (&thok).render(normal_area, &mut normal_buffer);
+        (&app).render(normal_area, &mut normal_buffer);
         assert!(*normal_buffer.area() == normal_area);
     }
 
     #[test]
     fn test_ui_widget_partial_typing() {
-        let mut thok = create_test_thok("hello world", false);
+        let mut app = create_test_app("hello world", false);
 
         // Type partially through the prompt
-        thok.write('h');
-        thok.write('e');
-        thok.write('l');
+        app.thok.write('h');
+        app.thok.write('e');
+        app.thok.write('l');
 
         let area = Rect::new(0, 0, 80, 24);
         let mut buffer = Buffer::empty(area);
 
-        (&thok).render(area, &mut buffer);
+        (&app).render(area, &mut buffer);
 
         let rendered = buffer
             .content()
@@ -533,19 +595,19 @@ mod tests {
 
     #[test]
     fn test_ui_widget_with_errors() {
-        let mut thok = create_test_thok("hello", false);
+        let mut app = create_test_app("hello", false);
 
         // Type with some errors
-        thok.write('h');
-        thok.write('x'); // Wrong character
-        thok.write('l');
-        thok.write('l');
-        thok.write('o');
+        app.thok.write('h');
+        app.thok.write('x'); // Wrong character
+        app.thok.write('l');
+        app.thok.write('l');
+        app.thok.write('o');
 
         let area = Rect::new(0, 0, 80, 24);
         let mut buffer = Buffer::empty(area);
 
-        (&thok).render(area, &mut buffer);
+        (&app).render(area, &mut buffer);
 
         let rendered = buffer
             .content()
@@ -559,12 +621,12 @@ mod tests {
 
     #[test]
     fn test_ui_widget_special_characters() {
-        let thok = create_test_thok("café naïve résumé", false);
+        let app = create_test_app("café naïve résumé", false);
 
         let area = Rect::new(0, 0, 80, 24);
         let mut buffer = Buffer::empty(area);
 
-        (&thok).render(area, &mut buffer);
+        (&app).render(area, &mut buffer);
 
         let rendered = buffer
             .content()
@@ -583,16 +645,16 @@ mod tests {
 
     #[test]
     fn test_ui_widget_color_consistency() {
-        let mut thok = create_test_thok("test", false);
+        let mut app = create_test_app("test", false);
 
         // Type correctly
-        thok.write('t');
-        thok.write('e');
+        app.thok.write('t');
+        app.thok.write('e');
 
         let area = Rect::new(0, 0, 80, 24);
         let mut buffer = Buffer::empty(area);
 
-        (&thok).render(area, &mut buffer);
+        (&app).render(area, &mut buffer);
 
         // Check that the buffer was successfully populated
         // (We can't easily test colors in unit tests, but we can verify rendering succeeds)
@@ -601,13 +663,13 @@ mod tests {
 
     #[test]
     fn test_ui_widget_renders_without_panic() {
-        let thok = create_test_thok("test", false);
+        let app = create_test_app("test", false);
 
         let area = Rect::new(0, 0, 80, 24);
         let mut buffer = Buffer::empty(area);
 
         // Test that basic rendering works without panicking
-        (&thok).render(area, &mut buffer);
+        (&app).render(area, &mut buffer);
 
         // Should render successfully
         assert!(*buffer.area() == area);
@@ -615,24 +677,24 @@ mod tests {
 
     #[test]
     fn test_ui_widget_different_aspect_ratios() {
-        let thok = create_test_thok("testing different aspect ratios", false);
+        let app = create_test_app("testing different aspect ratios", false);
 
         // Test wide and short
         let wide_area = Rect::new(0, 0, 200, 5);
         let mut wide_buffer = Buffer::empty(wide_area);
-        (&thok).render(wide_area, &mut wide_buffer);
+        (&app).render(wide_area, &mut wide_buffer);
         assert!(*wide_buffer.area() == wide_area);
 
         // Test narrow and tall
         let tall_area = Rect::new(0, 0, 20, 50);
         let mut tall_buffer = Buffer::empty(tall_area);
-        (&thok).render(tall_area, &mut tall_buffer);
+        (&app).render(tall_area, &mut tall_buffer);
         assert!(*tall_buffer.area() == tall_area);
 
         // Test square
         let square_area = Rect::new(0, 0, 50, 50);
         let mut square_buffer = Buffer::empty(square_area);
-        (&thok).render(square_area, &mut square_buffer);
+        (&app).render(square_area, &mut square_buffer);
         assert!(*square_buffer.area() == square_area);
     }
 
@@ -651,12 +713,12 @@ mod tests {
 
     #[test]
     fn test_ui_widget_with_newlines_in_prompt() {
-        let thok = create_test_thok("line one\nline two\nline three", false);
+        let app = create_test_app("line one\nline two\nline three", false);
 
         let area = Rect::new(0, 0, 80, 24);
         let mut buffer = Buffer::empty(area);
 
-        (&thok).render(area, &mut buffer);
+        (&app).render(area, &mut buffer);
 
         let rendered = buffer
             .content()
@@ -670,27 +732,27 @@ mod tests {
 
     #[test]
     fn test_ui_widget_render_multiple_times() {
-        let mut thok = create_test_thok("hello", false);
+        let mut app = create_test_app("hello", false);
 
         let area = Rect::new(0, 0, 80, 24);
 
         // Render initial state
         let mut buffer1 = Buffer::empty(area);
-        (&thok).render(area, &mut buffer1);
+        (&app).render(area, &mut buffer1);
 
         // Type a character
-        thok.write('h');
+        app.thok.write('h');
 
         // Render after typing
         let mut buffer2 = Buffer::empty(area);
-        (&thok).render(area, &mut buffer2);
+        (&app).render(area, &mut buffer2);
 
         // Type another character
-        thok.write('e');
+        app.thok.write('e');
 
         // Render again
         let mut buffer3 = Buffer::empty(area);
-        (&thok).render(area, &mut buffer3);
+        (&app).render(area, &mut buffer3);
 
         // All renders should succeed
         assert!(!buffer1.content().is_empty());
@@ -702,13 +764,13 @@ mod tests {
     fn test_ui_widget_performance_large_text() {
         // Test with a very large prompt to ensure performance doesn't degrade significantly
         let large_text = "word ".repeat(1000); // 5000 characters
-        let thok = create_test_thok(&large_text, false);
+        let app = create_test_app(&large_text, false);
 
         let area = Rect::new(0, 0, 80, 24);
         let mut buffer = Buffer::empty(area);
 
         // This should complete without hanging or excessive memory usage
-        (&thok).render(area, &mut buffer);
+        (&app).render(area, &mut buffer);
 
         assert!(*buffer.area() == area);
     }
@@ -717,22 +779,22 @@ mod tests {
     fn test_celebration_animation_rendering() {
         use crate::celebration::CelebrationAnimation;
 
-        let mut thok = create_test_thok("test", true);
+        let mut app = create_test_app("test", true);
 
         // Manually set up celebration
-        thok.accuracy = 100.0;
-        thok.celebration = CelebrationAnimation::default();
-        thok.celebration.start(80, 24);
+        app.thok.accuracy = 100.0;
+        app.thok.celebration = CelebrationAnimation::default();
+        app.thok.celebration.start(80, 24);
 
         // Ensure celebration is active
-        assert!(thok.celebration.is_active);
-        assert!(!thok.celebration.particles.is_empty());
+        assert!(app.thok.celebration.is_active);
+        assert!(!app.thok.celebration.particles.is_empty());
 
         let area = Rect::new(0, 0, 80, 24);
         let mut buffer = Buffer::empty(area);
 
         // Render with celebration
-        (&thok).render(area, &mut buffer);
+        (&app).render(area, &mut buffer);
 
         // Should render without panicking
         assert!(*buffer.area() == area);

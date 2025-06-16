@@ -100,6 +100,7 @@ impl SupportedLanguage {
 
 impl Cli {
     /// Convert CLI arguments to word generation configuration
+    #[allow(dead_code)]
     fn to_word_gen_config(&self, custom_prompt: Option<String>) -> WordGenConfig {
         WordGenConfig {
             number_of_words: self.number_of_words,
@@ -146,17 +147,61 @@ impl Default for CharStatsState {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct RuntimeSettings {
+    pub number_of_words: usize,
+    pub number_of_sentences: Option<usize>,
+    pub number_of_secs: Option<usize>,
+    pub supported_language: SupportedLanguage,
+    pub random_words: bool,
+    pub capitalize: bool,
+    pub strict: bool,
+    pub symbols: bool,
+    pub substitute: bool,
+}
+
+impl RuntimeSettings {
+    pub fn from_cli(cli: &Cli) -> Self {
+        Self {
+            number_of_words: cli.number_of_words,
+            number_of_sentences: cli.number_of_sentences,
+            number_of_secs: cli.number_of_secs,
+            supported_language: cli.supported_language,
+            random_words: cli.random_words,
+            capitalize: cli.capitalize,
+            strict: cli.strict,
+            symbols: cli.symbols,
+            substitute: cli.substitute,
+        }
+    }
+
+    pub fn to_word_gen_config(&self, custom_prompt: Option<String>) -> WordGenConfig {
+        WordGenConfig {
+            number_of_words: self.number_of_words,
+            number_of_sentences: self.number_of_sentences,
+            custom_prompt,
+            language: self.supported_language,
+            random_words: self.random_words,
+            substitute: self.substitute,
+            capitalize: self.capitalize,
+            symbols: self.symbols,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct App {
     pub cli: Option<Cli>,
     pub thok: Thok,
     pub state: AppState,
     pub char_stats_state: CharStatsState,
+    pub runtime_settings: RuntimeSettings,
 }
 
 impl App {
     pub fn new(cli: Cli) -> Self {
-        let config = cli.to_word_gen_config(cli.prompt.clone());
+        let runtime_settings = RuntimeSettings::from_cli(&cli);
+        let config = runtime_settings.to_word_gen_config(cli.prompt.clone());
         let generator = WordGenerator::new(config);
         let (prompt, word_count) = generator.generate_prompt();
 
@@ -164,26 +209,26 @@ impl App {
             thok: Thok::new(
                 prompt,
                 word_count,
-                cli.number_of_secs.map(|ns| ns as f64),
-                cli.strict,
+                runtime_settings.number_of_secs.map(|ns| ns as f64),
+                runtime_settings.strict,
             ),
             cli: Some(cli),
             state: AppState::Typing,
             char_stats_state: CharStatsState::default(),
+            runtime_settings,
         }
     }
 
     pub fn reset(&mut self, new_prompt: Option<String>) {
-        let cli = self.cli.clone().unwrap();
-        let config = cli.to_word_gen_config(new_prompt);
+        let config = self.runtime_settings.to_word_gen_config(new_prompt);
         let generator = WordGenerator::new(config);
         let (prompt, word_count) = generator.generate_prompt();
 
         self.thok = Thok::new(
             prompt,
             word_count,
-            cli.number_of_secs.map(|ns| ns as f64),
-            cli.strict,
+            self.runtime_settings.number_of_secs.map(|ns| ns as f64),
+            self.runtime_settings.strict,
         );
         self.state = AppState::Typing;
         self.char_stats_state = CharStatsState::default();
@@ -331,6 +376,51 @@ fn start_tui<B: Backend>(
                                     }
                                     KeyCode::Char('s') => {
                                         app.state = AppState::CharacterStats;
+                                    }
+                                    // Settings toggle keys
+                                    KeyCode::Char('1') => {
+                                        app.runtime_settings.random_words =
+                                            !app.runtime_settings.random_words;
+                                    }
+                                    KeyCode::Char('2') => {
+                                        app.runtime_settings.capitalize =
+                                            !app.runtime_settings.capitalize;
+                                    }
+                                    KeyCode::Char('3') => {
+                                        app.runtime_settings.strict = !app.runtime_settings.strict;
+                                    }
+                                    KeyCode::Char('4') => {
+                                        app.runtime_settings.symbols =
+                                            !app.runtime_settings.symbols;
+                                    }
+                                    KeyCode::Char('5') => {
+                                        app.runtime_settings.substitute =
+                                            !app.runtime_settings.substitute;
+                                    }
+                                    KeyCode::Char('w') => {
+                                        // Cycle through word count options: 15, 25, 50, 100
+                                        app.runtime_settings.number_of_words =
+                                            match app.runtime_settings.number_of_words {
+                                                15 => 25,
+                                                25 => 50,
+                                                50 => 100,
+                                                _ => 15,
+                                            };
+                                    }
+                                    KeyCode::Char('l') => {
+                                        // Cycle through languages
+                                        app.runtime_settings.supported_language =
+                                            match app.runtime_settings.supported_language {
+                                                SupportedLanguage::English => {
+                                                    SupportedLanguage::English1k
+                                                }
+                                                SupportedLanguage::English1k => {
+                                                    SupportedLanguage::English10k
+                                                }
+                                                SupportedLanguage::English10k => {
+                                                    SupportedLanguage::English
+                                                }
+                                            };
                                     }
                                     _ => {}
                                 },
@@ -762,7 +852,7 @@ fn render_character_stats(app: &mut App, f: &mut Frame) {
 fn ui(app: &mut App, f: &mut Frame) {
     match app.state {
         AppState::Typing | AppState::Results => {
-            f.render_widget(&app.thok, f.area());
+            f.render_widget(&*app, f.area());
         }
         AppState::CharacterStats => {
             render_character_stats(app, f);

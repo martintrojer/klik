@@ -2068,13 +2068,32 @@ mod tests {
 
             // Test UI rendering with statistics
             let area = Rect::new(0, 0, 100, 30);
-            let mut buffer = Buffer::empty(area);
+            let mut _buffer = Buffer::empty(area);
 
             // Test that the Thok widget renders without panicking when there are stats
-            (&thok).render(area, &mut buffer);
+            // Create a test app that wraps the thok for rendering
+            use crate::{App, AppState, CharStatsState, RuntimeSettings, SupportedLanguage};
+            let app = App {
+                cli: None,
+                thok,
+                state: AppState::Results,
+                char_stats_state: CharStatsState::default(),
+                runtime_settings: RuntimeSettings {
+                    number_of_words: 15,
+                    number_of_sentences: None,
+                    number_of_secs: None,
+                    supported_language: SupportedLanguage::English,
+                    random_words: false,
+                    capitalize: false,
+                    strict: false,
+                    symbols: false,
+                    substitute: false,
+                },
+            };
+            (&app).render(area, &mut _buffer);
 
             // Verify the buffer contains some content (basic sanity check)
-            let rendered_content = buffer
+            let rendered_content = _buffer
                 .content()
                 .iter()
                 .map(|cell| cell.symbol())
