@@ -315,7 +315,13 @@ fn start_tui<B: Backend>(
                 ThokEvent::Key(key) => {
                     // Mark activity for any key press during typing to exit idle state
                     if app.state == AppState::Typing && !app.thok.has_finished() {
-                        app.thok.mark_activity();
+                        let was_idle = app.thok.mark_activity();
+                        if was_idle {
+                            // Reset session when exiting idle state
+                            app.reset(Some(app.thok.prompt.clone()));
+                            // Skip processing this key event since we just reset
+                            continue;
+                        }
                     }
 
                     match key.code {

@@ -116,8 +116,10 @@ impl Thok {
     }
 
     /// Mark activity and exit idle state if necessary
-    pub fn mark_activity(&mut self) {
+    /// Returns true if we were exiting idle state (indicating session should be reset)
+    pub fn mark_activity(&mut self) -> bool {
         let now = SystemTime::now();
+        let was_idle = self.is_idle;
 
         if self.is_idle {
             // Exiting idle state - restart timers
@@ -131,6 +133,7 @@ impl Thok {
         }
 
         self.last_activity = Some(now);
+        was_idle
     }
 
     pub fn get_expected_char(&self, idx: usize) -> char {
@@ -310,7 +313,7 @@ impl Thok {
     }
 
     pub fn backspace(&mut self) {
-        self.mark_activity();
+        let _ = self.mark_activity(); // Ignore return value for backspace
 
         if self.strict_mode {
             // In strict mode, backspace should reset the current position to allow retry
@@ -350,7 +353,7 @@ impl Thok {
     }
 
     pub fn write(&mut self, c: char) {
-        self.mark_activity();
+        let _ = self.mark_activity(); // Ignore return value for write
 
         let idx = if self.strict_mode {
             // In strict mode, use cursor position instead of input length
@@ -2468,5 +2471,47 @@ mod tests {
                 println!("ℹ️  Session 2: Perfect session but improvements not significant enough for celebration");
             }
         }
+    }
+
+    #[test]
+    fn test_idle_state_reset() {
+        let mut thok = Thok::new("test prompt".to_string(), 2, None, false);
+
+        // Start typing by typing the first character
+        thok.write('t');
+        assert!(thok.has_started());
+        assert_eq!(thok.cursor_pos, 1);
+        assert_eq!(thok.input.len(), 1);
+
+        // Simulate going idle by setting the idle flag directly
+        thok.is_idle = true;
+        assert!(thok.is_idle);
+
+        // Mark activity (simulating a key press to exit idle)
+        let was_idle = thok.mark_activity();
+
+        // Verify we correctly detected we were exiting idle state
+        assert!(was_idle, "Should return true when exiting idle state");
+        assert!(
+            !thok.is_idle,
+            "Should no longer be idle after mark_activity"
+        );
+
+        // The session state should still be preserved at this point
+        // (the actual reset happens in the main event loop)
+        assert_eq!(thok.cursor_pos, 1);
+        assert_eq!(thok.input.len(), 1);
+    }
+
+    #[test]
+    fn test_mark_activity_not_idle() {
+        let mut thok = Thok::new("test prompt".to_string(), 2, None, false);
+
+        // Mark activity when not idle
+        let was_idle = thok.mark_activity();
+
+        // Should return false since we weren't idle
+        assert!(!was_idle, "Should return false when not exiting idle state");
+        assert!(!thok.is_idle);
     }
 }
