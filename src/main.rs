@@ -14,6 +14,7 @@ use crate::{
     thok::Thok,
     word_generator::{WordGenConfig, WordGenerator},
 };
+use chrono::{Local, TimeZone};
 use clap::{error::ErrorKind, CommandFactory, Parser, ValueEnum};
 use crossterm::{
     event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
@@ -32,6 +33,7 @@ use std::{
     thread,
     time::Duration,
 };
+use time_humanize::HumanTime;
 use webbrowser::Browser;
 
 const TICK_RATE_MS: u64 = 100;
@@ -670,6 +672,7 @@ fn render_character_stats(app: &mut App, f: &mut Frame) {
             Cell::from(format!("Avg Time (ms) {}", time_indicator)),
             Cell::from(format!("Miss Rate (%) {}", miss_indicator)),
             Cell::from(format!("Attempts {}", attempts_indicator)),
+            Cell::from("Last Typed"),
         ])
         .style(
             Style::default()
@@ -691,6 +694,7 @@ fn render_character_stats(app: &mut App, f: &mut Frame) {
                     time_delta,
                     miss_delta,
                     session_attempts,
+                    latest_datetime,
                 )| {
                     let char_display = if *character == ' ' {
                         "SPACE".to_string()
@@ -776,11 +780,48 @@ fn render_character_stats(app: &mut App, f: &mut Frame) {
                         Style::default().fg(miss_color)
                     };
 
+                    // Format datetime in human-readable format (e.g., "2 hours ago", "yesterday")
+                    let datetime_display = if let Some(datetime_str) = latest_datetime {
+                        // Parse SQLite datetime string (format: YYYY-MM-DD HH:MM:SS)
+                        match chrono::NaiveDateTime::parse_from_str(
+                            datetime_str,
+                            "%Y-%m-%d %H:%M:%S",
+                        ) {
+                            Ok(naive_dt) => {
+                                let dt = Local.from_local_datetime(&naive_dt).earliest();
+                                if let Some(local_dt) = dt {
+                                    let now = Local::now();
+                                    let duration = now.signed_duration_since(local_dt);
+
+                                    // Convert to seconds for HumanTime
+                                    let seconds = duration.num_seconds();
+                                    if seconds >= 0 {
+                                        // Past time
+                                        format!("{}", HumanTime::from_seconds(-seconds))
+                                    } else {
+                                        // Future time (shouldn't happen in our case, but handle it)
+                                        format!("{}", HumanTime::from_seconds(-seconds))
+                                    }
+                                } else {
+                                    // Fallback to original format if timezone conversion fails
+                                    datetime_str.clone()
+                                }
+                            }
+                            Err(_) => {
+                                // Fallback to original format if parsing fails
+                                datetime_str.clone()
+                            }
+                        }
+                    } else {
+                        "-".to_string()
+                    };
+
                     Row::new(vec![
                         Cell::from(char_display),
                         Cell::from(time_display).style(time_style),
                         Cell::from(miss_display).style(miss_style),
                         Cell::from(attempts_display),
+                        Cell::from(datetime_display).style(Style::default().fg(Color::Cyan)),
                     ])
                 },
             )
@@ -804,6 +845,7 @@ fn render_character_stats(app: &mut App, f: &mut Frame) {
                 Constraint::Length(22), // Avg Time with delta (expanded)
                 Constraint::Length(22), // Miss Rate with delta (expanded)
                 Constraint::Length(16), // Attempts with session info (expanded)
+                Constraint::Length(20), // Human-readable datetime (e.g., "2 hours ago")
             ],
         )
         .header(header)
@@ -829,9 +871,11 @@ fn render_character_stats(app: &mut App, f: &mut Frame) {
     let delta_count = if let Some(ref summary) = app.thok.get_char_summary_with_deltas() {
         let deltas_available = summary
             .iter()
-            .filter(|(_, _, _, _, time_delta, miss_delta, session_attempts)| {
-                *session_attempts > 0 && (time_delta.is_some() || miss_delta.is_some())
-            })
+            .filter(
+                |(_, _, _, _, time_delta, miss_delta, session_attempts, _)| {
+                    *session_attempts > 0 && (time_delta.is_some() || miss_delta.is_some())
+                },
+            )
             .count();
         if deltas_available > 0 {
             format!("Historical stats with session deltas: ↓=improvement ↑=regression •=new/first-time (+n)=session attempts | {} chars with deltas", deltas_available)

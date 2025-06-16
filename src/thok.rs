@@ -252,7 +252,7 @@ impl Thok {
             let mut avg_time_improvement = 0.0;
             let mut avg_accuracy_improvement = 0.0;
 
-            for (_, _, _, _, time_delta, miss_delta, session_attempts) in &deltas {
+            for (_, _, _, _, time_delta, miss_delta, session_attempts, _) in &deltas {
                 if *session_attempts > 0 {
                     // Only count characters that have actual delta values
                     if time_delta.is_some() || miss_delta.is_some() {
@@ -605,7 +605,7 @@ impl Thok {
             let mut avg_time_improvement = 0.0;
             let mut avg_miss_improvement = 0.0;
 
-            for (_, _, _, _, time_delta, miss_delta, session_attempts) in &summary {
+            for (_, _, _, _, time_delta, miss_delta, session_attempts, _) in &summary {
                 // Only consider characters typed in this session
                 if *session_attempts > 0 {
                     total_chars_with_deltas += 1;
@@ -1675,6 +1675,7 @@ mod tests {
                 _time_delta,
                 _miss_delta,
                 session_attempts,
+                _latest_datetime,
             ) in &summary_with_deltas
             {
                 if ['h', 'e', 'l', 'o'].contains(character) {
@@ -1956,6 +1957,7 @@ mod tests {
                 time_delta,
                 miss_delta,
                 session_attempts,
+                _latest_datetime,
             ) in &deltas
             {
                 if *session_attempts > 0 {
@@ -2319,7 +2321,7 @@ mod tests {
         println!("About to test celebration for perfect session...");
         if let Some(deltas) = thok.get_char_summary_with_deltas() {
             println!("Delta data available, {} characters", deltas.len());
-            for (c, _, _, _, time_delta, miss_delta, session_attempts) in &deltas {
+            for (c, _, _, _, time_delta, miss_delta, session_attempts, _) in &deltas {
                 if *session_attempts > 0 {
                     println!(
                         "  '{}': time_delta={:?}, miss_delta={:?}, session_attempts={}",
@@ -2339,9 +2341,11 @@ mod tests {
         let should_celebrate = if let Some(deltas) = thok.get_char_summary_with_deltas() {
             let chars_with_deltas = deltas
                 .iter()
-                .filter(|(_, _, _, _, time_delta, miss_delta, session_attempts)| {
-                    *session_attempts > 0 && (time_delta.is_some() || miss_delta.is_some())
-                })
+                .filter(
+                    |(_, _, _, _, time_delta, miss_delta, session_attempts, _)| {
+                        *session_attempts > 0 && (time_delta.is_some() || miss_delta.is_some())
+                    },
+                )
                 .count();
 
             if chars_with_deltas == 0 {
@@ -2350,21 +2354,23 @@ mod tests {
                 // Check if there are meaningful improvements
                 let improvements = deltas
                     .iter()
-                    .filter(|(_, _, _, _, time_delta, miss_delta, session_attempts)| {
-                        if *session_attempts > 0 {
-                            if let Some(time_d) = time_delta {
-                                if *time_d < -10.0 {
-                                    return true;
+                    .filter(
+                        |(_, _, _, _, time_delta, miss_delta, session_attempts, _)| {
+                            if *session_attempts > 0 {
+                                if let Some(time_d) = time_delta {
+                                    if *time_d < -10.0 {
+                                        return true;
+                                    }
+                                }
+                                if let Some(miss_d) = miss_delta {
+                                    if *miss_d < -5.0 {
+                                        return true;
+                                    }
                                 }
                             }
-                            if let Some(miss_d) = miss_delta {
-                                if *miss_d < -5.0 {
-                                    return true;
-                                }
-                            }
-                        }
-                        false
-                    })
+                            false
+                        },
+                    )
                     .count();
                 improvements >= 3 // Should celebrate if enough improvements
             }
@@ -2432,6 +2438,7 @@ mod tests {
                 time_delta,
                 _miss_delta,
                 session_attempts,
+                _latest_datetime,
             ) in &deltas
             {
                 if *session_attempts > 0 {

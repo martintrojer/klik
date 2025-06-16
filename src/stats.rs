@@ -9,8 +9,21 @@ use crate::language::CharacterDifficulty;
 
 /// Type alias for character statistics with session deltas
 /// (char, historical_avg_time, historical_miss_rate, historical_attempts,
-///  session_avg_time_delta, session_miss_rate_delta, session_attempts_delta)
-pub type CharSummaryWithDeltas = (char, f64, f64, i64, Option<f64>, Option<f64>, i64);
+///  session_avg_time_delta, session_miss_rate_delta, session_attempts_delta, latest_datetime)
+pub type CharSummaryWithDeltas = (
+    char,
+    f64,
+    f64,
+    i64,
+    Option<f64>,
+    Option<f64>,
+    i64,
+    Option<String>,
+);
+
+/// Type alias for character statistics with datetime
+/// (char, avg_time, miss_rate, attempts, latest_datetime)
+pub type CharSummaryWithDateTime = (char, f64, f64, i64, Option<String>);
 
 /// Character-level statistics for tracking typing performance (used during session)
 #[derive(Debug, Clone)]
@@ -384,6 +397,55 @@ impl StatsDb {
         Ok(summary)
     }
 
+    /// Get all character statistics summary with latest datetime from aggregated session data
+    pub fn get_all_char_summary_with_datetime(&self) -> Result<Vec<CharSummaryWithDateTime>> {
+        let mut stmt = self.conn.prepare(
+            r#"
+            SELECT 
+                character,
+                CASE 
+                    WHEN SUM(correct_attempts) > 0 THEN 
+                        CAST(SUM(total_time_ms) AS FLOAT) / SUM(correct_attempts)
+                    ELSE 0.0
+                END as avg_time,
+                CASE 
+                    WHEN SUM(total_attempts) > 0 THEN 
+                        (SUM(total_attempts - correct_attempts) * 100.0 / SUM(total_attempts))
+                    ELSE 0.0
+                END as miss_rate,
+                SUM(total_attempts) as total_attempts,
+                MAX(created_at) as latest_datetime
+            FROM char_session_stats 
+            GROUP BY character
+            ORDER BY character
+            "#,
+        )?;
+
+        let summary_iter = stmt.query_map([], |row| {
+            let char_str: String = row.get(0)?;
+            let character = char_str.chars().next().unwrap_or('\0');
+            let avg_time: f64 = row.get(1)?;
+            let miss_rate: f64 = row.get(2)?;
+            let total_attempts: i64 = row.get(3)?;
+            let latest_datetime: Option<String> = row.get(4)?;
+
+            Ok((
+                character,
+                avg_time,
+                miss_rate,
+                total_attempts,
+                latest_datetime,
+            ))
+        })?;
+
+        let mut summary = Vec::new();
+        for item in summary_iter {
+            summary.push(item?);
+        }
+
+        Ok(summary)
+    }
+
     /// Get historical character statistics summary excluding today's session
     /// This is used for delta calculations to compare against truly historical data
     pub fn get_historical_char_summary(&self) -> Result<Vec<(char, f64, f64, i64)>> {
@@ -435,6 +497,67 @@ impl StatsDb {
         Ok(summary)
     }
 
+    /// Get historical character statistics summary with latest datetime, excluding today's session
+    /// This is used for delta calculations to compare against truly historical data
+    pub fn get_historical_char_summary_with_datetime(
+        &self,
+    ) -> Result<Vec<CharSummaryWithDateTime>> {
+        // Get the timestamp of the most recent session
+        let mut max_stmt = self
+            .conn
+            .prepare("SELECT MAX(created_at) FROM char_session_stats")?;
+
+        let latest_timestamp: Option<String> =
+            max_stmt.query_row([], |row| row.get(0)).optional()?;
+
+        let mut stmt = self.conn.prepare(
+            r#"
+            SELECT 
+                character,
+                CASE 
+                    WHEN SUM(correct_attempts) > 0 THEN 
+                        CAST(SUM(total_time_ms) AS FLOAT) / SUM(correct_attempts)
+                    ELSE 0.0
+                END as avg_time,
+                CASE 
+                    WHEN SUM(total_attempts) > 0 THEN 
+                        (SUM(total_attempts - correct_attempts) * 100.0 / SUM(total_attempts))
+                    ELSE 0.0
+                END as miss_rate,
+                SUM(total_attempts) as total_attempts,
+                MAX(created_at) as latest_datetime
+            FROM char_session_stats 
+            WHERE created_at < ?1 OR ?1 IS NULL
+            GROUP BY character
+            ORDER BY character
+            "#,
+        )?;
+
+        let summary_iter = stmt.query_map([latest_timestamp], |row| {
+            let char_str: String = row.get(0)?;
+            let character = char_str.chars().next().unwrap_or('\0');
+            let avg_time: f64 = row.get(1)?;
+            let miss_rate: f64 = row.get(2)?;
+            let total_attempts: i64 = row.get(3)?;
+            let latest_datetime: Option<String> = row.get(4)?;
+
+            Ok((
+                character,
+                avg_time,
+                miss_rate,
+                total_attempts,
+                latest_datetime,
+            ))
+        })?;
+
+        let mut summary = Vec::new();
+        for item in summary_iter {
+            summary.push(item?);
+        }
+
+        Ok(summary)
+    }
+
     /// Get session statistics from the current session buffer
     pub fn get_current_session_summary(&self) -> Vec<(char, f64, f64, i64)> {
         let mut summary = Vec::new();
@@ -462,6 +585,40 @@ impl StatsDb {
             };
 
             summary.push((character, avg_time, miss_rate, total_attempts));
+        }
+
+        summary.sort_by(|a, b| a.0.cmp(&b.0));
+        summary
+    }
+
+    /// Get session statistics from the current session buffer with datetime placeholder
+    pub fn get_current_session_summary_with_datetime(&self) -> Vec<CharSummaryWithDateTime> {
+        let mut summary = Vec::new();
+
+        for (&character, stats) in &self.session_buffer {
+            let total_attempts = stats.len() as i64;
+            let correct_attempts = stats.iter().filter(|s| s.was_correct).count();
+
+            let avg_time = if correct_attempts > 0 {
+                let total_time: u64 = stats
+                    .iter()
+                    .filter(|s| s.was_correct)
+                    .map(|s| s.time_to_press_ms)
+                    .sum();
+                total_time as f64 / correct_attempts as f64
+            } else {
+                0.0
+            };
+
+            let miss_rate = if total_attempts > 0 {
+                let incorrect_attempts = total_attempts - correct_attempts as i64;
+                (incorrect_attempts as f64 / total_attempts as f64) * 100.0
+            } else {
+                0.0
+            };
+
+            // For current session, we don't have a datetime yet (it's still in progress)
+            summary.push((character, avg_time, miss_rate, total_attempts, None));
         }
 
         summary.sort_by(|a, b| a.0.cmp(&b.0));
@@ -522,61 +679,121 @@ impl StatsDb {
         Ok(summary)
     }
 
+    /// Get session statistics from the most recent session in the database with datetime
+    /// This is used for delta calculations after the session buffer has been flushed
+    pub fn get_latest_session_summary_with_datetime(&self) -> Result<Vec<CharSummaryWithDateTime>> {
+        // Get the timestamp of the most recent session
+        let mut max_stmt = self
+            .conn
+            .prepare("SELECT MAX(created_at) FROM char_session_stats")?;
+
+        let latest_timestamp: Option<String> =
+            max_stmt.query_row([], |row| row.get(0)).optional()?;
+
+        if latest_timestamp.is_none() {
+            return Ok(Vec::new());
+        }
+
+        let mut stmt = self.conn.prepare(
+            r#"
+            SELECT 
+                character,
+                CASE 
+                    WHEN correct_attempts > 0 THEN 
+                        CAST(total_time_ms AS FLOAT) / correct_attempts
+                    ELSE 0.0
+                END as avg_time,
+                CASE 
+                    WHEN total_attempts > 0 THEN 
+                        (total_attempts - correct_attempts) * 100.0 / total_attempts
+                    ELSE 0.0
+                END as miss_rate,
+                total_attempts,
+                created_at
+            FROM char_session_stats 
+            WHERE created_at = ?1
+            ORDER BY character
+            "#,
+        )?;
+
+        let summary_iter = stmt.query_map([&latest_timestamp], |row| {
+            let char_str: String = row.get(0)?;
+            let character = char_str.chars().next().unwrap_or('\0');
+            let avg_time: f64 = row.get(1)?;
+            let miss_rate: f64 = row.get(2)?;
+            let total_attempts: i64 = row.get(3)?;
+            let created_at: Option<String> = row.get(4)?;
+
+            Ok((character, avg_time, miss_rate, total_attempts, created_at))
+        })?;
+
+        let mut summary = Vec::new();
+        for item in summary_iter {
+            summary.push(item?);
+        }
+
+        Ok(summary)
+    }
+
     /// Get character statistics with session deltas
     /// Returns: (char, historical_avg_time, historical_miss_rate, historical_attempts,
-    ///          session_avg_time_delta, session_miss_rate_delta, session_attempts_delta)
+    ///          session_avg_time_delta, session_miss_rate_delta, session_attempts_delta, latest_datetime)
     pub fn get_char_summary_with_deltas(&self) -> Result<Vec<CharSummaryWithDeltas>> {
         // Try current session buffer first, fallback to latest session from database
         let session_summary = if self.session_buffer.is_empty() {
             // Session buffer is empty (already flushed), get latest session from database
-            self.get_latest_session_summary()
+            self.get_latest_session_summary_with_datetime()
                 .unwrap_or_else(|_| Vec::new())
         } else {
             // Session buffer has data, use it
-            self.get_current_session_summary()
+            self.get_current_session_summary_with_datetime()
         };
 
         // Get historical data based on whether we have session buffer data
         let historical_summary = if self.session_buffer.is_empty() {
             // No session buffer, so use the method that excludes latest database session
-            self.get_historical_char_summary()?
+            self.get_historical_char_summary_with_datetime()?
         } else {
             // Session buffer has data, so all database data is historical
-            self.get_all_char_summary()?
+            self.get_all_char_summary_with_datetime()?
         };
 
         let mut combined_summary = Vec::new();
 
         // Create a map of session data for quick lookup
-        let session_map: std::collections::HashMap<char, (f64, f64, i64)> = session_summary
-            .iter()
-            .map(|(c, avg_time, miss_rate, attempts)| (*c, (*avg_time, *miss_rate, *attempts)))
-            .collect();
+        let session_map: std::collections::HashMap<char, (f64, f64, i64, Option<String>)> =
+            session_summary
+                .iter()
+                .map(|(c, avg_time, miss_rate, attempts, datetime)| {
+                    (*c, (*avg_time, *miss_rate, *attempts, datetime.clone()))
+                })
+                .collect();
 
         // Process historical data and add session deltas
-        for (character, hist_avg_time, hist_miss_rate, hist_attempts) in historical_summary {
-            let (session_avg_delta, session_miss_delta, session_attempts) = if let Some(&(
-                session_avg,
-                session_miss,
-                session_att,
-            )) =
-                session_map.get(&character)
-            {
-                // Calculate deltas: negative means improvement for time/miss_rate
-                let avg_delta = if session_avg > 0.0 && hist_avg_time > 0.0 {
-                    Some(session_avg - hist_avg_time)
+        for (character, hist_avg_time, hist_miss_rate, hist_attempts, hist_datetime) in
+            historical_summary
+        {
+            let (session_avg_delta, session_miss_delta, session_attempts, latest_datetime) =
+                if let Some((session_avg, session_miss, session_att, session_datetime)) =
+                    session_map.get(&character)
+                {
+                    // Calculate deltas: negative means improvement for time/miss_rate
+                    let avg_delta = if *session_avg > 0.0 && hist_avg_time > 0.0 {
+                        Some(*session_avg - hist_avg_time)
+                    } else {
+                        None
+                    };
+                    let miss_delta = if hist_attempts > 0 {
+                        Some(*session_miss - hist_miss_rate)
+                    } else {
+                        None
+                    };
+                    // Use the most recent datetime (session datetime if available, otherwise historical)
+                    let datetime = session_datetime.clone().or(hist_datetime.clone());
+                    (avg_delta, miss_delta, *session_att, datetime)
                 } else {
-                    None
+                    (None, None, 0, hist_datetime)
                 };
-                let miss_delta = if hist_attempts > 0 {
-                    Some(session_miss - hist_miss_rate)
-                } else {
-                    None
-                };
-                (avg_delta, miss_delta, session_att)
-            } else {
-                (None, None, 0)
-            };
 
             combined_summary.push((
                 character,
@@ -586,14 +803,17 @@ impl StatsDb {
                 session_avg_delta,
                 session_miss_delta,
                 session_attempts,
+                latest_datetime,
             ));
         }
 
         // Add characters that are only in the current session (new characters)
-        for (character, session_avg, session_miss, session_attempts) in &session_summary {
+        for (character, session_avg, session_miss, session_attempts, session_datetime) in
+            &session_summary
+        {
             if !combined_summary
                 .iter()
-                .any(|(c, _, _, _, _, _, _)| c == character)
+                .any(|(c, _, _, _, _, _, _, _)| c == character)
             {
                 combined_summary.push((
                     *character,
@@ -603,6 +823,7 @@ impl StatsDb {
                     None, // No delta for new characters
                     None,
                     *session_attempts,
+                    session_datetime.clone(),
                 ));
             }
         }
@@ -1336,6 +1557,7 @@ mod tests {
             time_delta,
             miss_delta,
             session_attempts,
+            _latest_datetime,
         ) = &summary_with_deltas[0];
 
         assert_eq!(*character, 'a');
@@ -1385,6 +1607,7 @@ mod tests {
             time_delta,
             miss_delta,
             session_attempts,
+            _latest_datetime,
         ) = &summary_with_deltas[0];
 
         assert_eq!(*character, 'z');
