@@ -109,6 +109,15 @@ src/
 - **Purpose**: Test module interactions and workflows
 - **Examples**: Complete typing sessions, CLI argument parsing
 
+##### PTY-Driven Binary Test (Unix)
+- A minimal end-to-end test lives in `tests/integration_min_session.rs`.
+- It spawns the compiled `klik` binary in a pseudo terminal and simulates typing.
+- Marked `#[cfg(unix)]` so it only runs on Unix platforms.
+- Runs by default on Unix. If needed, run just this test:
+  ```bash
+  cargo test --test integration_min_session
+  ```
+
 #### Property Tests
 - **Purpose**: Test edge cases and boundary conditions
 - **Examples**: Empty inputs, large datasets, error conditions
