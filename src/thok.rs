@@ -1,5 +1,5 @@
 use crate::celebration::CelebrationAnimation;
-use crate::stats::{extract_context, time_diff_ms, CharStat, StatsDb, StatsStore};
+use crate::stats::{time_diff_ms, StatsDb, StatsStore};
 use crate::util::std_dev;
 use crate::TICK_RATE_MS;
 use chrono::prelude::*;
@@ -50,6 +50,7 @@ pub struct Thok {
     pub last_activity: Option<SystemTime>,
     pub is_idle: bool,
     pub idle_timeout_secs: f64,
+    pub session_config: crate::session::SessionConfig,
 }
 
 impl Thok {
@@ -83,6 +84,11 @@ impl Thok {
             last_activity: None,
             is_idle: false,
             idle_timeout_secs: 30.0, // 30 seconds idle timeout
+            session_config: crate::session::SessionConfig {
+                number_of_words,
+                number_of_secs,
+                strict: strict_mode,
+            },
         }
     }
 
@@ -296,152 +302,7 @@ impl Thok {
 
     pub fn write(&mut self, c: char) {
         let _ = self.mark_activity(); // Ignore return value for write
-
-        let idx = if self.strict_mode {
-            // In strict mode, use cursor position instead of input length
-            self.cursor_pos
-        } else {
-            self.input.len()
-        };
-
-        if idx == 0 && self.started_at.is_none() {
-            self.start();
-        }
-
-        let now = SystemTime::now();
-        let expected_char = self.get_expected_char(idx);
-        let outcome = if c == expected_char {
-            Outcome::Correct
-        } else {
-            Outcome::Incorrect
-        };
-
-        // Calculate time to press using two methods and take the better one
-        let keypress_time = if let Some(start_time) = self.keypress_start_time {
-            time_diff_ms(start_time, now)
-        } else {
-            0
-        };
-
-        let inter_key_time = self.calculate_inter_key_time(now);
-
-        // Prioritize inter-keystroke timing as it's more meaningful for typing performance
-        let time_to_press_ms = if inter_key_time > 0 {
-            inter_key_time
-        } else if keypress_time > 5 {
-            keypress_time
-        } else if self.input.is_empty() && self.started_at.is_some() {
-            // For the first character, use time since start if available
-            if let Some(start_time) = self.started_at {
-                let since_start = time_diff_ms(start_time, now);
-                if since_start > 0 {
-                    since_start
-                } else {
-                    150 // Reasonable default for first character
-                }
-            } else {
-                150
-            }
-        } else {
-            // Fallback: estimate based on typical typing speed
-            150
-        };
-
-        // Debug logging (uncomment to debug timing issues)
-        // eprintln!("Char '{}': keypress={}ms, inter_key={}ms, final={}ms",
-        //     expected_char, keypress_time, inter_key_time, time_to_press_ms);
-
-        // Record character statistics if database is available
-        if let Some(ref mut stats_db) = self.stats_db {
-            let (context_before, context_after) = extract_context(&self.prompt, idx, 3);
-
-            let char_stat = CharStat {
-                character: expected_char.to_lowercase().next().unwrap_or(expected_char), // Store as lowercase
-                time_to_press_ms,
-                was_correct: outcome == Outcome::Correct,
-                was_uppercase: expected_char.is_uppercase(),
-                timestamp: Local::now(),
-                context_before,
-                context_after,
-            };
-
-            // Record character statistic (failures are silently ignored to not interrupt typing)
-            if let Err(_e) = stats_db.record_char_stat(&char_stat) {
-                // For debugging: uncomment the line below to see database errors
-                // eprintln!("Warning: Failed to record character stat: {}", e);
-            } else {
-                // For debugging: uncomment the line below to see successful recordings
-                // eprintln!("Recorded stat for '{}': {}ms", expected_char, time_to_press_ms);
-            }
-        }
-
-        if self.strict_mode {
-            // In strict mode, handle cursor progression differently
-            if outcome == Outcome::Correct {
-                // Check if this position had previous errors
-                let had_error = self.cursor_pos < self.input.len()
-                    && self.input[self.cursor_pos].outcome == Outcome::Incorrect;
-
-                // If there was a previous error, mark this position as corrected
-                if had_error {
-                    self.corrected_positions.insert(self.cursor_pos);
-                }
-
-                // Replace any existing input at this position with the correct one
-                if self.cursor_pos < self.input.len() {
-                    self.input[self.cursor_pos] = Input {
-                        char: c,
-                        outcome,
-                        timestamp: now,
-                        keypress_start: self.keypress_start_time,
-                    };
-                } else {
-                    // Add new input if we're at the end
-                    self.input.push(Input {
-                        char: c,
-                        outcome,
-                        timestamp: now,
-                        keypress_start: self.keypress_start_time,
-                    });
-                }
-                // Only advance cursor on correct input
-                self.increment_cursor();
-            } else {
-                // For incorrect input, update the input at current position but don't advance cursor
-                if self.cursor_pos < self.input.len() {
-                    self.input[self.cursor_pos] = Input {
-                        char: c,
-                        outcome,
-                        timestamp: now,
-                        keypress_start: self.keypress_start_time,
-                    };
-                } else {
-                    // Add new input if we're at the end
-                    self.input.push(Input {
-                        char: c,
-                        outcome,
-                        timestamp: now,
-                        keypress_start: self.keypress_start_time,
-                    });
-                }
-                // Cursor stays at the same position for retry
-            }
-        } else {
-            // Normal mode: always insert and advance
-            self.input.insert(
-                self.cursor_pos,
-                Input {
-                    char: c,
-                    outcome,
-                    timestamp: now,
-                    keypress_start: self.keypress_start_time,
-                },
-            );
-            self.increment_cursor();
-        }
-
-        // Reset keypress start time for next character
-        self.keypress_start_time = None;
+        crate::typing_policy::apply_write(self, c);
     }
 
     pub fn has_started(&self) -> bool {

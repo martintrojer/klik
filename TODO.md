@@ -24,7 +24,8 @@ This document tracks proposed refactors to improve separation of concerns, testa
 - [x] Inject `StatsStore` into `Thok` instead of owning DB directly
 
 ## Typing Logic (Thok)
-- [ ] Extract `TypingPolicy` strategies (strict vs normal) from `write()`
+- [x] Extract `TypingPolicy` strategies (strict vs normal) from `write()`
+- [x] Add `SessionConfig` and `SessionResult` scaffolding (to evolve into full split)
 - [ ] Split session into `Session` (config), `SessionState` (mutable), `SessionResult`
 - [ ] Replace raw `(f64,f64)` WPM points with `TimeSeriesPoint { t, wpm }`
 
