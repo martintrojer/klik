@@ -55,14 +55,20 @@ pub struct Thok {
 }
 
 impl Thok {
-    fn sync_session_from_legacy(&mut self) {
-        self.session_state.cursor_pos = self.cursor_pos;
-        self.session_state.input = self.input.clone();
-        self.session_state.corrected_positions = self.corrected_positions.clone();
-        self.session_state.wpm = self.wpm;
-        self.session_state.accuracy = self.accuracy;
-        self.session_state.std_dev = self.std_dev;
-        self.session_state.wpm_coords = self.wpm_coords.clone();
+    fn sync_legacy_from_session(&mut self) {
+        self.cursor_pos = self.session_state.cursor_pos;
+        self.input = self.session_state.input.clone();
+        self.corrected_positions = self.session_state.corrected_positions.clone();
+        self.wpm = self.session_state.wpm;
+        self.accuracy = self.session_state.accuracy;
+        self.std_dev = self.session_state.std_dev;
+        self.wpm_coords = self.session_state.wpm_coords.clone();
+        self.started_at = self.session_state.started_at;
+        self.seconds_remaining = self.session_state.seconds_remaining;
+        self.keypress_start_time = self.session_state.keypress_start_time;
+        self.last_activity = self.session_state.last_activity;
+        self.is_idle = self.session_state.is_idle;
+        self.idle_timeout_secs = self.session_state.idle_timeout_secs;
     }
     pub fn with_stats_store(
         prompt: String,
@@ -186,26 +192,34 @@ impl Thok {
     }
 
     pub fn increment_cursor(&mut self) {
-        if self.cursor_pos < self.input.len() {
-            self.cursor_pos += 1;
+        if self.session_state.cursor_pos < self.session_state.input.len() {
+            self.session_state.cursor_pos += 1;
+            self.sync_legacy_from_session();
         }
     }
 
     pub fn decrement_cursor(&mut self) {
-        if self.cursor_pos > 0 {
-            self.cursor_pos -= 1;
+        if self.session_state.cursor_pos > 0 {
+            self.session_state.cursor_pos -= 1;
+            self.sync_legacy_from_session();
         }
     }
 
     pub fn calc_results(&mut self) {
         let correct_chars = self
+            .session_state
             .input
             .clone()
             .into_iter()
             .filter(|i| i.outcome == Outcome::Correct)
             .collect::<Vec<Input>>();
 
-        let elapsed_secs = self.started_at.unwrap().elapsed().unwrap().as_millis() as f64;
+        let started_at = self
+            .session_state
+            .started_at
+            .or(self.started_at)
+            .unwrap_or_else(SystemTime::now);
+        let elapsed_secs = started_at.elapsed().unwrap_or_default().as_millis() as f64;
 
         let whole_second_limit = elapsed_secs.floor();
 
@@ -215,8 +229,8 @@ impl Thok {
             .fold(HashMap::new(), |mut map, i| {
                 let mut num_secs = i
                     .timestamp
-                    .duration_since(self.started_at.unwrap())
-                    .unwrap()
+                    .duration_since(started_at)
+                    .unwrap_or_default()
                     .as_secs_f64();
 
                 if num_secs == 0.0 {
@@ -255,21 +269,24 @@ impl Thok {
 
         let mut correct_chars_pressed_until_now = 0.0;
 
+        self.session_state.wpm_coords.clear();
         for x in correct_chars_per_sec {
             correct_chars_pressed_until_now += x.1;
-            self.wpm_coords
+            self.session_state
+                .wpm_coords
                 .push(crate::time_series::TimeSeriesPoint::new(
                     x.0,
                     ((60.00 / x.0) * correct_chars_pressed_until_now) / 5.0,
                 ))
         }
 
-        if !self.wpm_coords.is_empty() {
-            self.wpm = self.wpm_coords.last().unwrap().wpm.ceil();
+        if let Some(last) = self.session_state.wpm_coords.last() {
+            self.session_state.wpm = last.wpm.ceil();
         } else {
-            self.wpm = 0.0;
+            self.session_state.wpm = 0.0;
         }
-        self.accuracy = ((correct_chars.len() as f64 / self.input.len() as f64) * 100.0).round();
+        self.session_state.accuracy =
+            ((correct_chars.len() as f64 / self.session_state.input.len() as f64) * 100.0).round();
 
         let _ = self.save_results();
 
@@ -281,12 +298,12 @@ impl Thok {
             // Perform automatic database compaction if needed
             self.auto_compact_database();
         };
-        self.sync_session_from_legacy();
+        self.sync_legacy_from_session();
     }
 
     /// Start celebration animation for perfect sessions.
     pub fn start_celebration_if_worthy(&mut self, terminal_width: u16, terminal_height: u16) {
-        if self.input.is_empty() {
+        if self.session_state.input.is_empty() {
             return;
         }
 
@@ -306,21 +323,25 @@ impl Thok {
 
         if self.strict_mode {
             // In strict mode, backspace should reset the current position to allow retry
-            if self.cursor_pos > 0 {
+            if self.session_state.cursor_pos > 0 {
                 self.decrement_cursor();
                 // Remove the input at the new cursor position if it exists
-                if self.cursor_pos < self.input.len() {
-                    self.input.remove(self.cursor_pos);
+                if self.session_state.cursor_pos < self.session_state.input.len() {
+                    self.session_state
+                        .input
+                        .remove(self.session_state.cursor_pos);
                 }
             }
         } else {
             // Normal mode: remove previous character and move cursor back
-            if self.cursor_pos > 0 {
-                self.input.remove(self.cursor_pos - 1);
+            if self.session_state.cursor_pos > 0 {
+                self.session_state
+                    .input
+                    .remove(self.session_state.cursor_pos - 1);
                 self.decrement_cursor();
             }
         }
-        self.sync_session_from_legacy();
+        self.sync_legacy_from_session();
     }
 
     pub fn start(&mut self) {
@@ -337,7 +358,7 @@ impl Thok {
 
     /// Alternative timing method that measures inter-keystroke intervals
     pub fn calculate_inter_key_time(&self, now: SystemTime) -> u64 {
-        if let Some(last_input) = self.input.last() {
+        if let Some(last_input) = self.session_state.input.last() {
             time_diff_ms(last_input.timestamp, now)
         } else {
             // For the first character, we can't measure inter-keystroke time
@@ -349,7 +370,7 @@ impl Thok {
     pub fn write(&mut self, c: char) {
         let _ = self.mark_activity(); // Ignore return value for write
         crate::typing_policy::apply_write(self, c);
-        self.sync_session_from_legacy();
+        self.sync_legacy_from_session();
     }
 
     pub fn has_started(&self) -> bool {

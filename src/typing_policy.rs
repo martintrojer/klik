@@ -5,9 +5,9 @@ use std::time::SystemTime;
 
 fn prepare_input(thok: &mut Thok, c: char) -> (usize, char, Outcome, SystemTime, u64) {
     let idx = if thok.strict_mode {
-        thok.cursor_pos
+        thok.session_state.cursor_pos
     } else {
-        thok.input.len()
+        thok.session_state.input.len()
     };
 
     if idx == 0 && thok.started_at.is_none() {
@@ -22,7 +22,7 @@ fn prepare_input(thok: &mut Thok, c: char) -> (usize, char, Outcome, SystemTime,
         Outcome::Incorrect
     };
 
-    let keypress_time = if let Some(start_time) = thok.keypress_start_time {
+    let keypress_time = if let Some(start_time) = thok.session_state.keypress_start_time {
         crate::stats::time_diff_ms(start_time, now)
     } else {
         0
@@ -68,64 +68,67 @@ fn prepare_input(thok: &mut Thok, c: char) -> (usize, char, Outcome, SystemTime,
 pub fn write_normal(thok: &mut Thok, c: char) {
     let (_idx, _expected, outcome, now, _ttp) = prepare_input(thok, c);
     // Always insert and advance
-    thok.input.insert(
-        thok.cursor_pos,
+    thok.session_state.input.insert(
+        thok.session_state.cursor_pos,
         Input {
             char: c,
             outcome,
             timestamp: now,
-            keypress_start: thok.keypress_start_time,
+            keypress_start: thok.session_state.keypress_start_time,
         },
     );
     thok.increment_cursor();
-    thok.keypress_start_time = None;
+    thok.session_state.keypress_start_time = None;
 }
 
 pub fn write_strict(thok: &mut Thok, c: char) {
     let (idx, expected, outcome, now, _ttp) = prepare_input(thok, c);
 
     if outcome == Outcome::Correct {
-        let had_error = thok.cursor_pos < thok.input.len()
-            && thok.input[thok.cursor_pos].outcome == Outcome::Incorrect;
+        let had_error = thok.session_state.cursor_pos < thok.session_state.input.len()
+            && thok.session_state.input[thok.session_state.cursor_pos].outcome
+                == Outcome::Incorrect;
         if had_error {
-            thok.corrected_positions.insert(thok.cursor_pos);
+            thok.session_state
+                .corrected_positions
+                .insert(thok.session_state.cursor_pos);
         }
-        if thok.cursor_pos < thok.input.len() {
-            thok.input[thok.cursor_pos] = Input {
+        if thok.session_state.cursor_pos < thok.session_state.input.len() {
+            thok.session_state.input[thok.session_state.cursor_pos] = Input {
                 char: c,
                 outcome,
                 timestamp: now,
-                keypress_start: thok.keypress_start_time,
+                keypress_start: thok.session_state.keypress_start_time,
             };
         } else {
-            thok.input.push(Input {
+            thok.session_state.input.push(Input {
                 char: c,
                 outcome,
                 timestamp: now,
-                keypress_start: thok.keypress_start_time,
+                keypress_start: thok.session_state.keypress_start_time,
             });
         }
         thok.increment_cursor();
-    } else if thok.cursor_pos < thok.input.len() {
-        thok.input[thok.cursor_pos] = Input {
+    } else if thok.session_state.cursor_pos < thok.session_state.input.len() {
+        thok.session_state.input[thok.session_state.cursor_pos] = Input {
             char: c,
             outcome,
             timestamp: now,
-            keypress_start: thok.keypress_start_time,
+            keypress_start: thok.session_state.keypress_start_time,
         };
     } else {
-        thok.input.push(Input {
+        thok.session_state.input.push(Input {
             char: c,
             outcome,
             timestamp: now,
-            keypress_start: thok.keypress_start_time,
+            keypress_start: thok.session_state.keypress_start_time,
         });
         // Cursor stays for retry
     }
 
     // Avoid unused warnings for variables we kept for parity
     let _ = (idx, expected);
-    thok.keypress_start_time = None;
+    thok.session_state.keypress_start_time = None;
 }
 
 pub fn apply_write(thok: &mut Thok, c: char) {
