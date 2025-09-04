@@ -29,7 +29,8 @@ This document tracks proposed refactors to improve separation of concerns, testa
 - [ ] Split session into `Session` (config), `SessionState` (mutable), `SessionResult`
   - [x] Added `SessionConfig` and `SessionState` (timers/idle)
   - [x] Wired Thok to maintain `SessionState` while preserving legacy fields
-  - [ ] Move input/cursor/results into `SessionState` and remove legacy fields
+  - [x] Mirror input/cursor/results into `SessionState` (sync from legacy)
+  - [ ] Flip primary ownership to `SessionState` and remove legacy fields
 - [x] Replace raw `(f64,f64)` WPM points with `TimeSeriesPoint { t, wpm }`
 
 ## Language & Formatting

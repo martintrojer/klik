@@ -55,6 +55,15 @@ pub struct Thok {
 }
 
 impl Thok {
+    fn sync_session_from_legacy(&mut self) {
+        self.session_state.cursor_pos = self.cursor_pos;
+        self.session_state.input = self.input.clone();
+        self.session_state.corrected_positions = self.corrected_positions.clone();
+        self.session_state.wpm = self.wpm;
+        self.session_state.accuracy = self.accuracy;
+        self.session_state.std_dev = self.std_dev;
+        self.session_state.wpm_coords = self.wpm_coords.clone();
+    }
     pub fn with_stats_store(
         prompt: String,
         number_of_words: usize,
@@ -272,6 +281,7 @@ impl Thok {
             // Perform automatic database compaction if needed
             self.auto_compact_database();
         };
+        self.sync_session_from_legacy();
     }
 
     /// Start celebration animation for perfect sessions.
@@ -310,6 +320,7 @@ impl Thok {
                 self.decrement_cursor();
             }
         }
+        self.sync_session_from_legacy();
     }
 
     pub fn start(&mut self) {
@@ -338,6 +349,7 @@ impl Thok {
     pub fn write(&mut self, c: char) {
         let _ = self.mark_activity(); // Ignore return value for write
         crate::typing_policy::apply_write(self, c);
+        self.sync_session_from_legacy();
     }
 
     pub fn has_started(&self) -> bool {
