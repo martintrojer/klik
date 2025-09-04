@@ -1,5 +1,6 @@
 pub mod celebration;
 pub mod language;
+pub mod runtime;
 pub mod stats;
 pub mod thok;
 pub mod ui;
@@ -9,6 +10,7 @@ pub mod word_generator;
 // Keep the old lang module name for compatibility
 pub use language as lang;
 
+use crate::ui::character_stats::render_character_stats;
 use crate::{
     lang::Language,
     thok::Thok,
@@ -548,7 +550,8 @@ fn get_thok_events(should_tick: bool) -> mpsc::Receiver<ThokEvent> {
     rx
 }
 
-fn render_character_stats(app: &mut App, f: &mut Frame) {
+/* moved to crate::ui::character_stats::render_character_stats */
+fn _render_character_stats_legacy(app: &mut App, f: &mut Frame) {
     use ratatui::{
         layout::{Alignment, Constraint, Direction, Layout},
         style::{Color, Modifier, Style},

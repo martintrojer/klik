@@ -235,74 +235,14 @@ impl Thok {
         };
     }
 
-    /// Start celebration animation if the session was perfect AND shows meaningful improvement
+    /// Start celebration animation for perfect sessions.
     pub fn start_celebration_if_worthy(&mut self, terminal_width: u16, terminal_height: u16) {
         if self.input.is_empty() {
             return;
         }
 
-        // Must have perfect accuracy to even consider celebration
-        if self.accuracy < 100.0 {
-            return;
-        }
-
-        let mut should_celebrate = false;
-
-        if let Some(deltas) = self.get_char_summary_with_deltas() {
-            // Check for meaningful improvements in perfect sessions
-            let mut significant_improvements = 0;
-            let mut total_chars_with_deltas = 0;
-            let mut avg_time_improvement = 0.0;
-            let mut avg_accuracy_improvement = 0.0;
-
-            for (_, _, _, _, time_delta, miss_delta, session_attempts, _) in &deltas {
-                if *session_attempts > 0 {
-                    // Only count characters that have actual delta values
-                    if time_delta.is_some() || miss_delta.is_some() {
-                        total_chars_with_deltas += 1;
-
-                        if let Some(time_d) = time_delta {
-                            avg_time_improvement += time_d;
-                            // Significant time improvement: >10ms faster
-                            if *time_d < -10.0 {
-                                significant_improvements += 1;
-                            }
-                        }
-
-                        if let Some(miss_d) = miss_delta {
-                            avg_accuracy_improvement += miss_d;
-                            // Significant accuracy improvement: >5% better
-                            if *miss_d < -5.0 {
-                                significant_improvements += 1;
-                            }
-                        }
-                    }
-                }
-            }
-
-            if total_chars_with_deltas > 0 {
-                avg_time_improvement /= total_chars_with_deltas as f64;
-                avg_accuracy_improvement /= total_chars_with_deltas as f64;
-
-                // Trigger celebration only if perfect session ALSO shows meaningful improvement:
-                // 1. Multiple characters show significant improvement, OR
-                // 2. Overall session shows substantial improvement (>15ms faster or >10% more accurate)
-                if significant_improvements >= 3
-                    || avg_time_improvement < -15.0
-                    || avg_accuracy_improvement < -10.0
-                {
-                    should_celebrate = true;
-                }
-            } else {
-                // If no historical data exists (empty deltas), celebrate any perfect session
-                should_celebrate = true;
-            }
-        } else {
-            // If no historical data exists, celebrate any perfect session
-            should_celebrate = true;
-        }
-
-        if should_celebrate {
+        // Celebrate only for perfect sessions
+        if self.accuracy >= 100.0 {
             self.celebration.start(terminal_width, terminal_height);
         }
     }

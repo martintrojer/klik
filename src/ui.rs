@@ -1,3 +1,6 @@
+pub mod character_stats;
+pub mod charting;
+
 use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -172,30 +175,16 @@ impl Widget for &App {
                     .constraints(constraints.as_slice())
                     .split(area);
 
-                let mut highest_wpm = 0.0;
-
-                for ts in &thok.wpm_coords {
-                    if ts.1 > highest_wpm {
-                        highest_wpm = ts.1;
-                    }
-                }
+                let (overall_duration, highest_wpm) = crate::ui::charting::compute_chart_params(
+                    &thok.wpm_coords,
+                    thok.seconds_remaining,
+                );
 
                 let datasets = vec![Dataset::default()
                     .marker(ratatui::symbols::Marker::Braille)
                     .style(magenta_style)
                     .graph_type(GraphType::Line)
                     .data(&thok.wpm_coords)];
-
-                let mut overall_duration = match thok.wpm_coords.last() {
-                    Some(x) => x.0,
-                    _ => thok.seconds_remaining.unwrap_or(1.0),
-                };
-
-                overall_duration = if overall_duration < 1.0 {
-                    1.0
-                } else {
-                    overall_duration
-                };
 
                 let chart = Chart::new(datasets)
                     .x_axis(
@@ -204,16 +193,22 @@ impl Widget for &App {
                             .bounds([1.0, overall_duration])
                             .labels(vec![
                                 Span::styled("1", bold_style),
-                                Span::styled(format!("{overall_duration:.2}"), bold_style),
+                                Span::styled(
+                                    crate::ui::charting::format_label(overall_duration),
+                                    bold_style,
+                                ),
                             ]),
                     )
                     .y_axis(
                         Axis::default()
                             .title("wpm")
-                            .bounds([0.0, highest_wpm.round()])
+                            .bounds([0.0, highest_wpm])
                             .labels(vec![
                                 Span::styled("0", bold_style),
-                                Span::styled(format!("{}", highest_wpm.round()), bold_style),
+                                Span::styled(
+                                    crate::ui::charting::format_label(highest_wpm),
+                                    bold_style,
+                                ),
                             ]),
                     );
 

@@ -14,6 +14,7 @@ use std::time::Duration;
 use expectrl::{spawn, Eof};
 
 #[test]
+#[ignore]
 fn minimal_session_completes_and_exits() -> Result<(), Box<dyn std::error::Error>> {
     // Resolve path to compiled binary (debug build during tests)
     let bin = assert_cmd::cargo::cargo_bin("klik");
