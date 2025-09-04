@@ -580,10 +580,7 @@ fn render_character_stats(app: &mut App, f: &mut Frame) {
         SortBy::MissRate => "Miss Rate",
         SortBy::Attempts => "Attempts",
     };
-    let title_text = format!(
-        "Character Statistics (Sort: {} {})",
-        sort_by_text, sort_direction
-    );
+    let title_text = format!("Character Statistics (Sort: {sort_by_text} {sort_direction})");
 
     let title = Paragraph::new(title_text)
         .block(Block::default().borders(Borders::ALL).title("Stats"))
@@ -674,10 +671,10 @@ fn render_character_stats(app: &mut App, f: &mut Frame) {
         };
 
         let header = Row::new(vec![
-            Cell::from(format!("Char {}", char_indicator)),
-            Cell::from(format!("Avg Time (ms) {}", time_indicator)),
-            Cell::from(format!("Miss Rate (%) {}", miss_indicator)),
-            Cell::from(format!("Attempts {}", attempts_indicator)),
+            Cell::from(format!("Char {char_indicator}")),
+            Cell::from(format!("Avg Time (ms) {time_indicator}")),
+            Cell::from(format!("Miss Rate (%) {miss_indicator}")),
+            Cell::from(format!("Attempts {attempts_indicator}")),
             Cell::from("Last Typed"),
         ])
         .style(
@@ -727,36 +724,36 @@ fn render_character_stats(app: &mut App, f: &mut Frame) {
                     // Format time with delta
                     let time_display = if let Some(delta) = time_delta {
                         if delta.abs() < 1.0 {
-                            format!("{:.1}", avg_time)
+                            format!("{avg_time:.1}")
                         } else if *delta < 0.0 {
-                            format!("{:.1} ↓{:.0}", avg_time, delta.abs())
+                            format!("{avg_time:.1} ↓{:.0}", delta.abs())
                         } else {
-                            format!("{:.1} ↑{:.0}", avg_time, delta)
+                            format!("{avg_time:.1} ↑{delta:.0}")
                         }
                     } else if *session_attempts > 0 {
-                        format!("{:.1} •", avg_time) // • indicates new character this session
+                        format!("{avg_time:.1} •") // • indicates new character this session
                     } else {
-                        format!("{:.1}", avg_time)
+                        format!("{avg_time:.1}")
                     };
 
                     // Format miss rate with delta
                     let miss_display = if let Some(delta) = miss_delta {
                         if delta.abs() < 0.5 {
-                            format!("{:.1}", miss_rate)
+                            format!("{miss_rate:.1}")
                         } else if *delta < 0.0 {
-                            format!("{:.1} ↓{:.1}", miss_rate, delta.abs())
+                            format!("{miss_rate:.1} ↓{:.1}", delta.abs())
                         } else {
-                            format!("{:.1} ↑{:.1}", miss_rate, delta)
+                            format!("{miss_rate:.1} ↑{delta:.1}")
                         }
                     } else if *session_attempts > 0 {
-                        format!("{:.1} •", miss_rate) // • indicates new character this session
+                        format!("{miss_rate:.1} •") // • indicates new character this session
                     } else {
-                        format!("{:.1}", miss_rate)
+                        format!("{miss_rate:.1}")
                     };
 
                     // Format attempts with session info
                     let attempts_display = if *session_attempts > 0 {
-                        format!("{} (+{})", attempts, session_attempts)
+                        format!("{attempts} (+{session_attempts})")
                     } else {
                         attempts.to_string()
                     };
@@ -858,7 +855,7 @@ fn render_character_stats(app: &mut App, f: &mut Frame) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title(format!("Performance by Character{}", scroll_info)),
+                .title(format!("Performance by Character{scroll_info}")),
         )
         .row_highlight_style(Style::default().bg(Color::DarkGray));
 
@@ -884,7 +881,7 @@ fn render_character_stats(app: &mut App, f: &mut Frame) {
             )
             .count();
         if deltas_available > 0 {
-            format!("Historical stats with session deltas: ↓=improvement ↑=regression •=new/first-time (+n)=session attempts | {} chars with deltas", deltas_available)
+            format!("Historical stats with session deltas: ↓=improvement ↑=regression •=new/first-time (+n)=session attempts | {deltas_available} chars with deltas")
         } else {
             "Historical stats: Type more sessions to see performance deltas | •=first time typing this character".to_string()
         }
@@ -892,7 +889,7 @@ fn render_character_stats(app: &mut App, f: &mut Frame) {
         "Historical stats: Database not available".to_string()
     };
 
-    let instructions = Paragraph::new(format!("{}\nSort: (1)Char (2)Time (3)Miss (4)Attempts | (Space)Toggle | ↑/↓ PgUp/PgDn | (b)ack (esc)ape", delta_count))
+    let instructions = Paragraph::new(format!("{delta_count}\nSort: (1)Char (2)Time (3)Miss (4)Attempts | (Space)Toggle | ↑/↓ PgUp/PgDn | (b)ack (esc)ape"))
         .block(Block::default().borders(Borders::ALL))
         .style(Style::default().fg(Color::Gray).add_modifier(Modifier::ITALIC))
         .alignment(Alignment::Center);
@@ -1167,9 +1164,9 @@ mod tests {
         let new = ExitType::New;
         let quit = ExitType::Quit;
 
-        assert_eq!(format!("{:?}", restart), "Restart");
-        assert_eq!(format!("{:?}", new), "New");
-        assert_eq!(format!("{:?}", quit), "Quit");
+        assert_eq!(format!("{restart:?}"), "Restart");
+        assert_eq!(format!("{new:?}"), "New");
+        assert_eq!(format!("{quit:?}"), "Quit");
     }
 
     #[test]
@@ -1700,14 +1697,14 @@ mod tests {
     #[test]
     fn test_exit_type_variants() {
         // Test all ExitType variants can be created
-        let _restart = ExitType::Restart;
-        let _new = ExitType::New;
-        let _quit = ExitType::Quit;
+        let restart = ExitType::Restart;
+        let new = ExitType::New;
+        let quit = ExitType::Quit;
 
         // Test Debug trait
-        assert_eq!(format!("{:?}", ExitType::Restart), "Restart");
-        assert_eq!(format!("{:?}", ExitType::New), "New");
-        assert_eq!(format!("{:?}", ExitType::Quit), "Quit");
+        assert_eq!(format!("{restart:?}"), "Restart");
+        assert_eq!(format!("{new:?}"), "New");
+        assert_eq!(format!("{quit:?}"), "Quit");
     }
 
     #[test]

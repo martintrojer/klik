@@ -541,7 +541,7 @@ impl Thok {
                 Local::now().format("%c"),
                 self.number_of_words,
                 self.number_of_secs
-                    .map_or(String::from(""), |ns| format!("{:.2}", ns)),
+                    .map_or(String::from(""), |ns| format!("{ns:.2}")),
                 elapsed_secs,
                 self.wpm,      // already rounded, no need to round to two decimal places
                 self.accuracy, // already rounded, no need to round to two decimal places
@@ -635,7 +635,7 @@ impl Thok {
                 let time_summary = if avg_time_improvement < -5.0 {
                     format!("↓{:.0}ms faster", avg_time_improvement.abs())
                 } else if avg_time_improvement > 5.0 {
-                    format!("↑{:.0}ms slower", avg_time_improvement)
+                    format!("↑{avg_time_improvement:.0}ms slower")
                 } else {
                     "similar speed".to_string()
                 };
@@ -643,18 +643,17 @@ impl Thok {
                 let miss_summary = if avg_miss_improvement < -2.0 {
                     format!("↓{:.1}% more accurate", avg_miss_improvement.abs())
                 } else if avg_miss_improvement > 2.0 {
-                    format!("↑{:.1}% less accurate", avg_miss_improvement)
+                    format!("↑{avg_miss_improvement:.1}% less accurate")
                 } else {
                     "similar accuracy".to_string()
                 };
 
                 if improvements > 0 || regressions > 0 {
                     format!(
-                        "vs historical: {} • {} • ↑{} ↓{} chars",
-                        time_summary, miss_summary, improvements, regressions
+                        "vs historical: {time_summary} • {miss_summary} • ↑{improvements} ↓{regressions} chars"
                     )
                 } else {
-                    format!("vs historical: {} • {}", time_summary, miss_summary)
+                    format!("vs historical: {time_summary} • {miss_summary}")
                 }
             } else {
                 "New session - no historical comparison available".to_string()
@@ -1008,7 +1007,7 @@ mod tests {
         // Print debug information
         println!("Has stats database: {}", thok.has_stats_database());
         if let Some(path) = thok.get_stats_database_path() {
-            println!("Database path: {:?}", path);
+            println!("Database path: {path:?}");
             println!("Database exists: {}", path.exists());
             if let Some(parent) = path.parent() {
                 println!("Parent directory exists: {}", parent.exists());
@@ -1070,10 +1069,7 @@ mod tests {
         if let Some(summary) = thok.get_all_char_summary() {
             println!("Summary statistics for {} characters", summary.len());
             for (char, avg_time, miss_rate, attempts) in &summary {
-                println!(
-                    "  '{}': avg={}ms, miss={}%, attempts={}",
-                    char, avg_time, miss_rate, attempts
-                );
+                println!("  '{char}': avg={avg_time}ms, miss={miss_rate}%, attempts={attempts}");
             }
 
             // Debug: Check specifically for our characters
@@ -1083,11 +1079,10 @@ mod tests {
                     summary.iter().find(|(c, _, _, _)| *c == target_char)
                 {
                     println!(
-                        "  Character '{}': avg_time={}ms, attempts={}",
-                        target_char, avg_time, attempts
+                        "  Character '{target_char}': avg_time={avg_time}ms, attempts={attempts}"
                     );
                 } else {
-                    println!("  Character '{}': NOT FOUND in summary", target_char);
+                    println!("  Character '{target_char}': NOT FOUND in summary");
                 }
             }
         } else {
@@ -1477,15 +1472,12 @@ mod tests {
             for (char, avg_time, miss_rate, attempts) in &summary {
                 if ['h', 'e', 'l', 'o'].contains(char) {
                     println!(
-                        "  '{}': avg={}ms, miss={}%, attempts={}",
-                        char, avg_time, miss_rate, attempts
+                        "  '{char}': avg={avg_time}ms, miss={miss_rate}%, attempts={attempts}"
                     );
                     // The timing should be meaningful (not 0)
                     assert!(
                         *avg_time > 0.0,
-                        "Character '{}' has zero timing: {}ms",
-                        char,
-                        avg_time
+                        "Character '{char}' has zero timing: {avg_time}ms",
                     );
                 }
             }
@@ -1631,8 +1623,7 @@ mod tests {
                     char.to_string()
                 };
                 println!(
-                    "  '{}': avg={}ms, miss={}%, attempts={}",
-                    char_display, avg_time, miss_rate, attempts
+                    "  '{char_display}': avg={avg_time}ms, miss={miss_rate}%, attempts={attempts}",
                 );
 
                 // Check that timing data is meaningful (not 0)
@@ -1723,7 +1714,7 @@ mod tests {
                 || summary.contains("No character statistics")
         );
 
-        println!("✅ Session delta summary: {}", summary);
+        println!("✅ Session delta summary: {summary}");
     }
 
     #[test]
@@ -1742,12 +1733,12 @@ mod tests {
         // Need to be careful: typing an error + correct char means we'll have extra input
         let chars: Vec<char> = "hello world".chars().collect();
         for (i, &c) in chars.iter().enumerate() {
-            println!("Typing char '{}' at position {}", c, i);
+            println!("Typing char '{c}' at position {i}");
             std::thread::sleep(std::time::Duration::from_millis(10));
             if i == 2 {
                 // Make an error on the first 'l'
                 thok.write('x'); // incorrect
-                println!("Typed 'x' (error) at position {}", i);
+                println!("Typed 'x' (error) at position {i}");
                 // Skip typing the correct 'l' to avoid going over the limit
                 println!("Skipping correct 'l' to avoid exceeding prompt length");
                 continue;
@@ -1761,7 +1752,7 @@ mod tests {
 
             // Stop if we've reached the end of the prompt
             if thok.has_finished() {
-                println!("Session finished at position {}", i);
+                println!("Session finished at position {i}");
                 break;
             }
         }
@@ -1811,8 +1802,7 @@ mod tests {
             println!("✅ Session 1 database verification successful");
             for (char, avg_time, miss_rate, attempts) in &summary {
                 println!(
-                    "  '{}': {}ms avg, {:.1}% miss rate, {} attempts",
-                    char, avg_time, miss_rate, attempts
+                    "  '{char}': {avg_time}ms avg, {miss_rate:.1}% miss rate, {attempts} attempts"
                 );
             }
         }
@@ -1850,8 +1840,8 @@ mod tests {
 
         let session1_accuracy = thok1.accuracy;
         println!(
-            "Session 1 - Accuracy: {}%, WPM: {}",
-            session1_accuracy, thok1.wpm
+            "Session 1 - Accuracy: {session1_accuracy}%, WPM: {}",
+            thok1.wpm
         );
 
         // Verify first session stats
@@ -1863,10 +1853,7 @@ mod tests {
             );
 
             let session1_char_count = summary_after_session1.len();
-            println!(
-                "Session 1 recorded {} unique characters",
-                session1_char_count
-            );
+            println!("Session 1 recorded {session1_char_count} unique characters",);
         }
 
         // Wait a bit before session 2 to ensure different timestamps
@@ -1897,8 +1884,8 @@ mod tests {
 
         let session2_accuracy = thok2.accuracy;
         println!(
-            "Session 2 - Accuracy: {}%, WPM: {}",
-            session2_accuracy, thok2.wpm
+            "Session 2 - Accuracy: {session2_accuracy}%, WPM: {}",
+            thok2.wpm
         );
 
         // Session 2 should be faster (higher WPM) or at least equal
@@ -1919,8 +1906,7 @@ mod tests {
             println!("Characters found in database after Session 2:");
             for (char, avg_time, miss_rate, attempts) in &summary_after_session2 {
                 println!(
-                    "  '{}': {}ms avg, {:.1}% miss rate, {} attempts",
-                    char, avg_time, miss_rate, attempts
+                    "  '{char}': {avg_time}ms avg, {miss_rate:.1}% miss rate, {attempts} attempts"
                 );
             }
 
@@ -1931,14 +1917,13 @@ mod tests {
                     summary_after_session2
                         .iter()
                         .any(|(c, _, _, _)| *c == expected_char),
-                    "Character '{}' should be in database",
-                    expected_char
+                    "Character '{expected_char}' should be in database",
                 );
             }
 
             // Get delta summary to verify improvements are detected
             let delta_summary = thok2.get_session_delta_summary();
-            println!("Delta Summary: {}", delta_summary);
+            println!("Delta Summary: {delta_summary}");
 
             // Should show improvements vs historical
             assert!(
@@ -1966,28 +1951,25 @@ mod tests {
                 if *session_attempts > 0 {
                     let mut improved = false;
 
-                    println!(
-                        "  Character '{}': hist_avg={:.1}ms, session_attempts={}",
-                        char, hist_avg, session_attempts
-                    );
+                    println!("  Character '{char}': hist_avg={hist_avg:.1}ms, session_attempts={session_attempts}");
 
                     if let Some(time_d) = time_delta {
-                        println!("    Time delta: {:.1}ms", time_d);
+                        println!("    Time delta: {time_d:.1}ms");
                         if *time_d < -5.0 {
                             // More than 5ms faster
                             improved = true;
-                            println!("    ✅ '{}' improved by {:.1}ms", char, -time_d);
+                            println!("    ✅ '{char}' improved by {:.1}ms", -time_d);
                         }
                     } else {
                         println!("    No time delta available");
                     }
 
                     if let Some(miss_d) = miss_delta {
-                        println!("    Miss delta: {:.1}%", miss_d);
+                        println!("    Miss delta: {miss_d:.1}%");
                         if *miss_d < -1.0 {
                             // More than 1% more accurate
                             improved = true;
-                            println!("    ✅ '{}' improved accuracy by {:.1}%", char, -miss_d);
+                            println!("    ✅ '{char}' improved accuracy by {:.1}%", -miss_d);
                         }
                     } else {
                         println!("    No miss delta available");
@@ -2000,8 +1982,7 @@ mod tests {
             }
 
             println!(
-                "✅ {} characters showed improvements in Session 2",
-                characters_with_improvements
+                "✅ {characters_with_improvements} characters showed improvements in Session 2",
             );
             assert!(
                 characters_with_improvements > 0,
@@ -2047,27 +2028,23 @@ mod tests {
             for expected_char in expected_chars {
                 assert!(
                     summary.iter().any(|(c, _, _, _)| *c == expected_char),
-                    "Character '{}' should be in database",
-                    expected_char
+                    "Character '{expected_char}' should be in database",
                 );
             }
 
             // Verify each character has reasonable data
             for (char, avg_time, miss_rate, attempts) in &summary {
-                assert!(*attempts > 0, "Character '{}' should have attempts", char);
+                assert!(*attempts > 0, "Character '{char}' should have attempts");
                 assert!(
                     *avg_time > 0.0,
-                    "Character '{}' should have positive average time",
-                    char
+                    "Character '{char}' should have positive average time",
                 );
                 assert!(
                     *miss_rate >= 0.0,
-                    "Character '{}' should have non-negative miss rate",
-                    char
+                    "Character '{char}' should have non-negative miss rate",
                 );
                 println!(
-                    "Character '{}': {}ms avg, {:.1}% miss, {} attempts",
-                    char, avg_time, miss_rate, attempts
+                    "Character '{char}': {avg_time}ms avg, {miss_rate:.1}% miss, {attempts} attempts",
                 );
             }
 
@@ -2140,7 +2117,7 @@ mod tests {
 
         let chars: Vec<char> = "aaa bbb".chars().collect();
         for (i, &c) in chars.iter().enumerate() {
-            println!("Typing char '{}' at position {}", c, i);
+            println!("Typing char '{c}' at position {i}");
             std::thread::sleep(std::time::Duration::from_millis(5));
 
             if c == 'b' {
@@ -2156,7 +2133,7 @@ mod tests {
 
                 // Check if we've reached the end after the error
                 if thok.has_finished() {
-                    println!("Finished after error at position {}", i);
+                    println!("Finished after error at position {i}");
                     break;
                 }
             }
@@ -2171,7 +2148,7 @@ mod tests {
 
             // Stop if we've reached the end
             if thok.has_finished() {
-                println!("Finished at position {}", i);
+                println!("Finished at position {i}");
                 break;
             }
         }
@@ -2327,8 +2304,7 @@ mod tests {
             for (c, _, _, _, time_delta, miss_delta, session_attempts, _) in &deltas {
                 if *session_attempts > 0 {
                     println!(
-                        "  '{}': time_delta={:?}, miss_delta={:?}, session_attempts={}",
-                        c, time_delta, miss_delta, session_attempts
+                        "  '{c}': time_delta={time_delta:?}, miss_delta={miss_delta:?}, session_attempts={session_attempts}",
                     );
                 }
             }
@@ -2427,7 +2403,7 @@ mod tests {
 
         // Get delta information for debugging
         let delta_summary = thok2.get_session_delta_summary();
-        println!("Session 2 delta summary: {}", delta_summary);
+        println!("Session 2 delta summary: {delta_summary}");
 
         if let Some(ref stats_db) = thok2.stats_db {
             let deltas = stats_db.get_char_summary_with_deltas().unwrap();
@@ -2449,16 +2425,13 @@ mod tests {
                         if *time_d < -10.0 {
                             // Significant improvement
                             improvement_count += 1;
-                            println!("  Character '{}' improved by {:.1}ms", char, -time_d);
+                            println!("  Character '{char}' improved by {:.1}ms", -time_d);
                         }
                     }
                 }
             }
 
-            println!(
-                "Characters with significant improvements: {}",
-                improvement_count
-            );
+            println!("Characters with significant improvements: {improvement_count}",);
 
             // Should celebrate if there are meaningful improvements AND perfect accuracy
             if improvement_count >= 3 || delta_summary.contains("faster") {

@@ -204,7 +204,7 @@ impl Widget for &App {
                             .bounds([1.0, overall_duration])
                             .labels(vec![
                                 Span::styled("1", bold_style),
-                                Span::styled(format!("{:.2}", overall_duration), bold_style),
+                                Span::styled(format!("{overall_duration:.2}"), bold_style),
                             ]),
                     )
                     .y_axis(

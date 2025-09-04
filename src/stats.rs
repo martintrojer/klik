@@ -71,7 +71,7 @@ impl StatsDb {
             std::fs::create_dir_all(parent).map_err(|e| {
                 rusqlite::Error::SqliteFailure(
                     rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_CANTOPEN),
-                    Some(format!("Failed to create directory: {}", e)),
+                    Some(format!("Failed to create directory: {e}")),
                 )
             })?;
         }

@@ -333,15 +333,11 @@ mod tests {
         // due to higher difficulty scores
         assert!(
             zap_count > trials / 4,
-            "zap should be selected frequently (got {} out of {})",
-            zap_count,
-            trials
+            "zap should be selected frequently (got {zap_count} out of {trials})",
         );
         assert!(
             hard_count > trials / 4,
-            "hard should be selected frequently (got {} out of {})",
-            hard_count,
-            trials
+            "hard should be selected frequently (got {hard_count} out of {trials})",
         );
     }
 
@@ -365,7 +361,7 @@ mod tests {
 
         for count in [1, 5, 10] {
             let words = lang.get_substituted(count, &char_stats);
-            assert_eq!(words.len(), count, "Should return exactly {} words", count);
+            assert_eq!(words.len(), count, "Should return exactly {count} words");
         }
     }
 }

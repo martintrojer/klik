@@ -40,29 +40,29 @@ impl Language {
                             // Brackets - always paired
                             let bracket_pair = rng.gen_range(0..3);
                             match bracket_pair {
-                                0 => formatted_word = format!("({})", formatted_word),
-                                1 => formatted_word = format!("[{}]", formatted_word),
-                                _ => formatted_word = format!("{{{}}}", formatted_word),
+                                0 => formatted_word = format!("({formatted_word})"),
+                                1 => formatted_word = format!("[{formatted_word}]"),
+                                _ => formatted_word = format!("{{{formatted_word}}}"),
                             }
                         }
                         1 => {
                             // Mathematical symbols - prefix or suffix
                             let symbol = mathematical.choose(rng).unwrap();
                             if rng.gen_bool(0.5) {
-                                formatted_word = format!("{}{}", symbol, formatted_word);
+                                formatted_word = format!("{symbol}{formatted_word}");
                             } else {
-                                formatted_word = format!("{}{}", formatted_word, symbol);
+                                formatted_word = format!("{formatted_word}{symbol}");
                             }
                         }
                         2 => {
                             // Programming symbols - usually prefix
                             let symbol = programming.choose(rng).unwrap();
-                            formatted_word = format!("{}{}", symbol, formatted_word);
+                            formatted_word = format!("{symbol}{formatted_word}");
                         }
                         _ => {
                             // Punctuation symbols - usually suffix
                             let symbol = punctuation_symbols.choose(rng).unwrap();
-                            formatted_word = format!("{}{}", formatted_word, symbol);
+                            formatted_word = format!("{formatted_word}{symbol}");
                         }
                     }
                 }

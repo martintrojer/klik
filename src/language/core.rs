@@ -15,7 +15,7 @@ pub struct Language {
 
 impl Language {
     pub fn new(file_name: String) -> Self {
-        read_language_from_file(format!("{}.json", file_name)).unwrap()
+        read_language_from_file(format!("{file_name}.json")).unwrap()
     }
 }
 

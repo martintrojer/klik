@@ -90,29 +90,29 @@ impl TextFormatter for SymbolFormatter {
                         // Brackets - always paired
                         let bracket_pair = rng.gen_range(0..3);
                         match bracket_pair {
-                            0 => formatted_word = format!("({})", formatted_word),
-                            1 => formatted_word = format!("[{}]", formatted_word),
-                            _ => formatted_word = format!("{{{}}}", formatted_word),
+                            0 => formatted_word = format!("({formatted_word})"),
+                            1 => formatted_word = format!("[{formatted_word}]"),
+                            _ => formatted_word = format!("{{{formatted_word}}}"),
                         }
                     }
                     1 => {
                         // Mathematical symbols - prefix or suffix
                         let symbol = mathematical.choose(rng).unwrap();
                         if rng.gen_bool(0.5) {
-                            formatted_word = format!("{}{}", symbol, formatted_word);
+                            formatted_word = format!("{symbol}{formatted_word}");
                         } else {
-                            formatted_word = format!("{}{}", formatted_word, symbol);
+                            formatted_word = format!("{formatted_word}{symbol}");
                         }
                     }
                     2 => {
                         // Programming symbols - usually prefix
                         let symbol = programming.choose(rng).unwrap();
-                        formatted_word = format!("{}{}", symbol, formatted_word);
+                        formatted_word = format!("{symbol}{formatted_word}");
                     }
                     _ => {
                         // Punctuation symbols - usually suffix
                         let symbol = punctuation_symbols.choose(rng).unwrap();
-                        formatted_word = format!("{}{}", formatted_word, symbol);
+                        formatted_word = format!("{formatted_word}{symbol}");
                     }
                 }
             }
@@ -250,29 +250,29 @@ impl TextFormatter for CombinedFormatter {
                         // Brackets - always paired
                         let bracket_pair = rng.gen_range(0..3);
                         match bracket_pair {
-                            0 => formatted_word = format!("({})", formatted_word),
-                            1 => formatted_word = format!("[{}]", formatted_word),
-                            _ => formatted_word = format!("{{{}}}", formatted_word),
+                            0 => formatted_word = format!("({formatted_word})"),
+                            1 => formatted_word = format!("[{formatted_word}]"),
+                            _ => formatted_word = format!("{{{formatted_word}}}"),
                         }
                     }
                     1 => {
                         // Mathematical symbols - prefix or suffix
                         let symbol = mathematical.choose(rng).unwrap();
                         if rng.gen_bool(0.5) {
-                            formatted_word = format!("{}{}", symbol, formatted_word);
+                            formatted_word = format!("{symbol}{formatted_word}");
                         } else {
-                            formatted_word = format!("{}{}", formatted_word, symbol);
+                            formatted_word = format!("{formatted_word}{symbol}");
                         }
                     }
                     2 => {
                         // Programming symbols - usually prefix
                         let symbol = programming.choose(rng).unwrap();
-                        formatted_word = format!("{}{}", symbol, formatted_word);
+                        formatted_word = format!("{symbol}{formatted_word}");
                     }
                     _ => {
                         // Punctuation symbols - usually suffix
                         let symbol = punctuation_symbols.choose(rng).unwrap();
-                        formatted_word = format!("{}{}", formatted_word, symbol);
+                        formatted_word = format!("{formatted_word}{symbol}");
                     }
                 }
             }
@@ -506,9 +506,7 @@ mod tests {
             if let Some(first_char) = first_alpha_char {
                 assert!(
                     first_char.is_uppercase(),
-                    "First alphabetic character should ALWAYS be uppercase on attempt {}. Generated result: '{}'",
-                    attempt,
-                    result
+                    "First alphabetic character should ALWAYS be uppercase on attempt {attempt}. Generated result: '{result}'",
                 );
             }
         }
@@ -531,10 +529,7 @@ mod tests {
 
             // Check for comma at beginning
             if result.starts_with(',') {
-                panic!(
-                    "Found comma at beginning on attempt {}: '{}'",
-                    attempt, result
-                );
+                panic!("Found comma at beginning on attempt {attempt}: '{result}'");
             }
 
             // Check first alphabetic character
@@ -542,9 +537,7 @@ mod tests {
             if let Some(first_char) = first_alpha_char {
                 assert!(
                     first_char.is_uppercase(),
-                    "First alphabetic character should be uppercase on attempt {}. Generated result: '{}'",
-                    attempt,
-                    result
+                    "First alphabetic character should be uppercase on attempt {attempt}. Generated result: '{result}'",
                 );
             }
         }

@@ -184,8 +184,7 @@ mod tests {
         if let Some(first_char) = first_alpha_char {
             assert!(
                 first_char.is_uppercase(),
-                "First alphabetic character should be uppercase. Generated prompt: '{}'",
-                prompt
+                "First alphabetic character should be uppercase. Generated prompt: '{prompt}'",
             );
         }
     }
