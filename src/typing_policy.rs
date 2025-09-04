@@ -10,7 +10,7 @@ fn prepare_input(thok: &mut Thok, c: char) -> (usize, char, Outcome, SystemTime,
         thok.session_state.input.len()
     };
 
-    if idx == 0 && thok.started_at.is_none() {
+    if idx == 0 && thok.session_state.started_at.is_none() {
         thok.start();
     }
 
@@ -32,8 +32,8 @@ fn prepare_input(thok: &mut Thok, c: char) -> (usize, char, Outcome, SystemTime,
         inter_key_time
     } else if keypress_time > 5 {
         keypress_time
-    } else if thok.input.is_empty() && thok.started_at.is_some() {
-        if let Some(start_time) = thok.started_at {
+    } else if thok.session_state.input.is_empty() && thok.session_state.started_at.is_some() {
+        if let Some(start_time) = thok.session_state.started_at {
             let since_start = crate::stats::time_diff_ms(start_time, now);
             if since_start > 0 {
                 since_start
