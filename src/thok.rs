@@ -54,6 +54,17 @@ pub struct Thok {
 }
 
 impl Thok {
+    pub fn with_stats_store(
+        prompt: String,
+        number_of_words: usize,
+        number_of_secs: Option<f64>,
+        strict_mode: bool,
+        store: Box<dyn StatsStore>,
+    ) -> Self {
+        let mut thok = Self::new(prompt, number_of_words, number_of_secs, strict_mode);
+        thok.stats_db = Some(store);
+        thok
+    }
     pub fn new(
         prompt: String,
         number_of_words: usize,

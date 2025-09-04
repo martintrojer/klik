@@ -18,8 +18,8 @@ This document tracks proposed refactors to improve separation of concerns, testa
 ## Domain vs Persistence
 - [x] Create `StatsStore` trait (get/put/flush/summary APIs)
   - [x] Impl: `SqliteStatsStore` (current DB via `StatsDb`)
-  - [ ] Impl: `NoopStatsStore` (tests)
-  - [ ] Impl: `InMemoryStatsStore` (bench/tests)
+  - [x] Impl: `NoopStatsStore` (tests)
+  - [x] Impl: `InMemoryStatsStore` (bench/tests)
 - [x] Introduce `AppDirs` service for config/log/db paths
 - [x] Inject `StatsStore` into `Thok` instead of owning DB directly
 

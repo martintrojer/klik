@@ -138,6 +138,245 @@ impl StatsStore for StatsDb {
     }
 }
 
+/// No-op implementation for tests that don't care about persistence
+#[derive(Debug, Default)]
+pub struct NoopStatsStore;
+
+impl StatsStore for NoopStatsStore {
+    fn record_char_stat(&mut self, _stat: &CharStat) -> Result<()> {
+        Ok(())
+    }
+    fn record_char_stats_batch(&mut self, _stats: &[CharStat]) -> Result<()> {
+        Ok(())
+    }
+    fn flush(&mut self) -> Result<()> {
+        Ok(())
+    }
+
+    fn get_char_stats(&self, _character: char) -> Result<Vec<CharStat>> {
+        Ok(vec![])
+    }
+    fn get_avg_time_to_press(&self, _character: char) -> Result<Option<f64>> {
+        Ok(None)
+    }
+    fn get_miss_rate(&self, _character: char) -> Result<f64> {
+        Ok(0.0)
+    }
+    fn get_all_char_summary(&self) -> Result<Vec<(char, f64, f64, i64)>> {
+        Ok(vec![])
+    }
+    fn get_char_summary_with_deltas(&self) -> Result<Vec<CharSummaryWithDeltas>> {
+        Ok(vec![])
+    }
+
+    fn auto_compact(&mut self) -> Result<()> {
+        Ok(())
+    }
+    fn get_compaction_info(&self) -> Result<(i64, i64, f64)> {
+        Ok((0, 0, 0.0))
+    }
+    fn compact_database(&mut self) -> Result<()> {
+        Ok(())
+    }
+    fn clear_all_stats(&self) -> Result<()> {
+        Ok(())
+    }
+    fn get_character_difficulties(
+        &self,
+    ) -> Result<std::collections::HashMap<char, crate::language::CharacterDifficulty>> {
+        Ok(std::collections::HashMap::new())
+    }
+}
+
+/// In-memory implementation for tests/bench without IO
+#[derive(Debug, Default)]
+pub struct InMemoryStatsStore {
+    session_buffer: std::collections::HashMap<char, Vec<CharStat>>,
+    historical: std::collections::HashMap<char, Vec<CharSessionStats>>,
+}
+
+impl InMemoryStatsStore {
+    fn aggregate(&self) -> Vec<CharSessionStats> {
+        let mut acc: std::collections::HashMap<char, CharSessionStats> =
+            std::collections::HashMap::new();
+        for vecs in self.historical.values() {
+            for stat in vecs {
+                let entry = acc.entry(stat.character).or_insert(CharSessionStats {
+                    character: stat.character,
+                    total_attempts: 0,
+                    correct_attempts: 0,
+                    total_time_ms: 0,
+                    min_time_ms: u64::MAX,
+                    max_time_ms: 0,
+                    uppercase_attempts: 0,
+                    uppercase_correct: 0,
+                    uppercase_time_ms: 0,
+                    uppercase_min_time: u64::MAX,
+                    uppercase_max_time: 0,
+                });
+                entry.total_attempts += stat.total_attempts;
+                entry.correct_attempts += stat.correct_attempts;
+                entry.total_time_ms += stat.total_time_ms;
+                entry.min_time_ms = entry.min_time_ms.min(stat.min_time_ms);
+                entry.max_time_ms = entry.max_time_ms.max(stat.max_time_ms);
+                entry.uppercase_attempts += stat.uppercase_attempts;
+                entry.uppercase_correct += stat.uppercase_correct;
+                entry.uppercase_time_ms += stat.uppercase_time_ms;
+                entry.uppercase_min_time = entry.uppercase_min_time.min(stat.uppercase_min_time);
+                entry.uppercase_max_time = entry.uppercase_max_time.max(stat.uppercase_max_time);
+            }
+        }
+        acc.into_values().collect()
+    }
+}
+
+impl StatsStore for InMemoryStatsStore {
+    fn record_char_stat(&mut self, stat: &CharStat) -> Result<()> {
+        self.session_buffer
+            .entry(stat.character)
+            .or_default()
+            .push(stat.clone());
+        Ok(())
+    }
+
+    fn record_char_stats_batch(&mut self, stats: &[CharStat]) -> Result<()> {
+        for s in stats {
+            self.record_char_stat(s)?;
+        }
+        self.flush()
+    }
+
+    fn flush(&mut self) -> Result<()> {
+        if self.session_buffer.is_empty() {
+            return Ok(());
+        }
+        let session_stats = StatsDb::aggregate_char_stats_from_buffer(&self.session_buffer);
+        for s in session_stats {
+            self.historical.entry(s.character).or_default().push(s);
+        }
+        self.session_buffer.clear();
+        Ok(())
+    }
+
+    fn get_char_stats(&self, _character: char) -> Result<Vec<CharStat>> {
+        Ok(vec![])
+    }
+
+    fn get_avg_time_to_press(&self, character: char) -> Result<Option<f64>> {
+        let all = self.aggregate();
+        if let Some(s) = all.into_iter().find(|s| s.character == character) {
+            if s.correct_attempts > 0 {
+                Ok(Some(s.total_time_ms as f64 / s.correct_attempts as f64))
+            } else {
+                Ok(None)
+            }
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn get_miss_rate(&self, character: char) -> Result<f64> {
+        let all = self.aggregate();
+        if let Some(s) = all.into_iter().find(|s| s.character == character) {
+            if s.total_attempts > 0 {
+                Ok(((s.total_attempts - s.correct_attempts) as f64) * 100.0
+                    / s.total_attempts as f64)
+            } else {
+                Ok(0.0)
+            }
+        } else {
+            Ok(0.0)
+        }
+    }
+
+    fn get_all_char_summary(&self) -> Result<Vec<(char, f64, f64, i64)>> {
+        let all = self.aggregate();
+        let mut res = Vec::new();
+        for s in all {
+            let avg_time = if s.correct_attempts > 0 {
+                s.total_time_ms as f64 / s.correct_attempts as f64
+            } else {
+                0.0
+            };
+            let miss_rate = if s.total_attempts > 0 {
+                ((s.total_attempts - s.correct_attempts) as f64) * 100.0 / s.total_attempts as f64
+            } else {
+                0.0
+            };
+            res.push((s.character, avg_time, miss_rate, s.total_attempts as i64));
+        }
+        Ok(res)
+    }
+
+    fn get_char_summary_with_deltas(&self) -> Result<Vec<CharSummaryWithDeltas>> {
+        // For in-memory store, provide current session deltas vs aggregated historical
+        let hist = self.get_all_char_summary()?;
+        let mut hist_map = std::collections::HashMap::new();
+        for (c, avg, miss, attempts) in hist {
+            hist_map.insert(c, (avg, miss, attempts));
+        }
+
+        let mut session_summary = Vec::new();
+        for (&character, stats) in &self.session_buffer {
+            let total_attempts = stats.len() as i64;
+            let correct_attempts = stats.iter().filter(|s| s.was_correct).count() as i64;
+            let avg_time = if correct_attempts > 0 {
+                let total_time: u64 = stats
+                    .iter()
+                    .filter(|s| s.was_correct)
+                    .map(|s| s.time_to_press_ms)
+                    .sum();
+                total_time as f64 / correct_attempts as f64
+            } else {
+                0.0
+            };
+            let miss_rate = if total_attempts > 0 {
+                ((total_attempts - correct_attempts) as f64) * 100.0 / total_attempts as f64
+            } else {
+                0.0
+            };
+            session_summary.push((character, avg_time, miss_rate, total_attempts));
+        }
+
+        let mut combined = Vec::new();
+        for (c, s_avg, s_miss, s_attempts) in session_summary {
+            if let Some((h_avg, h_miss, h_attempts)) = hist_map.get(&c).cloned() {
+                combined.push((
+                    c,
+                    h_avg,
+                    h_miss,
+                    h_attempts,
+                    Some(s_avg - h_avg),
+                    Some(s_miss - h_miss),
+                    s_attempts,
+                    None,
+                ));
+            } else {
+                combined.push((c, s_avg, s_miss, s_attempts, None, None, s_attempts, None));
+            }
+        }
+        Ok(combined)
+    }
+
+    fn auto_compact(&mut self) -> Result<()> {
+        Ok(())
+    }
+    fn get_compaction_info(&self) -> Result<(i64, i64, f64)> {
+        Ok((0, 0, 0.0))
+    }
+    fn compact_database(&mut self) -> Result<()> {
+        Ok(())
+    }
+    fn clear_all_stats(&self) -> Result<()> {
+        Ok(())
+    }
+    fn get_character_difficulties(
+        &self,
+    ) -> Result<std::collections::HashMap<char, crate::language::CharacterDifficulty>> {
+        Ok(std::collections::HashMap::new())
+    }
+}
+
 impl StatsDb {
     /// Initialize the database connection and create tables if needed
     pub fn new() -> Result<Self> {
