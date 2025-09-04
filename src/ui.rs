@@ -176,12 +176,16 @@ impl Widget for &App {
                     .split(area);
 
                 let (overall_duration, highest_wpm) = crate::ui::charting::compute_chart_params(
-                    &thok.wpm_coords,
+                    &thok.session_state.wpm_coords,
                     thok.seconds_remaining,
                 );
 
-                let tuples: Vec<(f64, f64)> =
-                    thok.wpm_coords.iter().map(|p| (p.t, p.wpm)).collect();
+                let tuples: Vec<(f64, f64)> = thok
+                    .session_state
+                    .wpm_coords
+                    .iter()
+                    .map(|p| (p.t, p.wpm))
+                    .collect();
                 let datasets = vec![Dataset::default()
                     .marker(ratatui::symbols::Marker::Braille)
                     .style(magenta_style)
@@ -219,7 +223,9 @@ impl Widget for &App {
                 let stats = Paragraph::new(Span::styled(
                     format!(
                         "{} wpm   {}% acc   {:.2} sd",
-                        thok.wpm, thok.accuracy, thok.std_dev
+                        thok.session_state.wpm,
+                        thok.session_state.accuracy,
+                        thok.session_state.std_dev
                     ),
                     bold_style,
                 ))
@@ -352,22 +358,29 @@ mod tests {
 
         if finished {
             for c in prompt.chars() {
-                thok.input.push(Input {
+                let input = Input {
                     char: c,
                     outcome: Outcome::Correct,
                     timestamp: SystemTime::now(),
                     keypress_start: None,
-                });
+                };
+                thok.session_state.input.push(input.clone());
+                thok.input.push(input);
             }
+            thok.session_state.cursor_pos = prompt.len();
             thok.cursor_pos = prompt.len();
+            thok.session_state.wpm = 42.0;
             thok.wpm = 42.0;
+            thok.session_state.accuracy = 95.0;
             thok.accuracy = 95.0;
+            thok.session_state.std_dev = 2.5;
             thok.std_dev = 2.5;
-            thok.wpm_coords = vec![
+            thok.session_state.wpm_coords = vec![
                 crate::time_series::TimeSeriesPoint::new(1.0, 20.0),
                 crate::time_series::TimeSeriesPoint::new(2.0, 35.0),
                 crate::time_series::TimeSeriesPoint::new(3.0, 42.0),
             ];
+            thok.wpm_coords = thok.session_state.wpm_coords.clone();
         }
 
         App {
@@ -783,7 +796,7 @@ mod tests {
         let mut app = create_test_app("test", true);
 
         // Manually set up celebration
-        app.thok.accuracy = 100.0;
+        app.thok.session_state.accuracy = 100.0;
         app.thok.celebration = CelebrationAnimation::default();
         app.thok.celebration.start(80, 24);
 
