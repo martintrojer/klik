@@ -37,7 +37,7 @@ impl Widget for &App {
 
         let magenta_style = Style::default().fg(Color::Magenta);
 
-        match (!thok.has_finished(), thok.is_idle) {
+        match (!thok.has_finished(), thok.session_state.is_idle) {
             (true, true) => {
                 // Idle state - show idle message
                 let idle_message = Paragraph::new(Span::styled(
@@ -81,6 +81,7 @@ impl Widget for &App {
                     .split(area);
 
                 let mut spans = thok
+                    .session_state
                     .input
                     .iter()
                     .enumerate()
@@ -97,7 +98,9 @@ impl Widget for &App {
                             ),
                             Outcome::Correct => {
                                 // In strict mode, show corrected positions with a different color
-                                if thok.strict_mode && thok.corrected_positions.contains(&idx) {
+                                if thok.strict_mode
+                                    && thok.session_state.corrected_positions.contains(&idx)
+                                {
                                     // Show corrected errors with orange color (much more distinct from green)
                                     Span::styled(
                                         expected,
@@ -114,12 +117,14 @@ impl Widget for &App {
                     .collect::<Vec<Span>>();
 
                 spans.push(Span::styled(
-                    thok.get_expected_char(thok.cursor_pos).to_string(),
+                    thok.get_expected_char(thok.session_state.cursor_pos)
+                        .to_string(),
                     underlined_dim_bold_style,
                 ));
 
+                let start = (thok.session_state.cursor_pos + 1).min(thok.prompt.len());
                 spans.push(Span::styled(
-                    thok.prompt[(thok.cursor_pos + 1)..thok.prompt.len()].to_string(),
+                    thok.prompt[start..thok.prompt.len()].to_string(),
                     dim_bold_style,
                 ));
 
@@ -135,9 +140,9 @@ impl Widget for &App {
 
                 widget.render(chunks[2], buf);
 
-                if thok.seconds_remaining.is_some() {
+                if thok.session_state.seconds_remaining.is_some() {
                     let timer = Paragraph::new(Span::styled(
-                        format!("{:.1}", thok.seconds_remaining.unwrap()),
+                        format!("{:.1}", thok.session_state.seconds_remaining.unwrap()),
                         dim_bold_style,
                     ))
                     .alignment(Alignment::Center);
@@ -177,7 +182,7 @@ impl Widget for &App {
 
                 let (overall_duration, highest_wpm) = crate::ui::charting::compute_chart_params(
                     &thok.session_state.wpm_coords,
-                    thok.seconds_remaining,
+                    thok.session_state.seconds_remaining,
                 );
 
                 let tuples: Vec<(f64, f64)> = thok
@@ -365,22 +370,21 @@ mod tests {
                     keypress_start: None,
                 };
                 thok.session_state.input.push(input.clone());
-                thok.input.push(input);
+                thok.session_state.input.push(input);
             }
             thok.session_state.cursor_pos = prompt.len();
-            thok.cursor_pos = prompt.len();
+            thok.session_state.cursor_pos = prompt.len();
             thok.session_state.wpm = 42.0;
-            thok.wpm = 42.0;
+            thok.session_state.wpm = 42.0;
             thok.session_state.accuracy = 95.0;
-            thok.accuracy = 95.0;
+            thok.session_state.accuracy = 95.0;
             thok.session_state.std_dev = 2.5;
-            thok.std_dev = 2.5;
+            thok.session_state.std_dev = 2.5;
             thok.session_state.wpm_coords = vec![
                 crate::time_series::TimeSeriesPoint::new(1.0, 20.0),
                 crate::time_series::TimeSeriesPoint::new(2.0, 35.0),
                 crate::time_series::TimeSeriesPoint::new(3.0, 42.0),
             ];
-            thok.wpm_coords = thok.session_state.wpm_coords.clone();
         }
 
         App {
@@ -442,7 +446,7 @@ mod tests {
     #[test]
     fn test_ui_widget_with_time_limit() {
         let mut app = create_test_app("test", false);
-        app.thok.seconds_remaining = Some(25.5);
+        app.thok.session_state.seconds_remaining = Some(25.5);
         app.thok.number_of_secs = Some(30.0);
 
         let area = Rect::new(0, 0, 80, 24);
@@ -475,19 +479,19 @@ mod tests {
     fn test_ui_widget_with_incorrect_input() {
         let mut app = create_test_app("test", false);
 
-        app.thok.input.push(Input {
+        app.thok.session_state.input.push(Input {
             char: 't',
             outcome: Outcome::Correct,
             timestamp: SystemTime::now(),
             keypress_start: None,
         });
-        app.thok.input.push(Input {
+        app.thok.session_state.input.push(Input {
             char: 'x',
             outcome: Outcome::Incorrect,
             timestamp: SystemTime::now(),
             keypress_start: None,
         });
-        app.thok.cursor_pos = 2;
+        app.thok.session_state.cursor_pos = 2;
 
         let area = Rect::new(0, 0, 80, 24);
         let mut buffer = Buffer::empty(area);

@@ -7,11 +7,7 @@ use directories::ProjectDirs;
 use itertools::Itertools;
 use std::fs::OpenOptions;
 use std::io::{self, Write};
-use std::{
-    char,
-    collections::{HashMap, HashSet},
-    time::SystemTime,
-};
+use std::{char, collections::HashMap, time::SystemTime};
 
 #[derive(Clone, Debug, Copy, PartialEq)]
 pub enum Outcome {
@@ -31,45 +27,17 @@ pub struct Input {
 #[derive(Debug)]
 pub struct Thok {
     pub prompt: String,
-    pub input: Vec<Input>,
-    pub raw_coords: Vec<(f64, f64)>,
-    pub wpm_coords: Vec<crate::time_series::TimeSeriesPoint>,
-    pub cursor_pos: usize,
-    pub started_at: Option<SystemTime>,
-    pub seconds_remaining: Option<f64>,
     pub number_of_secs: Option<f64>,
     pub number_of_words: usize,
-    pub wpm: f64,
-    pub accuracy: f64,
-    pub std_dev: f64,
     pub stats_db: Option<Box<dyn StatsStore>>,
-    pub keypress_start_time: Option<SystemTime>,
     pub strict_mode: bool,
-    pub corrected_positions: std::collections::HashSet<usize>, // Track positions that had errors
     pub celebration: CelebrationAnimation,
-    pub last_activity: Option<SystemTime>,
-    pub is_idle: bool,
-    pub idle_timeout_secs: f64,
     pub session_config: crate::session::SessionConfig,
     pub session_state: crate::session::SessionState,
 }
 
 impl Thok {
-    fn sync_legacy_from_session(&mut self) {
-        self.cursor_pos = self.session_state.cursor_pos;
-        self.input = self.session_state.input.clone();
-        self.corrected_positions = self.session_state.corrected_positions.clone();
-        self.wpm = self.session_state.wpm;
-        self.accuracy = self.session_state.accuracy;
-        self.std_dev = self.session_state.std_dev;
-        self.wpm_coords = self.session_state.wpm_coords.clone();
-        self.started_at = self.session_state.started_at;
-        self.seconds_remaining = self.session_state.seconds_remaining;
-        self.keypress_start_time = self.session_state.keypress_start_time;
-        self.last_activity = self.session_state.last_activity;
-        self.is_idle = self.session_state.is_idle;
-        self.idle_timeout_secs = self.session_state.idle_timeout_secs;
-    }
+    // SessionState is the single source of truth
     pub fn with_stats_store(
         prompt: String,
         number_of_words: usize,
@@ -92,25 +60,11 @@ impl Thok {
             .map(|db| Box::new(db) as Box<dyn StatsStore>);
         Self {
             prompt,
-            input: vec![],
-            raw_coords: vec![],
-            wpm_coords: vec![],
-            cursor_pos: 0,
-            started_at: None,
             number_of_secs,
             number_of_words,
-            seconds_remaining: number_of_secs,
-            wpm: 0.0,
-            accuracy: 0.0,
-            std_dev: 0.0,
             stats_db,
-            keypress_start_time: None,
             strict_mode,
-            corrected_positions: HashSet::new(),
             celebration: CelebrationAnimation::default(),
-            last_activity: None,
-            is_idle: false,
-            idle_timeout_secs: 30.0, // 30 seconds idle timeout
             session_config: crate::session::SessionConfig {
                 number_of_words,
                 number_of_secs,
@@ -127,7 +81,6 @@ impl Thok {
         if let Some(remaining) = self.session_state.seconds_remaining {
             let next = remaining - (TICK_RATE_MS as f64 / 1000_f64);
             self.session_state.seconds_remaining = Some(next);
-            self.seconds_remaining = Some(next);
         }
 
         // Check for idle timeout
@@ -136,7 +89,7 @@ impl Thok {
 
     /// Check if the user has been idle and set idle state accordingly
     fn check_idle_timeout(&mut self) {
-        if let Some(last_activity) = self.session_state.last_activity.or(self.last_activity) {
+        if let Some(last_activity) = self.session_state.last_activity {
             let now = SystemTime::now();
             if let Ok(duration) = now.duration_since(last_activity) {
                 let idle_duration = duration.as_secs_f64();
@@ -144,16 +97,13 @@ impl Thok {
                     && !self.session_state.is_idle
                 {
                     self.session_state.is_idle = true;
-                    self.is_idle = true;
                     // Pause timers when going idle
                     if self.has_started() && !self.has_finished() {
-                        if let Some(started_at) = self.session_state.started_at.or(self.started_at)
-                        {
+                        if let Some(started_at) = self.session_state.started_at {
                             if let Ok(elapsed) = last_activity.duration_since(started_at) {
                                 // Store the elapsed time up to when user went idle
                                 let adj = Some(now.checked_sub(elapsed).unwrap_or(now));
                                 self.session_state.started_at = adj;
-                                self.started_at = adj;
                             }
                         }
                     }
@@ -166,42 +116,36 @@ impl Thok {
     /// Returns true if we were exiting idle state (indicating session should be reset)
     pub fn mark_activity(&mut self) -> bool {
         let now = SystemTime::now();
-        let was_idle = self.session_state.is_idle || self.is_idle;
+        let was_idle = self.session_state.is_idle;
 
-        if self.session_state.is_idle || self.is_idle {
+        if self.session_state.is_idle {
             // Exiting idle state - restart timers
             self.session_state.is_idle = false;
-            self.is_idle = false;
             if self.has_started() && !self.has_finished() {
                 // Reset started_at to effectively restart the session timer
                 self.session_state.started_at = Some(now);
-                self.started_at = Some(now);
                 // Reset remaining time for timed sessions
                 self.session_state.seconds_remaining = self.number_of_secs;
-                self.seconds_remaining = self.number_of_secs;
             }
         }
 
         self.session_state.last_activity = Some(now);
-        self.last_activity = Some(now);
         was_idle
     }
 
     pub fn get_expected_char(&self, idx: usize) -> char {
-        self.prompt.chars().nth(idx).unwrap()
+        self.prompt.chars().nth(idx).unwrap_or(' ')
     }
 
     pub fn increment_cursor(&mut self) {
         if self.session_state.cursor_pos < self.session_state.input.len() {
             self.session_state.cursor_pos += 1;
-            self.sync_legacy_from_session();
         }
     }
 
     pub fn decrement_cursor(&mut self) {
         if self.session_state.cursor_pos > 0 {
             self.session_state.cursor_pos -= 1;
-            self.sync_legacy_from_session();
         }
     }
 
@@ -217,7 +161,6 @@ impl Thok {
         let started_at = self
             .session_state
             .started_at
-            .or(self.started_at)
             .unwrap_or_else(SystemTime::now);
         let elapsed_secs = started_at.elapsed().unwrap_or_default().as_millis() as f64;
 
@@ -262,9 +205,9 @@ impl Thok {
             .collect::<Vec<f64>>();
 
         if !correct_chars_at_whole_sec_intervals.is_empty() {
-            self.std_dev = std_dev(&correct_chars_at_whole_sec_intervals).unwrap();
+            self.session_state.std_dev = std_dev(&correct_chars_at_whole_sec_intervals).unwrap();
         } else {
-            self.std_dev = 0.0;
+            self.session_state.std_dev = 0.0;
         }
 
         let mut correct_chars_pressed_until_now = 0.0;
@@ -298,7 +241,6 @@ impl Thok {
             // Perform automatic database compaction if needed
             self.auto_compact_database();
         };
-        self.sync_legacy_from_session();
     }
 
     /// Start celebration animation for perfect sessions.
@@ -308,7 +250,7 @@ impl Thok {
         }
 
         // Celebrate only for perfect sessions
-        if self.accuracy >= 100.0 {
+        if self.session_state.accuracy >= 100.0 {
             self.celebration.start(terminal_width, terminal_height);
         }
     }
@@ -341,19 +283,16 @@ impl Thok {
                 self.decrement_cursor();
             }
         }
-        self.sync_legacy_from_session();
     }
 
     pub fn start(&mut self) {
         let now = SystemTime::now();
         self.session_state.started_at = Some(now);
-        self.started_at = Some(now);
     }
 
     pub fn on_keypress_start(&mut self) {
         let now = SystemTime::now();
         self.session_state.keypress_start_time = Some(now);
-        self.keypress_start_time = Some(now);
     }
 
     /// Alternative timing method that measures inter-keystroke intervals
@@ -370,16 +309,16 @@ impl Thok {
     pub fn write(&mut self, c: char) {
         let _ = self.mark_activity(); // Ignore return value for write
         crate::typing_policy::apply_write(self, c);
-        self.sync_legacy_from_session();
     }
 
     pub fn has_started(&self) -> bool {
-        self.started_at.is_some()
+        self.session_state.started_at.is_some()
     }
 
     pub fn has_finished(&self) -> bool {
-        (self.input.len() == self.prompt.len())
-            || (self.seconds_remaining.is_some() && self.seconds_remaining.unwrap() <= 0.0)
+        (self.session_state.input.len() == self.prompt.len())
+            || (self.session_state.seconds_remaining.is_some()
+                && self.session_state.seconds_remaining.unwrap() <= 0.0)
     }
 
     pub fn save_results(&self) -> io::Result<()> {
@@ -404,7 +343,13 @@ impl Thok {
                 )?;
             }
 
-            let elapsed_secs = self.started_at.unwrap().elapsed().unwrap().as_secs_f64();
+            let elapsed_secs = self
+                .session_state
+                .started_at
+                .unwrap_or_else(SystemTime::now)
+                .elapsed()
+                .unwrap_or_default()
+                .as_secs_f64();
 
             writeln!(
                 log_file,
@@ -414,9 +359,9 @@ impl Thok {
                 self.number_of_secs
                     .map_or(String::from(""), |ns| format!("{ns:.2}")),
                 elapsed_secs,
-                self.wpm,      // already rounded, no need to round to two decimal places
-                self.accuracy, // already rounded, no need to round to two decimal places
-                self.std_dev,
+                self.session_state.wpm,      // already rounded
+                self.session_state.accuracy, // already rounded
+                self.session_state.std_dev,
             )?;
         }
 
@@ -617,11 +562,11 @@ mod tests {
         assert_eq!(thok.prompt, "hello world");
         assert_eq!(thok.number_of_words, 2);
         assert_eq!(thok.number_of_secs, None);
-        assert_eq!(thok.input.len(), 0);
-        assert_eq!(thok.cursor_pos, 0);
-        assert_eq!(thok.wpm, 0.0);
-        assert_eq!(thok.accuracy, 0.0);
-        assert_eq!(thok.std_dev, 0.0);
+        assert_eq!(thok.session_state.input.len(), 0);
+        assert_eq!(thok.session_state.cursor_pos, 0);
+        assert_eq!(thok.session_state.wpm, 0.0);
+        assert_eq!(thok.session_state.accuracy, 0.0);
+        assert_eq!(thok.session_state.std_dev, 0.0);
         assert!(!thok.has_started());
         assert!(!thok.has_finished());
         assert!(!thok.strict_mode);
@@ -632,7 +577,7 @@ mod tests {
         let thok = Thok::new("test".to_string(), 1, Some(30.0), false);
 
         assert_eq!(thok.number_of_secs, Some(30.0));
-        assert_eq!(thok.seconds_remaining, Some(30.0));
+        assert_eq!(thok.session_state.seconds_remaining, Some(30.0));
     }
 
     #[test]
@@ -650,10 +595,10 @@ mod tests {
 
         thok.write('t');
 
-        assert_eq!(thok.input.len(), 1);
-        assert_eq!(thok.input[0].char, 't');
-        assert_eq!(thok.input[0].outcome, Outcome::Correct);
-        assert_eq!(thok.cursor_pos, 1);
+        assert_eq!(thok.session_state.input.len(), 1);
+        assert_eq!(thok.session_state.input[0].char, 't');
+        assert_eq!(thok.session_state.input[0].outcome, Outcome::Correct);
+        assert_eq!(thok.session_state.cursor_pos, 1);
         assert!(thok.has_started());
     }
 
@@ -663,10 +608,10 @@ mod tests {
 
         thok.write('x');
 
-        assert_eq!(thok.input.len(), 1);
-        assert_eq!(thok.input[0].char, 'x');
-        assert_eq!(thok.input[0].outcome, Outcome::Incorrect);
-        assert_eq!(thok.cursor_pos, 1);
+        assert_eq!(thok.session_state.input.len(), 1);
+        assert_eq!(thok.session_state.input[0].char, 'x');
+        assert_eq!(thok.session_state.input[0].outcome, Outcome::Incorrect);
+        assert_eq!(thok.session_state.cursor_pos, 1);
     }
 
     #[test]
@@ -675,16 +620,16 @@ mod tests {
 
         thok.write('t');
         thok.write('e');
-        assert_eq!(thok.input.len(), 2);
-        assert_eq!(thok.cursor_pos, 2);
+        assert_eq!(thok.session_state.input.len(), 2);
+        assert_eq!(thok.session_state.cursor_pos, 2);
 
         thok.backspace();
-        assert_eq!(thok.input.len(), 1);
-        assert_eq!(thok.cursor_pos, 1);
+        assert_eq!(thok.session_state.input.len(), 1);
+        assert_eq!(thok.session_state.cursor_pos, 1);
 
         thok.backspace();
-        assert_eq!(thok.input.len(), 0);
-        assert_eq!(thok.cursor_pos, 0);
+        assert_eq!(thok.session_state.input.len(), 0);
+        assert_eq!(thok.session_state.cursor_pos, 0);
     }
 
     #[test]
@@ -692,8 +637,8 @@ mod tests {
         let mut thok = Thok::new("test".to_string(), 1, None, false);
 
         thok.backspace();
-        assert_eq!(thok.input.len(), 0);
-        assert_eq!(thok.cursor_pos, 0);
+        assert_eq!(thok.session_state.input.len(), 0);
+        assert_eq!(thok.session_state.cursor_pos, 0);
     }
 
     #[test]
@@ -701,10 +646,10 @@ mod tests {
         let mut thok = Thok::new("test".to_string(), 1, None, false);
         thok.write('t');
 
-        let initial_pos = thok.cursor_pos;
+        let initial_pos = thok.session_state.cursor_pos;
         thok.increment_cursor();
 
-        assert_eq!(thok.cursor_pos, initial_pos);
+        assert_eq!(thok.session_state.cursor_pos, initial_pos);
     }
 
     #[test]
@@ -712,10 +657,10 @@ mod tests {
         let mut thok = Thok::new("test".to_string(), 1, None, false);
         thok.write('t');
 
-        let initial_pos = thok.cursor_pos;
+        let initial_pos = thok.session_state.cursor_pos;
         thok.decrement_cursor();
 
-        assert_eq!(thok.cursor_pos, initial_pos - 1);
+        assert_eq!(thok.session_state.cursor_pos, initial_pos - 1);
     }
 
     #[test]
@@ -737,22 +682,22 @@ mod tests {
 
         assert!(!thok.has_finished());
 
-        thok.seconds_remaining = Some(0.0);
+        thok.session_state.seconds_remaining = Some(0.0);
         assert!(thok.has_finished());
 
-        thok.seconds_remaining = Some(-1.0);
+        thok.session_state.seconds_remaining = Some(-1.0);
         assert!(thok.has_finished());
     }
 
     #[test]
     fn test_on_tick() {
         let mut thok = Thok::new("test".to_string(), 1, Some(10.0), false);
-        let initial_time = thok.seconds_remaining.unwrap();
+        let initial_time = thok.session_state.seconds_remaining.unwrap();
 
         thok.on_tick();
 
         let expected_time = initial_time - (TICK_RATE_MS as f64 / 1000.0);
-        assert_eq!(thok.seconds_remaining.unwrap(), expected_time);
+        assert_eq!(thok.session_state.seconds_remaining.unwrap(), expected_time);
     }
 
     #[test]
@@ -769,8 +714,8 @@ mod tests {
 
         thok.calc_results();
 
-        assert_eq!(thok.accuracy, 100.0);
-        assert!(thok.wpm > 0.0);
+        assert_eq!(thok.session_state.accuracy, 100.0);
+        assert!(thok.session_state.wpm > 0.0);
     }
 
     #[test]
@@ -787,8 +732,8 @@ mod tests {
 
         thok.calc_results();
 
-        assert_eq!(thok.accuracy, 75.0);
-        assert!(thok.wpm >= 0.0);
+        assert_eq!(thok.session_state.accuracy, 75.0);
+        assert!(thok.session_state.wpm >= 0.0);
     }
 
     #[test]
@@ -798,8 +743,8 @@ mod tests {
 
         thok.calc_results();
 
-        assert_eq!(thok.wpm, 0.0);
-        assert_eq!(thok.std_dev, 0.0);
+        assert_eq!(thok.session_state.wpm, 0.0);
+        assert_eq!(thok.session_state.std_dev, 0.0);
     }
 
     use std::thread;
@@ -812,10 +757,10 @@ mod tests {
         thread::sleep(Duration::from_millis(10));
         thok.write('t');
 
-        assert_eq!(thok.input.len(), 1);
-        assert_eq!(thok.input[0].char, 't');
-        assert_eq!(thok.input[0].outcome, Outcome::Correct);
-        assert!(thok.input[0].keypress_start.is_some());
+        assert_eq!(thok.session_state.input.len(), 1);
+        assert_eq!(thok.session_state.input[0].char, 't');
+        assert_eq!(thok.session_state.input[0].outcome, Outcome::Correct);
+        assert!(thok.session_state.input[0].keypress_start.is_some());
     }
 
     #[test]
@@ -836,10 +781,10 @@ mod tests {
         let mut thok = Thok::new("test".to_string(), 1, None, false);
 
         thok.on_keypress_start();
-        assert!(thok.keypress_start_time.is_some());
+        assert!(thok.session_state.keypress_start_time.is_some());
 
         thok.write('t');
-        assert!(thok.keypress_start_time.is_none()); // Should be reset after write
+        assert!(thok.session_state.keypress_start_time.is_none()); // Should be reset after write
     }
 
     #[test]
@@ -867,8 +812,8 @@ mod tests {
         // This should complete without error and flush stats
         thok.calc_results();
 
-        assert_eq!(thok.accuracy, 100.0);
-        assert!(thok.wpm > 0.0);
+        assert_eq!(thok.session_state.accuracy, 100.0);
+        assert!(thok.session_state.wpm > 0.0);
     }
 
     #[test]
@@ -967,18 +912,18 @@ mod tests {
 
         // Test correct input advances cursor
         thok.write('t');
-        assert_eq!(thok.cursor_pos, 1);
+        assert_eq!(thok.session_state.cursor_pos, 1);
 
         // Test incorrect input doesn't advance cursor
         thok.write('x'); // Wrong character for 'e'
-        assert_eq!(thok.cursor_pos, 1); // Cursor should stay at position 1
-        assert_eq!(thok.input[1].outcome, Outcome::Incorrect);
+        assert_eq!(thok.session_state.cursor_pos, 1); // Cursor should stay at position 1
+        assert_eq!(thok.session_state.input[1].outcome, Outcome::Incorrect);
 
         // Test correct input after error advances cursor and marks as corrected
         thok.write('e'); // Correct character
-        assert_eq!(thok.cursor_pos, 2); // Cursor should advance
-        assert_eq!(thok.input[1].outcome, Outcome::Correct);
-        assert!(thok.corrected_positions.contains(&1)); // Position 1 should be marked as corrected
+        assert_eq!(thok.session_state.cursor_pos, 2); // Cursor should advance
+        assert_eq!(thok.session_state.input[1].outcome, Outcome::Correct);
+        assert!(thok.session_state.corrected_positions.contains(&1)); // Position 1 should be marked as corrected
     }
 
     #[test]
@@ -987,13 +932,13 @@ mod tests {
 
         thok.write('t');
         thok.write('e');
-        assert_eq!(thok.cursor_pos, 2);
-        assert_eq!(thok.input.len(), 2);
+        assert_eq!(thok.session_state.cursor_pos, 2);
+        assert_eq!(thok.session_state.input.len(), 2);
 
         // Test backspace in strict mode
         thok.backspace();
-        assert_eq!(thok.cursor_pos, 1);
-        assert_eq!(thok.input.len(), 1); // Should remove the input at new cursor position
+        assert_eq!(thok.session_state.cursor_pos, 1);
+        assert_eq!(thok.session_state.input.len(), 1); // Should remove the input at new cursor position
     }
 
     #[test]
@@ -1001,12 +946,12 @@ mod tests {
         // Test normal mode
         let mut normal_thok = Thok::new("test".to_string(), 1, None, false);
         normal_thok.write('x'); // Wrong character
-        assert_eq!(normal_thok.cursor_pos, 1); // Cursor advances even with wrong char
+        assert_eq!(normal_thok.session_state.cursor_pos, 1); // Cursor advances even with wrong char
 
         // Test strict mode
         let mut strict_thok = Thok::new("test".to_string(), 1, None, true);
         strict_thok.write('x'); // Wrong character
-        assert_eq!(strict_thok.cursor_pos, 0); // Cursor doesn't advance with wrong char
+        assert_eq!(strict_thok.session_state.cursor_pos, 0); // Cursor doesn't advance with wrong char
     }
 
     #[test]
@@ -1016,8 +961,8 @@ mod tests {
         assert_eq!(thok.prompt, "");
         assert_eq!(thok.number_of_words, 0);
         assert!(thok.has_finished()); // Empty prompt should be considered finished
-        assert_eq!(thok.cursor_pos, 0);
-        assert_eq!(thok.input.len(), 0);
+        assert_eq!(thok.session_state.cursor_pos, 0);
+        assert_eq!(thok.session_state.input.len(), 0);
     }
 
     #[test]
@@ -1028,9 +973,9 @@ mod tests {
 
         thok.write('a');
         assert!(thok.has_finished());
-        assert_eq!(thok.cursor_pos, 1);
-        assert_eq!(thok.input.len(), 1);
-        assert_eq!(thok.input[0].outcome, Outcome::Correct);
+        assert_eq!(thok.session_state.cursor_pos, 1);
+        assert_eq!(thok.session_state.input.len(), 1);
+        assert_eq!(thok.session_state.input[0].outcome, Outcome::Correct);
     }
 
     #[test]
@@ -1044,13 +989,13 @@ mod tests {
 
         // Check if finished (depends on unicode handling)
         if thok.has_finished() {
-            assert_eq!(thok.input.len(), 4);
-            for input in &thok.input {
+            assert_eq!(thok.session_state.input.len(), 4);
+            for input in &thok.session_state.input {
                 assert_eq!(input.outcome, Outcome::Correct);
             }
         } else {
             // If unicode handling creates different byte lengths, that's acceptable
-            assert!(!thok.input.is_empty());
+            assert!(!thok.session_state.input.is_empty());
         }
     }
 
@@ -1067,7 +1012,7 @@ mod tests {
             thok.write('a');
         }
 
-        assert_eq!(thok.cursor_pos, 100);
+        assert_eq!(thok.session_state.cursor_pos, 100);
         assert!(!thok.has_finished()); // Still not finished
     }
 
@@ -1076,7 +1021,7 @@ mod tests {
         let thok = Thok::new("test".to_string(), 1, Some(0.0), false);
 
         assert!(thok.has_finished()); // Zero time should be considered finished
-        assert_eq!(thok.seconds_remaining, Some(0.0));
+        assert_eq!(thok.session_state.seconds_remaining, Some(0.0));
     }
 
     #[test]
@@ -1084,7 +1029,7 @@ mod tests {
         let thok = Thok::new("test".to_string(), 1, Some(-1.0), false);
 
         assert!(thok.has_finished()); // Negative time should be considered finished
-        assert_eq!(thok.seconds_remaining, Some(-1.0));
+        assert_eq!(thok.session_state.seconds_remaining, Some(-1.0));
     }
 
     #[test]
@@ -1094,10 +1039,10 @@ mod tests {
         // Test writing normal characters first
         thok.write('t');
         thok.write('e');
-        assert_eq!(thok.cursor_pos, 2);
+        assert_eq!(thok.session_state.cursor_pos, 2);
 
         // The cursor should never exceed prompt length in normal operation
-        assert!(thok.cursor_pos <= thok.prompt.len());
+        assert!(thok.session_state.cursor_pos <= thok.prompt.len());
     }
 
     #[test]
@@ -1106,8 +1051,8 @@ mod tests {
 
         // Backspace at start should not panic or cause issues
         thok.backspace();
-        assert_eq!(thok.cursor_pos, 0);
-        assert_eq!(thok.input.len(), 0);
+        assert_eq!(thok.session_state.cursor_pos, 0);
+        assert_eq!(thok.session_state.input.len(), 0);
     }
 
     #[test]
@@ -1116,15 +1061,15 @@ mod tests {
 
         thok.write('t');
         thok.write('e');
-        assert_eq!(thok.cursor_pos, 2);
+        assert_eq!(thok.session_state.cursor_pos, 2);
 
         // Multiple backspaces
         thok.backspace();
         thok.backspace();
         thok.backspace(); // One more than typed
 
-        assert_eq!(thok.cursor_pos, 0);
-        assert_eq!(thok.input.len(), 0);
+        assert_eq!(thok.session_state.cursor_pos, 0);
+        assert_eq!(thok.session_state.input.len(), 0);
     }
 
     #[test]
@@ -1132,16 +1077,16 @@ mod tests {
         let mut thok = Thok::new("test".to_string(), 1, None, false);
 
         // Set started_at to avoid None unwrap
-        thok.started_at = Some(SystemTime::now());
+        thok.session_state.started_at = Some(SystemTime::now());
 
         // Call calc_results without any input
         thok.calc_results();
 
         // Should not panic and should handle empty input gracefully
-        assert!(thok.wpm >= 0.0);
+        assert!(thok.session_state.wpm >= 0.0);
         // For empty input, accuracy might be NaN, so just check it's not infinite
-        assert!(!thok.accuracy.is_infinite());
-        assert!(thok.std_dev >= 0.0);
+        assert!(!thok.session_state.accuracy.is_infinite());
+        assert!(thok.session_state.std_dev >= 0.0);
     }
 
     #[test]
@@ -1149,15 +1094,15 @@ mod tests {
         let mut thok = Thok::new("test".to_string(), 1, None, false);
 
         // Set started_at to now to make duration effectively zero
-        thok.started_at = Some(SystemTime::now());
+        thok.session_state.started_at = Some(SystemTime::now());
         thok.write('t');
 
         // Immediately calculate results (very short time)
         thok.calc_results();
 
         // Should handle zero/near-zero time gracefully
-        assert!(thok.wpm >= 0.0);
-        assert!(thok.accuracy >= 0.0);
+        assert!(thok.session_state.wpm >= 0.0);
+        assert!(thok.session_state.accuracy >= 0.0);
     }
 
     #[test]
@@ -1166,7 +1111,7 @@ mod tests {
 
         // Test that timing is initialized correctly
         assert_eq!(thok.number_of_secs, Some(1.0));
-        assert_eq!(thok.seconds_remaining, Some(1.0));
+        assert_eq!(thok.session_state.seconds_remaining, Some(1.0));
     }
 
     #[test]
@@ -1184,8 +1129,8 @@ mod tests {
         // calc_results should not panic even if stats operations fail
         thok.calc_results();
 
-        assert!(thok.wpm >= 0.0);
-        assert!(thok.accuracy >= 0.0);
+        assert!(thok.session_state.wpm >= 0.0);
+        assert!(thok.session_state.accuracy >= 0.0);
     }
 
     #[test]
@@ -1202,10 +1147,10 @@ mod tests {
         thok.write('\r'); // Carriage return
 
         assert!(thok.has_finished());
-        assert_eq!(thok.input.len(), 7);
+        assert_eq!(thok.session_state.input.len(), 7);
 
         // All should be marked as correct
-        for input in &thok.input {
+        for input in &thok.session_state.input {
             assert_eq!(input.outcome, Outcome::Correct);
         }
     }
@@ -1221,8 +1166,8 @@ mod tests {
         thok.write('\0'); // Null character
 
         assert!(thok.has_finished());
-        assert_eq!(thok.input.len(), 5);
-        assert_eq!(thok.input[4].outcome, Outcome::Correct);
+        assert_eq!(thok.session_state.input.len(), 5);
+        assert_eq!(thok.session_state.input[4].outcome, Outcome::Correct);
     }
 
     #[test]
@@ -1235,10 +1180,10 @@ mod tests {
         thok.write('c');
 
         assert!(thok.has_finished());
-        assert_eq!(thok.cursor_pos, 3);
+        assert_eq!(thok.session_state.cursor_pos, 3);
 
         // Test that the state is consistent after completion
-        assert!(thok.cursor_pos <= thok.prompt.len());
+        assert!(thok.session_state.cursor_pos <= thok.prompt.len());
     }
 
     #[test]
@@ -1249,7 +1194,7 @@ mod tests {
         assert!(thok.number_of_secs == Some(0.001));
 
         // Start and let it finish immediately
-        thok.started_at = Some(SystemTime::now());
+        thok.session_state.started_at = Some(SystemTime::now());
         thok.on_tick();
 
         // Should be finished due to tiny time limit
@@ -1286,7 +1231,7 @@ mod tests {
         let mut thok = Thok::new("test".to_string(), 1, None, false);
 
         // Set up a typing session
-        thok.started_at = Some(SystemTime::now());
+        thok.session_state.started_at = Some(SystemTime::now());
         thok.write('t');
         thok.write('e');
         thok.write('s');
@@ -1297,8 +1242,8 @@ mod tests {
 
         // Verify the session completed successfully
         assert!(thok.has_finished());
-        assert!(thok.wpm >= 0.0);
-        assert!(thok.accuracy >= 0.0);
+        assert!(thok.session_state.wpm >= 0.0);
+        assert!(thok.session_state.accuracy >= 0.0);
     }
 
     #[test]
@@ -1377,7 +1322,7 @@ mod tests {
         thok.calc_results();
 
         // Should have 100% accuracy
-        assert_eq!(thok.accuracy, 100.0);
+        assert_eq!(thok.session_state.accuracy, 100.0);
 
         // Start celebration - should work
         thok.start_celebration_if_worthy(80, 24);
@@ -1412,7 +1357,7 @@ mod tests {
         thok.calc_results();
 
         // Should have 100% accuracy
-        assert_eq!(thok.accuracy, 100.0);
+        assert_eq!(thok.session_state.accuracy, 100.0);
 
         // Start celebration
         thok.start_celebration_if_worthy(80, 24);
@@ -1445,7 +1390,7 @@ mod tests {
         thok.calc_results();
 
         // Should not have 100% accuracy
-        assert!(thok.accuracy < 100.0);
+        assert!(thok.session_state.accuracy < 100.0);
 
         // Try to start celebration
         thok.start_celebration_if_worthy(80, 24);
@@ -1617,8 +1562,8 @@ mod tests {
             thok.write(c);
             println!(
                 "Current cursor position: {}, input length: {}",
-                thok.cursor_pos,
-                thok.input.len()
+                thok.session_state.cursor_pos,
+                thok.session_state.input.len()
             );
 
             // Stop if we've reached the end of the prompt
@@ -1632,9 +1577,9 @@ mod tests {
         thok.calc_results();
 
         // Verify results calculation
-        assert!(thok.accuracy < 100.0); // Should be less than perfect due to one error
-        assert!(thok.accuracy > 85.0); // But still quite high
-        assert!(thok.wpm > 0.0);
+        assert!(thok.session_state.accuracy < 100.0); // Should be less than perfect due to one error
+        assert!(thok.session_state.accuracy > 85.0); // But still quite high
+        assert!(thok.session_state.wpm > 0.0);
 
         // Verify stats were recorded to database
         if let Some(ref stats_db) = thok.stats_db {
@@ -1709,10 +1654,10 @@ mod tests {
         assert!(thok1.has_finished());
         thok1.calc_results();
 
-        let session1_accuracy = thok1.accuracy;
+        let session1_accuracy = thok1.session_state.accuracy;
         println!(
             "Session 1 - Accuracy: {session1_accuracy}%, WPM: {}",
-            thok1.wpm
+            thok1.session_state.wpm
         );
 
         // Verify first session stats
@@ -1753,19 +1698,19 @@ mod tests {
         assert!(thok2.has_finished());
         thok2.calc_results();
 
-        let session2_accuracy = thok2.accuracy;
+        let session2_accuracy = thok2.session_state.accuracy;
         println!(
             "Session 2 - Accuracy: {session2_accuracy}%, WPM: {}",
-            thok2.wpm
+            thok2.session_state.wpm
         );
 
         // Session 2 should be faster (higher WPM) or at least equal
         // On some platforms timing precision might cause identical WPM values
         assert!(
-            thok2.wpm >= thok1.wpm,
+            thok2.session_state.wpm >= thok1.session_state.wpm,
             "Session 2 should be at least as fast as Session 1 (Session 1: {}, Session 2: {})",
-            thok1.wpm,
-            thok2.wpm
+            thok1.session_state.wpm,
+            thok2.session_state.wpm
         );
 
         // Verify second session stats and deltas
@@ -1997,8 +1942,8 @@ mod tests {
                 thok.write('x'); // incorrect
                 println!(
                     "After error: cursor={}, input_len={}",
-                    thok.cursor_pos,
-                    thok.input.len()
+                    thok.session_state.cursor_pos,
+                    thok.session_state.input.len()
                 );
                 std::thread::sleep(std::time::Duration::from_millis(250)); // slow
 
@@ -2012,8 +1957,8 @@ mod tests {
             thok.write(c); // correct character
             println!(
                 "After correct: cursor={}, input_len={}",
-                thok.cursor_pos,
-                thok.input.len()
+                thok.session_state.cursor_pos,
+                thok.session_state.input.len()
             );
             std::thread::sleep(std::time::Duration::from_millis(100));
 
@@ -2166,7 +2111,10 @@ mod tests {
         assert!(thok.has_finished());
         thok.calc_results();
 
-        assert_eq!(thok.accuracy, 100.0, "First session should be perfect");
+        assert_eq!(
+            thok.session_state.accuracy, 100.0,
+            "First session should be perfect"
+        );
 
         // Should celebrate perfect session with no historical data
         println!("About to test celebration for perfect session...");
@@ -2262,10 +2210,13 @@ mod tests {
         thok2.calc_results();
 
         assert_eq!(
-            thok2.accuracy, 100.0,
+            thok2.session_state.accuracy, 100.0,
             "Second session should also be perfect"
         );
-        println!("Session 1 WPM: {}, Session 2 WPM: {}", thok.wpm, thok2.wpm);
+        println!(
+            "Session 1 WPM: {}, Session 2 WPM: {}",
+            thok.session_state.wpm, thok2.session_state.wpm
+        );
         // Relax this assertion since timing differences might be minimal
         // assert!(thok2.wpm > thok.wpm, "Second session should be faster");
 
@@ -2324,12 +2275,12 @@ mod tests {
         // Start typing by typing the first character
         thok.write('t');
         assert!(thok.has_started());
-        assert_eq!(thok.cursor_pos, 1);
-        assert_eq!(thok.input.len(), 1);
+        assert_eq!(thok.session_state.cursor_pos, 1);
+        assert_eq!(thok.session_state.input.len(), 1);
 
         // Simulate going idle by setting the idle flag directly
-        thok.is_idle = true;
-        assert!(thok.is_idle);
+        thok.session_state.is_idle = true;
+        assert!(thok.session_state.is_idle);
 
         // Mark activity (simulating a key press to exit idle)
         let was_idle = thok.mark_activity();
@@ -2337,14 +2288,14 @@ mod tests {
         // Verify we correctly detected we were exiting idle state
         assert!(was_idle, "Should return true when exiting idle state");
         assert!(
-            !thok.is_idle,
+            !thok.session_state.is_idle,
             "Should no longer be idle after mark_activity"
         );
 
         // The session state should still be preserved at this point
         // (the actual reset happens in the main event loop)
-        assert_eq!(thok.cursor_pos, 1);
-        assert_eq!(thok.input.len(), 1);
+        assert_eq!(thok.session_state.cursor_pos, 1);
+        assert_eq!(thok.session_state.input.len(), 1);
     }
 
     #[test]
@@ -2356,6 +2307,6 @@ mod tests {
 
         // Should return false since we weren't idle
         assert!(!was_idle, "Should return false when not exiting idle state");
-        assert!(!thok.is_idle);
+        assert!(!thok.session_state.is_idle);
     }
 }

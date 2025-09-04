@@ -373,8 +373,13 @@ fn start_tui<B: Backend>(
                                 AppState::Results => match key.code {
                                     KeyCode::Char('t') => {
                                         if Browser::is_available() {
-                                            webbrowser::open(&format!("https://twitter.com/intent/tweet?text={}%20wpm%20%2F%20{}%25%20acc%20%2F%20{:.2}%20sd%0A%0Ahttps%3A%2F%2Fgithub.com%martintrojer%2Fklik", app.thok.wpm, app.thok.accuracy, app.thok.std_dev))
-                                        .unwrap_or_default();
+                                            webbrowser::open(&format!(
+                                                "https://twitter.com/intent/tweet?text={}%20wpm%20%2F%20{}%25%20acc%20%2F%20{:.2}%20sd%0A%0Ahttps%3A%2F%2Fgithub.com%martintrojer%2Fklik",
+                                                app.thok.session_state.wpm,
+                                                app.thok.session_state.accuracy,
+                                                app.thok.session_state.std_dev
+                                            ))
+                                            .unwrap_or_default();
                                         }
                                     }
                                     KeyCode::Char('r') => {
@@ -1052,7 +1057,7 @@ mod tests {
         let app = App::new(cli);
 
         assert_eq!(app.thok.number_of_secs, Some(60.0));
-        assert_eq!(app.thok.seconds_remaining, Some(60.0));
+        assert_eq!(app.thok.session_state.seconds_remaining, Some(60.0));
         assert_eq!(app.state, AppState::Typing);
     }
 
@@ -1078,8 +1083,8 @@ mod tests {
 
         assert_eq!(app.thok.prompt, "new test prompt");
         assert_ne!(app.thok.prompt, original_prompt);
-        assert_eq!(app.thok.input.len(), 0);
-        assert_eq!(app.thok.cursor_pos, 0);
+        assert_eq!(app.thok.session_state.input.len(), 0);
+        assert_eq!(app.thok.session_state.cursor_pos, 0);
         assert_eq!(app.state, AppState::Typing);
     }
 
@@ -1103,13 +1108,13 @@ mod tests {
 
         app.thok.write('t');
         app.thok.write('e');
-        assert_eq!(app.thok.input.len(), 2);
+        assert_eq!(app.thok.session_state.input.len(), 2);
 
         app.reset(None);
 
         assert_ne!(app.thok.prompt, original_prompt);
-        assert_eq!(app.thok.input.len(), 0);
-        assert_eq!(app.thok.cursor_pos, 0);
+        assert_eq!(app.thok.session_state.input.len(), 0);
+        assert_eq!(app.thok.session_state.cursor_pos, 0);
         assert_eq!(app.state, AppState::Typing);
     }
 
@@ -1718,8 +1723,8 @@ mod tests {
         app.state = AppState::Results;
 
         // Verify results exist
-        assert!(app.thok.wpm > 0.0);
-        assert!(app.thok.accuracy >= 0.0 && app.thok.accuracy <= 100.0);
+        assert!(app.thok.session_state.wpm > 0.0);
+        assert!(app.thok.session_state.accuracy >= 0.0 && app.thok.session_state.accuracy <= 100.0);
 
         // Test state transitions
         app.state = AppState::CharacterStats;
@@ -1730,7 +1735,7 @@ mod tests {
         assert_eq!(app.state, AppState::Typing);
         assert!(!app.thok.has_started());
         assert!(!app.thok.has_finished());
-        assert_eq!(app.thok.input.len(), 0);
+        assert_eq!(app.thok.session_state.input.len(), 0);
     }
 
     #[test]
@@ -1753,7 +1758,7 @@ mod tests {
 
         // Verify timed session setup
         assert_eq!(app.thok.number_of_secs, Some(1.0));
-        assert_eq!(app.thok.seconds_remaining, Some(1.0));
+        assert_eq!(app.thok.session_state.seconds_remaining, Some(1.0));
 
         // Start typing
         app.thok.on_keypress_start();
@@ -1861,8 +1866,8 @@ mod tests {
         assert_eq!(app.thok.number_of_words, 25);
         assert_eq!(app.thok.number_of_secs, Some(60.0));
         assert!(app.thok.strict_mode);
-        assert_eq!(app.thok.input.len(), 0); // But input is cleared
-        assert_eq!(app.thok.cursor_pos, 0); // And cursor is reset
+        assert_eq!(app.thok.session_state.input.len(), 0); // But input is cleared
+        assert_eq!(app.thok.session_state.cursor_pos, 0); // And cursor is reset
         assert_eq!(app.state, AppState::Typing); // And state is reset
     }
 
