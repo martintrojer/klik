@@ -5,6 +5,7 @@ pub mod runtime;
 pub mod session;
 pub mod stats;
 pub mod thok;
+pub mod time_series;
 pub mod typing_policy;
 pub mod ui;
 pub mod util;

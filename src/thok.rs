@@ -33,7 +33,7 @@ pub struct Thok {
     pub prompt: String,
     pub input: Vec<Input>,
     pub raw_coords: Vec<(f64, f64)>,
-    pub wpm_coords: Vec<(f64, f64)>,
+    pub wpm_coords: Vec<crate::time_series::TimeSeriesPoint>,
     pub cursor_pos: usize,
     pub started_at: Option<SystemTime>,
     pub seconds_remaining: Option<f64>,
@@ -232,11 +232,14 @@ impl Thok {
         for x in correct_chars_per_sec {
             correct_chars_pressed_until_now += x.1;
             self.wpm_coords
-                .push((x.0, ((60.00 / x.0) * correct_chars_pressed_until_now) / 5.0))
+                .push(crate::time_series::TimeSeriesPoint::new(
+                    x.0,
+                    ((60.00 / x.0) * correct_chars_pressed_until_now) / 5.0,
+                ))
         }
 
         if !self.wpm_coords.is_empty() {
-            self.wpm = self.wpm_coords.last().unwrap().1.ceil();
+            self.wpm = self.wpm_coords.last().unwrap().wpm.ceil();
         } else {
             self.wpm = 0.0;
         }

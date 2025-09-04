@@ -180,11 +180,13 @@ impl Widget for &App {
                     thok.seconds_remaining,
                 );
 
+                let tuples: Vec<(f64, f64)> =
+                    thok.wpm_coords.iter().map(|p| (p.t, p.wpm)).collect();
                 let datasets = vec![Dataset::default()
                     .marker(ratatui::symbols::Marker::Braille)
                     .style(magenta_style)
                     .graph_type(GraphType::Line)
-                    .data(&thok.wpm_coords)];
+                    .data(&tuples)];
 
                 let chart = Chart::new(datasets)
                     .x_axis(
@@ -361,7 +363,11 @@ mod tests {
             thok.wpm = 42.0;
             thok.accuracy = 95.0;
             thok.std_dev = 2.5;
-            thok.wpm_coords = vec![(1.0, 20.0), (2.0, 35.0), (3.0, 42.0)];
+            thok.wpm_coords = vec![
+                crate::time_series::TimeSeriesPoint::new(1.0, 20.0),
+                crate::time_series::TimeSeriesPoint::new(2.0, 35.0),
+                crate::time_series::TimeSeriesPoint::new(3.0, 42.0),
+            ];
         }
 
         App {

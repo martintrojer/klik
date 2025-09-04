@@ -10,5 +10,5 @@ pub struct SessionResult {
     pub wpm: f64,
     pub accuracy: f64,
     pub std_dev: f64,
-    pub wpm_coords: Vec<(f64, f64)>,
+    pub wpm_coords: Vec<crate::time_series::TimeSeriesPoint>,
 }

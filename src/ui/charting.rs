@@ -1,17 +1,17 @@
 /// Compute X (seconds) and Y (WPM) bounds for the results chart
 pub fn compute_chart_params(
-    wpm_coords: &[(f64, f64)],
+    wpm_coords: &[crate::time_series::TimeSeriesPoint],
     seconds_remaining: Option<f64>,
 ) -> (f64, f64) {
     let mut highest_wpm = 0.0;
-    for &(_, wpm) in wpm_coords {
-        if wpm > highest_wpm {
-            highest_wpm = wpm;
+    for p in wpm_coords {
+        if p.wpm > highest_wpm {
+            highest_wpm = p.wpm;
         }
     }
 
     let mut overall_duration = match wpm_coords.last() {
-        Some(x) => x.0,
+        Some(x) => x.t,
         None => seconds_remaining.unwrap_or(1.0),
     };
     if overall_duration < 1.0 {
