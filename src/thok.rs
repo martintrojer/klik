@@ -51,6 +51,7 @@ pub struct Thok {
     pub is_idle: bool,
     pub idle_timeout_secs: f64,
     pub session_config: crate::session::SessionConfig,
+    pub session_state: crate::session::SessionState,
 }
 
 impl Thok {
@@ -100,12 +101,18 @@ impl Thok {
                 number_of_secs,
                 strict: strict_mode,
             },
+            session_state: crate::session::SessionState {
+                seconds_remaining: number_of_secs,
+                ..Default::default()
+            },
         }
     }
 
     pub fn on_tick(&mut self) {
-        if let Some(remaining) = self.seconds_remaining {
-            self.seconds_remaining = Some(remaining - (TICK_RATE_MS as f64 / 1000_f64));
+        if let Some(remaining) = self.session_state.seconds_remaining {
+            let next = remaining - (TICK_RATE_MS as f64 / 1000_f64);
+            self.session_state.seconds_remaining = Some(next);
+            self.seconds_remaining = Some(next);
         }
 
         // Check for idle timeout
@@ -114,18 +121,24 @@ impl Thok {
 
     /// Check if the user has been idle and set idle state accordingly
     fn check_idle_timeout(&mut self) {
-        if let Some(last_activity) = self.last_activity {
+        if let Some(last_activity) = self.session_state.last_activity.or(self.last_activity) {
             let now = SystemTime::now();
             if let Ok(duration) = now.duration_since(last_activity) {
                 let idle_duration = duration.as_secs_f64();
-                if idle_duration >= self.idle_timeout_secs && !self.is_idle {
+                if idle_duration >= self.session_state.idle_timeout_secs
+                    && !self.session_state.is_idle
+                {
+                    self.session_state.is_idle = true;
                     self.is_idle = true;
                     // Pause timers when going idle
                     if self.has_started() && !self.has_finished() {
-                        if let Some(started_at) = self.started_at {
+                        if let Some(started_at) = self.session_state.started_at.or(self.started_at)
+                        {
                             if let Ok(elapsed) = last_activity.duration_since(started_at) {
                                 // Store the elapsed time up to when user went idle
-                                self.started_at = Some(now.checked_sub(elapsed).unwrap_or(now));
+                                let adj = Some(now.checked_sub(elapsed).unwrap_or(now));
+                                self.session_state.started_at = adj;
+                                self.started_at = adj;
                             }
                         }
                     }
@@ -138,19 +151,23 @@ impl Thok {
     /// Returns true if we were exiting idle state (indicating session should be reset)
     pub fn mark_activity(&mut self) -> bool {
         let now = SystemTime::now();
-        let was_idle = self.is_idle;
+        let was_idle = self.session_state.is_idle || self.is_idle;
 
-        if self.is_idle {
+        if self.session_state.is_idle || self.is_idle {
             // Exiting idle state - restart timers
+            self.session_state.is_idle = false;
             self.is_idle = false;
             if self.has_started() && !self.has_finished() {
                 // Reset started_at to effectively restart the session timer
+                self.session_state.started_at = Some(now);
                 self.started_at = Some(now);
                 // Reset remaining time for timed sessions
+                self.session_state.seconds_remaining = self.number_of_secs;
                 self.seconds_remaining = self.number_of_secs;
             }
         }
 
+        self.session_state.last_activity = Some(now);
         self.last_activity = Some(now);
         was_idle
     }
@@ -296,11 +313,15 @@ impl Thok {
     }
 
     pub fn start(&mut self) {
-        self.started_at = Some(SystemTime::now());
+        let now = SystemTime::now();
+        self.session_state.started_at = Some(now);
+        self.started_at = Some(now);
     }
 
     pub fn on_keypress_start(&mut self) {
-        self.keypress_start_time = Some(SystemTime::now());
+        let now = SystemTime::now();
+        self.session_state.keypress_start_time = Some(now);
+        self.keypress_start_time = Some(now);
     }
 
     /// Alternative timing method that measures inter-keystroke intervals

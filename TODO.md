@@ -27,6 +27,9 @@ This document tracks proposed refactors to improve separation of concerns, testa
 - [x] Extract `TypingPolicy` strategies (strict vs normal) from `write()`
 - [x] Add `SessionConfig` and `SessionResult` scaffolding (to evolve into full split)
 - [ ] Split session into `Session` (config), `SessionState` (mutable), `SessionResult`
+  - [x] Added `SessionConfig` and `SessionState` (timers/idle)
+  - [x] Wired Thok to maintain `SessionState` while preserving legacy fields
+  - [ ] Move input/cursor/results into `SessionState` and remove legacy fields
 - [x] Replace raw `(f64,f64)` WPM points with `TimeSeriesPoint { t, wpm }`
 
 ## Language & Formatting
