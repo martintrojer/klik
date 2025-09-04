@@ -1,5 +1,5 @@
 use crate::celebration::CelebrationAnimation;
-use crate::stats::{extract_context, time_diff_ms, CharStat, StatsDb};
+use crate::stats::{extract_context, time_diff_ms, CharStat, StatsDb, StatsStore};
 use crate::util::std_dev;
 use crate::TICK_RATE_MS;
 use chrono::prelude::*;
@@ -42,7 +42,7 @@ pub struct Thok {
     pub wpm: f64,
     pub accuracy: f64,
     pub std_dev: f64,
-    pub stats_db: Option<StatsDb>,
+    pub stats_db: Option<Box<dyn StatsStore>>,
     pub keypress_start_time: Option<SystemTime>,
     pub strict_mode: bool,
     pub corrected_positions: std::collections::HashSet<usize>, // Track positions that had errors
@@ -59,7 +59,9 @@ impl Thok {
         number_of_secs: Option<f64>,
         strict_mode: bool,
     ) -> Self {
-        let stats_db = StatsDb::new().ok();
+        let stats_db = StatsDb::new()
+            .ok()
+            .map(|db| Box::new(db) as Box<dyn StatsStore>);
         Self {
             prompt,
             input: vec![],

@@ -1,3 +1,4 @@
+pub mod app_dirs;
 pub mod celebration;
 pub mod language;
 pub mod runtime;

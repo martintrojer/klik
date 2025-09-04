@@ -1,5 +1,5 @@
 use chrono::{DateTime, Local};
-use directories::ProjectDirs;
+// ProjectDirs used via app_dirs; keep import minimal here
 use rusqlite::{params, Connection, OptionalExtension, Result};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -61,10 +61,88 @@ pub struct StatsDb {
     session_buffer: HashMap<char, Vec<CharStat>>,
 }
 
+/// Abstraction for character statistics persistence
+pub trait StatsStore: Send + std::fmt::Debug {
+    fn record_char_stat(&mut self, stat: &CharStat) -> Result<()>;
+    fn record_char_stats_batch(&mut self, stats: &[CharStat]) -> Result<()>;
+    fn flush(&mut self) -> Result<()>;
+
+    fn get_char_stats(&self, character: char) -> Result<Vec<CharStat>>;
+    fn get_avg_time_to_press(&self, character: char) -> Result<Option<f64>>;
+    fn get_miss_rate(&self, character: char) -> Result<f64>;
+    fn get_all_char_summary(&self) -> Result<Vec<(char, f64, f64, i64)>>;
+    fn get_char_summary_with_deltas(&self) -> Result<Vec<CharSummaryWithDeltas>>;
+
+    fn auto_compact(&mut self) -> Result<()> {
+        Ok(())
+    }
+    fn get_compaction_info(&self) -> Result<(i64, i64, f64)> {
+        Ok((0, 0, 0.0))
+    }
+    fn compact_database(&mut self) -> Result<()> {
+        Ok(())
+    }
+    fn clear_all_stats(&self) -> Result<()> {
+        Ok(())
+    }
+    fn get_character_difficulties(
+        &self,
+    ) -> Result<std::collections::HashMap<char, crate::language::CharacterDifficulty>> {
+        Ok(std::collections::HashMap::new())
+    }
+}
+
+impl StatsStore for StatsDb {
+    fn record_char_stat(&mut self, stat: &CharStat) -> Result<()> {
+        StatsDb::record_char_stat(self, stat)
+    }
+    fn record_char_stats_batch(&mut self, stats: &[CharStat]) -> Result<()> {
+        StatsDb::record_char_stats_batch(self, stats)
+    }
+    fn flush(&mut self) -> Result<()> {
+        StatsDb::flush(self)
+    }
+
+    fn get_char_stats(&self, character: char) -> Result<Vec<CharStat>> {
+        StatsDb::get_char_stats(self, character)
+    }
+    fn get_avg_time_to_press(&self, character: char) -> Result<Option<f64>> {
+        StatsDb::get_avg_time_to_press(self, character)
+    }
+    fn get_miss_rate(&self, character: char) -> Result<f64> {
+        StatsDb::get_miss_rate(self, character)
+    }
+    fn get_all_char_summary(&self) -> Result<Vec<(char, f64, f64, i64)>> {
+        StatsDb::get_all_char_summary(self)
+    }
+    fn get_char_summary_with_deltas(&self) -> Result<Vec<CharSummaryWithDeltas>> {
+        StatsDb::get_char_summary_with_deltas(self)
+    }
+
+    fn auto_compact(&mut self) -> Result<()> {
+        StatsDb::auto_compact(self)
+    }
+    fn get_compaction_info(&self) -> Result<(i64, i64, f64)> {
+        StatsDb::get_compaction_info(self)
+    }
+    fn compact_database(&mut self) -> Result<()> {
+        StatsDb::compact_database(self)
+    }
+    fn clear_all_stats(&self) -> Result<()> {
+        StatsDb::clear_all_stats(self)
+    }
+    fn get_character_difficulties(
+        &self,
+    ) -> Result<std::collections::HashMap<char, crate::language::CharacterDifficulty>> {
+        StatsDb::get_character_difficulties(self)
+    }
+}
+
 impl StatsDb {
     /// Initialize the database connection and create tables if needed
     pub fn new() -> Result<Self> {
-        let db_path = Self::get_db_path().unwrap_or_else(|| PathBuf::from("klik_stats.db"));
+        let db_path =
+            crate::app_dirs::AppDirs::db_path().unwrap_or_else(|| PathBuf::from("klik_stats.db"));
 
         // Create parent directory if it doesn't exist
         if let Some(parent) = db_path.parent() {
@@ -120,20 +198,7 @@ impl StatsDb {
 
     /// Get the database file path under $HOME/.local/state/klik
     fn get_db_path() -> Option<PathBuf> {
-        // Try to use the XDG-compliant ~/.local/state directory first
-        if let Ok(home) = std::env::var("HOME") {
-            let state_dir = PathBuf::from(home)
-                .join(".local")
-                .join("state")
-                .join("klik");
-            Some(state_dir.join("stats.db"))
-        } else if let Some(proj_dirs) = ProjectDirs::from("", "", "klik") {
-            // Fallback to system-specific directory
-            let state_dir = proj_dirs.data_local_dir();
-            Some(state_dir.join("stats.db"))
-        } else {
-            None
-        }
+        crate::app_dirs::AppDirs::db_path()
     }
 
     /// Record a character statistic (buffers for session aggregation)

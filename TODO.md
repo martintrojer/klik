@@ -16,12 +16,12 @@ This document tracks proposed refactors to improve separation of concerns, testa
 - [x] Add a presenter for character stats rows (pure function) to simplify the widget
 
 ## Domain vs Persistence
-- [ ] Create `StatsStore` trait (get/put/flush/summary APIs)
-  - [ ] Impl: `SqliteStatsStore` (current DB)
+- [x] Create `StatsStore` trait (get/put/flush/summary APIs)
+  - [x] Impl: `SqliteStatsStore` (current DB via `StatsDb`)
   - [ ] Impl: `NoopStatsStore` (tests)
   - [ ] Impl: `InMemoryStatsStore` (bench/tests)
-- [ ] Introduce `AppDirs` service for config/log/db paths
-- [ ] Inject `StatsStore` into `Thok` instead of owning DB directly
+- [x] Introduce `AppDirs` service for config/log/db paths
+- [x] Inject `StatsStore` into `Thok` instead of owning DB directly
 
 ## Typing Logic (Thok)
 - [ ] Extract `TypingPolicy` strategies (strict vs normal) from `write()`
@@ -53,7 +53,7 @@ This document tracks proposed refactors to improve separation of concerns, testa
 
 ### Suggested Phasing
 - Phase 1: EventSource/Ticker/Runner + move character-stats UI + chart helpers [COMPLETED]
-- Phase 2: StatsStore/AppDirs injection + TypingPolicy + Session structs
+- Phase 2: StatsStore/AppDirs injection [DONE], TypingPolicy + Session structs [NEXT]
 - Phase 3: Formatter consolidation + Config/ConfigStore
 - Phase 4: Test reorganization + logging cleanup
 
