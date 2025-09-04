@@ -10,6 +10,7 @@ pub mod word_generator;
 // Keep the old lang module name for compatibility
 pub use language as lang;
 
+use crate::runtime::{CrosstermEventSource, FixedTicker, Runner, ThokEvent as RtEvent};
 use crate::ui::character_stats::render_character_stats;
 use crate::{
     lang::Language,
@@ -19,7 +20,7 @@ use crate::{
 use chrono::{Local, TimeZone};
 use clap::{error::ErrorKind, CommandFactory, Parser, ValueEnum};
 use crossterm::{
-    event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
+    event::{KeyCode, KeyModifiers},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     tty::IsTty,
@@ -31,8 +32,6 @@ use ratatui::{
 use std::{
     error::Error,
     io::{self, stdin},
-    sync::mpsc,
-    thread,
     time::Duration,
 };
 use time_humanize::HumanTime;
@@ -274,10 +273,10 @@ fn start_tui<B: Backend>(
     terminal: &mut Terminal<B>,
     mut app: &mut App,
 ) -> Result<(), Box<dyn Error>> {
-    // Always enable ticking for celebration animations and timed sessions
-    let should_tick = true;
-
-    let thok_events = get_thok_events(should_tick);
+    // Use the new Runner with crossterm event source and fixed ticker
+    let event_source = CrosstermEventSource::new();
+    let ticker = FixedTicker::new(Duration::from_millis(TICK_RATE_MS));
+    let runner = Runner::new(event_source, ticker);
 
     loop {
         let mut exit_type: ExitType = ExitType::Quit;
@@ -286,8 +285,8 @@ fn start_tui<B: Backend>(
         loop {
             let app = &mut app;
 
-            match thok_events.recv()? {
-                ThokEvent::Tick => {
+            match runner.step() {
+                RtEvent::Tick => {
                     if app.thok.has_started() && !app.thok.has_finished() {
                         app.thok.on_tick();
 
@@ -311,10 +310,10 @@ fn start_tui<B: Backend>(
                         terminal.draw(|f| ui(app, f))?;
                     }
                 }
-                ThokEvent::Resize => {
+                RtEvent::Resize => {
                     terminal.draw(|f| ui(app, f))?;
                 }
-                ThokEvent::Key(key) => {
+                RtEvent::Key(key) => {
                     // Mark activity for any key press during typing to exit idle state
                     if app.state == AppState::Typing && !app.thok.has_finished() {
                         let was_idle = app.thok.mark_activity();
@@ -327,9 +326,7 @@ fn start_tui<B: Backend>(
                     }
 
                     match key.code {
-                        KeyCode::Esc => {
-                            break;
-                        }
+                        KeyCode::Esc => break,
                         KeyCode::Backspace => {
                             if app.state == AppState::Typing && !app.thok.has_finished() {
                                 app.thok.backspace();
@@ -512,42 +509,6 @@ fn start_tui<B: Backend>(
     }
 
     Ok(())
-}
-
-#[derive(Clone)]
-enum ThokEvent {
-    Key(KeyEvent),
-    Resize,
-    Tick,
-}
-
-fn get_thok_events(should_tick: bool) -> mpsc::Receiver<ThokEvent> {
-    let (tx, rx) = mpsc::channel();
-
-    if should_tick {
-        let tick_x = tx.clone();
-        thread::spawn(move || loop {
-            if tick_x.send(ThokEvent::Tick).is_err() {
-                break;
-            }
-
-            thread::sleep(Duration::from_millis(TICK_RATE_MS))
-        });
-    }
-
-    thread::spawn(move || loop {
-        let evt = match event::read().unwrap() {
-            Event::Key(key) => Some(ThokEvent::Key(key)),
-            Event::Resize(_, _) => Some(ThokEvent::Resize),
-            _ => None,
-        };
-
-        if evt.is_some() && tx.send(evt.unwrap()).is_err() {
-            break;
-        }
-    });
-
-    rx
 }
 
 /* moved to crate::ui::character_stats::render_character_stats */
@@ -913,7 +874,9 @@ fn ui(app: &mut App, f: &mut Frame) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::runtime::{FixedTicker, Runner, TestEventSource, ThokEvent};
     use clap::Parser;
+    use crossterm::event::KeyEvent;
 
     #[test]
     fn test_cli_default_values() {
@@ -1426,37 +1389,30 @@ mod tests {
 
     #[test]
     fn test_get_thok_events_no_tick() {
-        // Test creating event receiver without ticking
-        let receiver = get_thok_events(false);
-
-        // Since we can't easily inject events in a unit test without complex mocking,
-        // we'll just verify the receiver was created successfully
-        // The actual event handling is tested through integration
-        drop(receiver); // Clean up
+        use std::sync::mpsc;
+        let (_tx, rx) = mpsc::channel();
+        let es = TestEventSource::new(rx);
+        let ticker = FixedTicker::new(Duration::from_millis(1));
+        let runner = Runner::new(es, ticker);
+        // With no events available, step should yield Tick via timeout
+        match runner.step() {
+            ThokEvent::Tick => {}
+            _ => panic!("Expected Tick on timeout"),
+        }
     }
 
     #[test]
     fn test_get_thok_events_with_tick() {
-        // Test creating event receiver with ticking enabled
-        let receiver = get_thok_events(true);
-
-        // Verify we can receive tick events (with timeout to avoid hanging)
-        use std::time::Duration;
-        let result = receiver.recv_timeout(Duration::from_millis(150)); // Slightly longer than TICK_RATE_MS
-
-        // Should receive a tick event
-        match result {
-            Ok(ThokEvent::Tick) => {
-                // Success - we got a tick event
-            }
-            Ok(_) => panic!("Expected tick event, got different event type"),
-            Err(_) => {
-                // Timeout is acceptable in test environment due to timing variations
-                // The important thing is that the receiver was created successfully
-            }
+        use std::sync::mpsc;
+        let (tx, rx) = mpsc::channel();
+        tx.send(ThokEvent::Tick).unwrap();
+        let es = TestEventSource::new(rx);
+        let ticker = FixedTicker::new(Duration::from_millis(10));
+        let runner = Runner::new(es, ticker);
+        match runner.step() {
+            ThokEvent::Tick => {}
+            other => panic!("Expected tick event, got {:?}", other),
         }
-
-        drop(receiver); // Clean up
     }
 
     #[test]
