@@ -34,9 +34,9 @@ This document tracks proposed refactors to improve separation of concerns, testa
 - [x] Replace raw `(f64,f64)` WPM points with `TimeSeriesPoint { t, wpm }`
 
 ## Language & Formatting
-- [ ] Consolidate `language/formatter.rs` and `language/formatting.rs`
-  - Keep `TextFormatter` + `CompositeFormatter` strategy
-  - Remove/redirect `Language::apply_advanced_formatting` to formatter
+- [x] Consolidate `language/formatter.rs` and `language/formatting.rs`
+  - [x] Keep `TextFormatter` + `CompositeFormatter` strategy
+  - [x] Redirect `Language::apply_advanced_formatting` to formatter (preserving basic punctuation behavior)
 - [ ] Ensure a single source of truth for word selectors (avoid duplication with `selection.rs`)
 - [ ] Make `WordGenerator` depend only on formatter trait for formatting step
 
