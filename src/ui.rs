@@ -37,7 +37,7 @@ impl Widget for &App {
 
         let magenta_style = Style::default().fg(Color::Magenta);
 
-        match (!thok.has_finished(), thok.session_state.is_idle) {
+        match (!thok.has_finished(), thok.is_idle()) {
             (true, true) => {
                 // Idle state - show idle message
                 let idle_message = Paragraph::new(Span::styled(
@@ -81,8 +81,7 @@ impl Widget for &App {
                     .split(area);
 
                 let mut spans = thok
-                    .session_state
-                    .input
+                    .input()
                     .iter()
                     .enumerate()
                     .map(|(idx, input)| {
@@ -98,9 +97,7 @@ impl Widget for &App {
                             ),
                             Outcome::Correct => {
                                 // In strict mode, show corrected positions with a different color
-                                if thok.strict_mode
-                                    && thok.session_state.corrected_positions.contains(&idx)
-                                {
+                                if thok.strict_mode && thok.corrected_positions().contains(&idx) {
                                     // Show corrected errors with orange color (much more distinct from green)
                                     Span::styled(
                                         expected,
@@ -117,12 +114,11 @@ impl Widget for &App {
                     .collect::<Vec<Span>>();
 
                 spans.push(Span::styled(
-                    thok.get_expected_char(thok.session_state.cursor_pos)
-                        .to_string(),
+                    thok.get_expected_char(thok.cursor_pos()).to_string(),
                     underlined_dim_bold_style,
                 ));
 
-                let start = (thok.session_state.cursor_pos + 1).min(thok.prompt.len());
+                let start = (thok.cursor_pos() + 1).min(thok.prompt.len());
                 spans.push(Span::styled(
                     thok.prompt[start..thok.prompt.len()].to_string(),
                     dim_bold_style,
@@ -140,9 +136,9 @@ impl Widget for &App {
 
                 widget.render(chunks[2], buf);
 
-                if thok.session_state.seconds_remaining.is_some() {
+                if thok.seconds_remaining().is_some() {
                     let timer = Paragraph::new(Span::styled(
-                        format!("{:.1}", thok.session_state.seconds_remaining.unwrap()),
+                        format!("{:.1}", thok.seconds_remaining().unwrap()),
                         dim_bold_style,
                     ))
                     .alignment(Alignment::Center);
@@ -181,16 +177,12 @@ impl Widget for &App {
                     .split(area);
 
                 let (overall_duration, highest_wpm) = crate::ui::charting::compute_chart_params(
-                    &thok.session_state.wpm_coords,
-                    thok.session_state.seconds_remaining,
+                    thok.wpm_coords(),
+                    thok.seconds_remaining(),
                 );
 
-                let tuples: Vec<(f64, f64)> = thok
-                    .session_state
-                    .wpm_coords
-                    .iter()
-                    .map(|p| (p.t, p.wpm))
-                    .collect();
+                let tuples: Vec<(f64, f64)> =
+                    thok.wpm_coords().iter().map(|p| (p.t, p.wpm)).collect();
                 let datasets = vec![Dataset::default()
                     .marker(ratatui::symbols::Marker::Braille)
                     .style(magenta_style)
@@ -228,9 +220,9 @@ impl Widget for &App {
                 let stats = Paragraph::new(Span::styled(
                     format!(
                         "{} wpm   {}% acc   {:.2} sd",
-                        thok.session_state.wpm,
-                        thok.session_state.accuracy,
-                        thok.session_state.std_dev
+                        thok.wpm(),
+                        thok.accuracy(),
+                        thok.std_dev()
                     ),
                     bold_style,
                 ))

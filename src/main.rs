@@ -375,9 +375,9 @@ fn start_tui<B: Backend>(
                                         if Browser::is_available() {
                                             webbrowser::open(&format!(
                                                 "https://twitter.com/intent/tweet?text={}%20wpm%20%2F%20{}%25%20acc%20%2F%20{:.2}%20sd%0A%0Ahttps%3A%2F%2Fgithub.com%martintrojer%2Fklik",
-                                                app.thok.session_state.wpm,
-                                                app.thok.session_state.accuracy,
-                                                app.thok.session_state.std_dev
+                                                app.thok.wpm(),
+                                                app.thok.accuracy(),
+                                                app.thok.std_dev()
                                             ))
                                             .unwrap_or_default();
                                         }
