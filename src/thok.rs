@@ -37,6 +37,46 @@ pub struct Thok {
 }
 
 impl Thok {
+    // Convenience getters to decouple external code from internal layout
+    pub fn wpm(&self) -> f64 {
+        self.session_state.wpm
+    }
+
+    pub fn accuracy(&self) -> f64 {
+        self.session_state.accuracy
+    }
+
+    pub fn std_dev(&self) -> f64 {
+        self.session_state.std_dev
+    }
+
+    pub fn wpm_coords(&self) -> &[crate::time_series::TimeSeriesPoint] {
+        &self.session_state.wpm_coords
+    }
+
+    pub fn input(&self) -> &[Input] {
+        &self.session_state.input
+    }
+
+    pub fn cursor_pos(&self) -> usize {
+        self.session_state.cursor_pos
+    }
+
+    pub fn seconds_remaining(&self) -> Option<f64> {
+        self.session_state.seconds_remaining
+    }
+
+    pub fn is_idle(&self) -> bool {
+        self.session_state.is_idle
+    }
+
+    pub fn started_at(&self) -> Option<SystemTime> {
+        self.session_state.started_at
+    }
+
+    pub fn corrected_positions(&self) -> &std::collections::HashSet<usize> {
+        &self.session_state.corrected_positions
+    }
     // SessionState is the single source of truth
     pub fn with_stats_store(
         prompt: String,
