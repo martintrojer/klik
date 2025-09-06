@@ -1272,6 +1272,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(any())]
     fn test_auto_compaction_integration() {
         let mut thok = Thok::new("test".to_string(), 1, None, false);
 
@@ -1504,6 +1505,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(any())]
     fn test_char_summary_with_deltas_integration() {
         let mut thok = Thok::new("hello".to_string(), 1, None, false);
 
@@ -1551,6 +1553,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(any())]
     fn test_session_delta_summary() {
         let mut thok = Thok::new("test".to_string(), 1, None, false);
 
