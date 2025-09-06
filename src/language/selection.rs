@@ -33,34 +33,7 @@ impl Language {
         IntelligentSelector.select_words(self, num, char_stats)
     }
 
-    /// Calculate difficulty score for a word based on character statistics
-    #[allow(dead_code)]
-    fn calculate_word_difficulty_score(
-        &self,
-        _word: &str,
-        _char_stats: &HashMap<char, CharacterDifficulty>,
-    ) -> f64 {
-        // Deprecated: logic moved to selector module; kept for compatibility
-        0.0
-    }
-
-    /// Get the weakest characters (those that need most practice) from character statistics
-    #[allow(dead_code)]
-    fn get_weakest_characters(
-        &self,
-        _char_stats: &HashMap<char, CharacterDifficulty>,
-        _count: usize,
-    ) -> Vec<char> {
-        // Deprecated: logic moved to selector module; kept for compatibility
-        Vec::new()
-    }
-
-    /// Substitute some characters in a word with weaker characters for practice
-    #[allow(dead_code)]
-    fn substitute_characters_in_word(&self, word: &str, _weak_chars: &[char]) -> String {
-        // Deprecated: logic moved to selector module; kept for compatibility
-        word.to_string()
-    }
+    // Deprecated helpers removed in favor of selector.rs single source of truth
 }
 
 #[cfg(test)]
