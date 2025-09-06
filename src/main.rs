@@ -42,7 +42,7 @@ use std::{
     time::Duration,
 };
 use time_humanize::HumanTime;
-use webbrowser::Browser;
+// Browser is used in ui module; not needed here
 
 const TICK_RATE_MS: u64 = 100;
 
@@ -332,175 +332,44 @@ fn start_tui<B: Backend>(
                         }
                     }
 
-                    match key.code {
-                        KeyCode::Esc => break,
-                        KeyCode::Backspace => {
-                            if app.state == AppState::Typing && !app.thok.has_finished() {
-                                app.thok.backspace();
-                            }
-                        }
-                        KeyCode::Left => {
+                    // Global keys
+                    if key.code == KeyCode::Esc
+                        || (key.modifiers.contains(KeyModifiers::CONTROL)
+                            && matches!(key.code, KeyCode::Char('c')))
+                    {
+                        break;
+                    }
+                    if key.code == KeyCode::Left {
+                        exit_type = ExitType::Restart;
+                        break;
+                    }
+                    if key.code == KeyCode::Right {
+                        exit_type = ExitType::New;
+                        break;
+                    }
+
+                    // Delegate to current screen for handling
+                    let mut screen = current_screen(&app.state);
+                    match screen.on_key(key, app) {
+                        Some(crate::ui::screen::KeyAction::Restart) => {
                             exit_type = ExitType::Restart;
                             break;
                         }
-                        KeyCode::Right => {
+                        Some(crate::ui::screen::KeyAction::New) => {
                             exit_type = ExitType::New;
                             break;
                         }
-                        KeyCode::Char(c) => {
-                            if key.modifiers.contains(KeyModifiers::CONTROL)
-                                && key.code == KeyCode::Char('c')
-                            // ctrl+c to quit
-                            {
-                                break;
-                            }
-
-                            match app.state {
-                                AppState::Typing => {
-                                    if !app.thok.has_finished() {
-                                        // Remove the immediate on_keypress_start() call
-                                        // The write() method will now use inter-keystroke timing
-                                        app.thok.write(c);
-                                        if app.thok.has_finished() {
-                                            app.thok.calc_results();
-                                            // Get terminal size for celebration
-                                            let size = terminal.size().unwrap_or_default();
-                                            app.thok.start_celebration_if_worthy(
-                                                size.width,
-                                                size.height,
-                                            );
-                                            app.state = AppState::Results;
-                                        }
-                                    }
-                                }
-                                AppState::Results => match key.code {
-                                    KeyCode::Char('t') => {
-                                        if Browser::is_available() {
-                                            webbrowser::open(&format!(
-                                                "https://twitter.com/intent/tweet?text={}%20wpm%20%2F%20{}%25%20acc%20%2F%20{:.2}%20sd%0A%0Ahttps%3A%2F%2Fgithub.com%martintrojer%2Fklik",
-                                                app.thok.wpm(),
-                                                app.thok.accuracy(),
-                                                app.thok.std_dev()
-                                            ))
-                                            .unwrap_or_default();
-                                        }
-                                    }
-                                    KeyCode::Char('r') => {
-                                        exit_type = ExitType::Restart;
-                                        break;
-                                    }
-                                    KeyCode::Char('n') => {
-                                        exit_type = ExitType::New;
-                                        break;
-                                    }
-                                    KeyCode::Char('s') => {
-                                        app.state = AppState::CharacterStats;
-                                    }
-                                    // Settings toggle keys
-                                    KeyCode::Char('1') => {
-                                        app.runtime_settings.random_words =
-                                            !app.runtime_settings.random_words;
-                                    }
-                                    KeyCode::Char('2') => {
-                                        app.runtime_settings.capitalize =
-                                            !app.runtime_settings.capitalize;
-                                    }
-                                    KeyCode::Char('3') => {
-                                        app.runtime_settings.strict = !app.runtime_settings.strict;
-                                    }
-                                    KeyCode::Char('4') => {
-                                        app.runtime_settings.symbols =
-                                            !app.runtime_settings.symbols;
-                                    }
-                                    KeyCode::Char('5') => {
-                                        app.runtime_settings.substitute =
-                                            !app.runtime_settings.substitute;
-                                    }
-                                    KeyCode::Char('w') => {
-                                        // Cycle through word count options: 15, 25, 50, 100
-                                        app.runtime_settings.number_of_words =
-                                            match app.runtime_settings.number_of_words {
-                                                15 => 25,
-                                                25 => 50,
-                                                50 => 100,
-                                                _ => 15,
-                                            };
-                                    }
-                                    KeyCode::Char('l') => {
-                                        // Cycle through languages
-                                        app.runtime_settings.supported_language =
-                                            match app.runtime_settings.supported_language {
-                                                SupportedLanguage::English => {
-                                                    SupportedLanguage::English1k
-                                                }
-                                                SupportedLanguage::English1k => {
-                                                    SupportedLanguage::English10k
-                                                }
-                                                SupportedLanguage::English10k => {
-                                                    SupportedLanguage::English
-                                                }
-                                            };
-                                    }
-                                    _ => {}
-                                },
-                                AppState::CharacterStats => match key.code {
-                                    KeyCode::Char('r') => {
-                                        exit_type = ExitType::Restart;
-                                        break;
-                                    }
-                                    KeyCode::Char('n') => {
-                                        exit_type = ExitType::New;
-                                        break;
-                                    }
-                                    KeyCode::Char('b') | KeyCode::Backspace => {
-                                        app.state = AppState::Results;
-                                    }
-                                    KeyCode::Up => {
-                                        if app.char_stats_state.scroll_offset > 0 {
-                                            app.char_stats_state.scroll_offset -= 1;
-                                        }
-                                    }
-                                    KeyCode::Down => {
-                                        // Will check max scroll in render function
-                                        app.char_stats_state.scroll_offset += 1;
-                                    }
-                                    KeyCode::PageUp => {
-                                        app.char_stats_state.scroll_offset =
-                                            app.char_stats_state.scroll_offset.saturating_sub(10);
-                                    }
-                                    KeyCode::PageDown => {
-                                        app.char_stats_state.scroll_offset += 10;
-                                    }
-                                    KeyCode::Home => {
-                                        app.char_stats_state.scroll_offset = 0;
-                                    }
-                                    KeyCode::Char('1') => {
-                                        app.char_stats_state.sort_by = SortBy::Character;
-                                        app.char_stats_state.scroll_offset = 0;
-                                    }
-                                    KeyCode::Char('2') => {
-                                        app.char_stats_state.sort_by = SortBy::AvgTime;
-                                        app.char_stats_state.scroll_offset = 0;
-                                    }
-                                    KeyCode::Char('3') => {
-                                        app.char_stats_state.sort_by = SortBy::MissRate;
-                                        app.char_stats_state.scroll_offset = 0;
-                                    }
-                                    KeyCode::Char('4') => {
-                                        app.char_stats_state.sort_by = SortBy::Attempts;
-                                        app.char_stats_state.scroll_offset = 0;
-                                    }
-                                    KeyCode::Char(' ') => {
-                                        // Toggle sort direction
-                                        app.char_stats_state.sort_ascending =
-                                            !app.char_stats_state.sort_ascending;
-                                        app.char_stats_state.scroll_offset = 0;
-                                    }
-                                    _ => {}
-                                },
-                            }
-                        }
+                        Some(crate::ui::screen::KeyAction::Quit) => break,
                         _ => {}
+                    }
+
+                    // If we're in Typing state and just finished, finalize results
+                    if app.state == AppState::Typing && app.thok.has_finished() {
+                        app.thok.calc_results();
+                        let size = terminal.size().unwrap_or_default();
+                        app.thok
+                            .start_celebration_if_worthy(size.width, size.height);
+                        app.state = AppState::Results;
                     }
                     terminal.draw(|f| ui(app, f))?;
                 }
