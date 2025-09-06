@@ -31,15 +31,7 @@ impl Language {
         formatter.format(words)
     }
 
-    /// Helper function to capitalize the first letter of a word
-    #[allow(dead_code)]
-    fn capitalize_first_letter(word: &str) -> String {
-        let mut chars: Vec<char> = word.chars().collect();
-        if !chars.is_empty() && chars[0].is_alphabetic() {
-            chars[0] = chars[0].to_uppercase().next().unwrap_or(chars[0]);
-        }
-        chars.into_iter().collect()
-    }
+    // Legacy helper removed
 }
 
 #[cfg(test)]
@@ -62,14 +54,7 @@ mod tests {
         assert!(lowercase_result.contains("test"));
     }
 
-    #[test]
-    fn test_capitalize_first_letter() {
-        assert_eq!(Language::capitalize_first_letter("hello"), "Hello");
-        assert_eq!(Language::capitalize_first_letter("WORLD"), "WORLD");
-        assert_eq!(Language::capitalize_first_letter("test123"), "Test123");
-        assert_eq!(Language::capitalize_first_letter(""), "");
-        assert_eq!(Language::capitalize_first_letter("123abc"), "123abc");
-    }
+    // Removed legacy Language::capitalize_first_letter helper; covered indirectly via formatter tests
 
     #[test]
     fn test_flag_independence_capitalize_only() {
