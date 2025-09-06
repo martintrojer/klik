@@ -30,7 +30,7 @@ This document tracks proposed refactors to improve separation of concerns, testa
   - [x] Added `SessionConfig` and `SessionState` (timers/idle)
   - [x] Wired Thok to maintain `SessionState` while preserving legacy fields
   - [x] Mirror input/cursor/results into `SessionState` (sync from legacy)
-  - [ ] Flip primary ownership to `SessionState` and remove legacy fields
+  - [x] Flip primary ownership to `SessionState` and remove legacy fields
 - [x] Replace raw `(f64,f64)` WPM points with `TimeSeriesPoint { t, wpm }`
 
 ## Language & Formatting
@@ -48,7 +48,7 @@ This document tracks proposed refactors to improve separation of concerns, testa
 - [x] Extract `charting` helpers (bounds, label formatting) used by UI
 
 ## Logging/Diagnostics
-- [ ] Replace `println!` in tests with `log` macros behind a `test` feature or `RUST_LOG`
+- [x] Replace noisy test `println!` with conditional output guarded by `RUST_LOG`
 
 ## Tests Organization
 - [ ] Move long integration-style tests from `src/*` to `tests/` where feasible
