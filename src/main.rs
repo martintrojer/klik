@@ -1287,7 +1287,7 @@ mod tests {
         let runner = Runner::new(es, ticker);
         match runner.step() {
             ThokEvent::Tick => {}
-            other => panic!("Expected tick event, got {:?}", other),
+            other => panic!("Expected tick event, got {other:?}"),
         }
     }
 

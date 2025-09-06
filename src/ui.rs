@@ -368,7 +368,7 @@ mod tests {
                     timestamp: SystemTime::now(),
                     keypress_start: None,
                 };
-                thok.session_state.input.push(input.clone());
+                thok.session_state.input.push(input);
                 thok.session_state.input.push(input);
             }
             thok.session_state.cursor_pos = prompt.len();
