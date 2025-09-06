@@ -37,8 +37,8 @@ This document tracks proposed refactors to improve separation of concerns, testa
 - [x] Consolidate `language/formatter.rs` and `language/formatting.rs`
   - [x] Keep `TextFormatter` + `CompositeFormatter` strategy
   - [x] Redirect `Language::apply_advanced_formatting` to formatter (preserving basic punctuation behavior)
-- [ ] Ensure a single source of truth for word selectors (avoid duplication with `selection.rs`)
-- [ ] Make `WordGenerator` depend only on formatter trait for formatting step
+- [x] Ensure a single source of truth for word selectors (avoid duplication with `selection.rs`)
+- [x] Make `WordGenerator` depend only on formatter trait for formatting step
 
 ## Configuration
 - [x] Add persisted `Config` (user prefs: defaults, language)
