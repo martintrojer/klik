@@ -10,8 +10,8 @@ This document tracks proposed refactors to improve separation of concerns, testa
 - [x] Extract a `Runner` with `step()` to advance one event/tick
 
 ## UI Boundaries
-- [ ] Define `Screen` trait: `render(&self, app, frame)` and `on_key(&mut self, key, app)`
-- [ ] Implement screens: Typing, Results, CharacterStats
+- [x] Define `Screen` trait: `render(&self, app, frame)` and `on_key(&mut self, key, app)`
+- [x] Implement screens: Typing, Results, CharacterStats
 - [x] Move character stats rendering out of `main.rs` into `ui` (e.g. `ui/character_stats.rs`)
 - [x] Add a presenter for character stats rows (pure function) to simplify the widget
 

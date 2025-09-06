@@ -16,7 +16,9 @@ pub mod word_generator;
 pub use language as lang;
 
 use crate::runtime::{CrosstermEventSource, FixedTicker, Runner, ThokEvent as RtEvent};
+#[cfg(test)]
 use crate::ui::character_stats::render_character_stats;
+use crate::ui::screen::current_screen;
 use crate::{
     lang::Language,
     thok::Thok,
@@ -871,14 +873,9 @@ fn _render_character_stats_legacy(app: &mut App, f: &mut Frame) {
 }
 
 fn ui(app: &mut App, f: &mut Frame) {
-    match app.state {
-        AppState::Typing | AppState::Results => {
-            f.render_widget(&*app, f.area());
-        }
-        AppState::CharacterStats => {
-            render_character_stats(app, f);
-        }
-    }
+    // Route rendering via the Screen abstraction while preserving behavior
+    let screen = current_screen(&app.state);
+    screen.render(app, f);
 }
 
 #[cfg(test)]

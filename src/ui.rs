@@ -1,5 +1,6 @@
 pub mod character_stats;
 pub mod charting;
+pub mod screen;
 
 use ratatui::{
     buffer::Buffer,
