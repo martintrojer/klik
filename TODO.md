@@ -52,7 +52,7 @@ This document tracks proposed refactors to improve separation of concerns, testa
 
 ## Tests Organization
 - [ ] Move long integration-style tests from `src/*` to `tests/` where feasible
-- [ ] Keep PTY-driven E2E test (Unix) and add a headless integration test using `ThokEventSource` test impl
+- [x] Keep PTY-driven E2E test (Unix) and add a headless integration test using `ThokEventSource` test impl
 
 ---
 
