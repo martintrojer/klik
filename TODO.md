@@ -41,8 +41,8 @@ This document tracks proposed refactors to improve separation of concerns, testa
 - [ ] Make `WordGenerator` depend only on formatter trait for formatting step
 
 ## Configuration
-- [ ] Add persisted `Config` (user prefs: theme, defaults, language)
-- [ ] Create `ConfigStore` trait (file-backed impl later)
+- [x] Add persisted `Config` (user prefs: defaults, language)
+- [x] Create `ConfigStore` trait with file-backed impl
 
 ## Rendering Helpers
 - [x] Extract `charting` helpers (bounds, label formatting) used by UI

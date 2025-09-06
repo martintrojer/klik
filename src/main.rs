@@ -1,5 +1,6 @@
 pub mod app_dirs;
 pub mod celebration;
+pub mod config;
 pub mod language;
 pub mod runtime;
 pub mod session;
