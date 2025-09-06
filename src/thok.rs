@@ -27,10 +27,7 @@ pub struct Input {
 #[derive(Debug)]
 pub struct Thok {
     pub prompt: String,
-    pub number_of_secs: Option<f64>,
-    pub number_of_words: usize,
     pub stats_db: Option<Box<dyn StatsStore>>,
-    pub strict_mode: bool,
     pub celebration: CelebrationAnimation,
     pub session_config: crate::session::SessionConfig,
     pub session_state: crate::session::SessionState,
@@ -100,10 +97,7 @@ impl Thok {
             .map(|db| Box::new(db) as Box<dyn StatsStore>);
         Self {
             prompt,
-            number_of_secs,
-            number_of_words,
             stats_db,
-            strict_mode,
             celebration: CelebrationAnimation::default(),
             session_config: crate::session::SessionConfig {
                 number_of_words,
@@ -165,7 +159,7 @@ impl Thok {
                 // Reset started_at to effectively restart the session timer
                 self.session_state.started_at = Some(now);
                 // Reset remaining time for timed sessions
-                self.session_state.seconds_remaining = self.number_of_secs;
+                self.session_state.seconds_remaining = self.session_config.number_of_secs;
             }
         }
 
@@ -303,7 +297,7 @@ impl Thok {
     pub fn backspace(&mut self) {
         let _ = self.mark_activity(); // Ignore return value for backspace
 
-        if self.strict_mode {
+        if self.session_config.strict {
             // In strict mode, backspace should reset the current position to allow retry
             if self.session_state.cursor_pos > 0 {
                 self.decrement_cursor();
@@ -395,8 +389,9 @@ impl Thok {
                 log_file,
                 "{},{},{},{:.2},{},{},{:.2}",
                 Local::now().format("%c"),
-                self.number_of_words,
-                self.number_of_secs
+                self.session_config.number_of_words,
+                self.session_config
+                    .number_of_secs
                     .map_or(String::from(""), |ns| format!("{ns:.2}")),
                 elapsed_secs,
                 self.session_state.wpm,      // already rounded
@@ -600,8 +595,8 @@ mod tests {
         let thok = Thok::new("hello world".to_string(), 2, None, false);
 
         assert_eq!(thok.prompt, "hello world");
-        assert_eq!(thok.number_of_words, 2);
-        assert_eq!(thok.number_of_secs, None);
+        assert_eq!(thok.session_config.number_of_words, 2);
+        assert_eq!(thok.session_config.number_of_secs, None);
         assert_eq!(thok.session_state.input.len(), 0);
         assert_eq!(thok.session_state.cursor_pos, 0);
         assert_eq!(thok.session_state.wpm, 0.0);
@@ -609,14 +604,14 @@ mod tests {
         assert_eq!(thok.session_state.std_dev, 0.0);
         assert!(!thok.has_started());
         assert!(!thok.has_finished());
-        assert!(!thok.strict_mode);
+        assert!(!thok.session_config.strict);
     }
 
     #[test]
     fn test_thok_new_with_time_limit() {
         let thok = Thok::new("test".to_string(), 1, Some(30.0), false);
 
-        assert_eq!(thok.number_of_secs, Some(30.0));
+        assert_eq!(thok.session_config.number_of_secs, Some(30.0));
         assert_eq!(thok.session_state.seconds_remaining, Some(30.0));
     }
 
@@ -999,7 +994,7 @@ mod tests {
         let thok = Thok::new("".to_string(), 0, None, false);
 
         assert_eq!(thok.prompt, "");
-        assert_eq!(thok.number_of_words, 0);
+        assert_eq!(thok.session_config.number_of_words, 0);
         assert!(thok.has_finished()); // Empty prompt should be considered finished
         assert_eq!(thok.session_state.cursor_pos, 0);
         assert_eq!(thok.session_state.input.len(), 0);
@@ -1150,7 +1145,7 @@ mod tests {
         let thok = Thok::new("test".to_string(), 1, Some(1.0), false);
 
         // Test that timing is initialized correctly
-        assert_eq!(thok.number_of_secs, Some(1.0));
+        assert_eq!(thok.session_config.number_of_secs, Some(1.0));
         assert_eq!(thok.session_state.seconds_remaining, Some(1.0));
     }
 
@@ -1231,7 +1226,7 @@ mod tests {
         let mut thok = Thok::new("test".to_string(), 1, Some(0.001), false); // 1 millisecond
 
         // Should handle very small time limits
-        assert!(thok.number_of_secs == Some(0.001));
+        assert!(thok.session_config.number_of_secs == Some(0.001));
 
         // Start and let it finish immediately
         thok.session_state.started_at = Some(SystemTime::now());

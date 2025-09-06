@@ -855,8 +855,8 @@ mod tests {
 
         let app = App::new(cli.clone());
 
-        assert_eq!(app.thok.number_of_words, 10);
-        assert_eq!(app.thok.number_of_secs, None);
+        assert_eq!(app.thok.session_config.number_of_words, 10);
+        assert_eq!(app.thok.session_config.number_of_secs, None);
         assert!(app.cli.is_some());
         assert!(!app.thok.prompt.is_empty());
         assert_eq!(app.state, AppState::Typing);
@@ -880,7 +880,7 @@ mod tests {
         let app = App::new(cli);
 
         assert_eq!(app.thok.prompt, "custom test prompt");
-        assert_eq!(app.thok.number_of_words, 10);
+        assert_eq!(app.thok.session_config.number_of_words, 10);
         assert_eq!(app.state, AppState::Typing);
     }
 
@@ -901,7 +901,7 @@ mod tests {
 
         let app = App::new(cli);
 
-        assert!(app.thok.number_of_words > 0);
+        assert!(app.thok.session_config.number_of_words > 0);
         assert!(!app.thok.prompt.is_empty());
         assert_eq!(app.state, AppState::Typing);
     }
@@ -923,7 +923,7 @@ mod tests {
 
         let app = App::new(cli);
 
-        assert_eq!(app.thok.number_of_secs, Some(60.0));
+        assert_eq!(app.thok.session_config.number_of_secs, Some(60.0));
         assert_eq!(app.thok.session_state.seconds_remaining, Some(60.0));
         assert_eq!(app.state, AppState::Typing);
     }
@@ -1247,7 +1247,7 @@ mod tests {
         };
 
         let app = App::new(cli_strict);
-        assert!(app.thok.strict_mode);
+        assert!(app.thok.session_config.strict);
     }
 
     #[test]
@@ -1624,7 +1624,7 @@ mod tests {
         let mut app = App::new(cli);
 
         // Verify timed session setup
-        assert_eq!(app.thok.number_of_secs, Some(1.0));
+        assert_eq!(app.thok.session_config.number_of_secs, Some(1.0));
         assert_eq!(app.thok.session_state.seconds_remaining, Some(1.0));
 
         // Start typing
@@ -1661,7 +1661,7 @@ mod tests {
         let mut app = App::new(cli);
 
         // Verify strict mode is enabled
-        assert!(app.thok.strict_mode);
+        assert!(app.thok.session_config.strict);
 
         // Start typing
         app.thok.on_keypress_start();
@@ -1718,9 +1718,9 @@ mod tests {
         let mut app = App::new(cli.clone());
 
         // Verify initial settings
-        assert_eq!(app.thok.number_of_words, 25);
-        assert_eq!(app.thok.number_of_secs, Some(60.0));
-        assert!(app.thok.strict_mode);
+        assert_eq!(app.thok.session_config.number_of_words, 25);
+        assert_eq!(app.thok.session_config.number_of_secs, Some(60.0));
+        assert!(app.thok.session_config.strict);
 
         // Type something to change state
         app.thok.write('t');
@@ -1730,9 +1730,9 @@ mod tests {
         app.reset(None);
 
         // Verify settings are preserved after reset
-        assert_eq!(app.thok.number_of_words, 25);
-        assert_eq!(app.thok.number_of_secs, Some(60.0));
-        assert!(app.thok.strict_mode);
+        assert_eq!(app.thok.session_config.number_of_words, 25);
+        assert_eq!(app.thok.session_config.number_of_secs, Some(60.0));
+        assert!(app.thok.session_config.strict);
         assert_eq!(app.thok.session_state.input.len(), 0); // But input is cleared
         assert_eq!(app.thok.session_state.cursor_pos, 0); // And cursor is reset
         assert_eq!(app.state, AppState::Typing); // And state is reset
@@ -1765,7 +1765,7 @@ mod tests {
 
             // Verify that each language generates a valid prompt
             assert!(!app.thok.prompt.is_empty());
-            assert!(app.thok.number_of_words > 0);
+            assert!(app.thok.session_config.number_of_words > 0);
         }
     }
 

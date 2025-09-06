@@ -4,7 +4,7 @@ use chrono::Local;
 use std::time::SystemTime;
 
 fn prepare_input(thok: &mut Thok, c: char) -> (usize, char, Outcome, SystemTime, u64) {
-    let idx = if thok.strict_mode {
+    let idx = if thok.session_config.strict {
         thok.session_state.cursor_pos
     } else {
         thok.session_state.input.len()
@@ -132,7 +132,7 @@ pub fn write_strict(thok: &mut Thok, c: char) {
 }
 
 pub fn apply_write(thok: &mut Thok, c: char) {
-    if thok.strict_mode {
+    if thok.session_config.strict {
         write_strict(thok, c)
     } else {
         write_normal(thok, c)

@@ -57,7 +57,11 @@ impl Widget for &App {
                 let mut prompt_occupied_lines =
                     ((thok.prompt.width() as f64 / max_chars_per_line as f64).ceil() + 1.0) as u16;
 
-                let time_left_lines = if thok.number_of_secs.is_some() { 2 } else { 0 };
+                let time_left_lines = if thok.session_config.number_of_secs.is_some() {
+                    2
+                } else {
+                    0
+                };
 
                 if thok.prompt.width() <= max_chars_per_line as usize {
                     prompt_occupied_lines = 1;
@@ -98,7 +102,9 @@ impl Widget for &App {
                             ),
                             Outcome::Correct => {
                                 // In strict mode, show corrected positions with a different color
-                                if thok.strict_mode && thok.corrected_positions().contains(&idx) {
+                                if thok.session_config.strict
+                                    && thok.corrected_positions().contains(&idx)
+                                {
                                     // Show corrected errors with orange color (much more distinct from green)
                                     Span::styled(
                                         expected,
@@ -440,7 +446,7 @@ mod tests {
     fn test_ui_widget_with_time_limit() {
         let mut app = create_test_app("test", false);
         app.thok.session_state.seconds_remaining = Some(25.5);
-        app.thok.number_of_secs = Some(30.0);
+        app.thok.session_config.number_of_secs = Some(30.0);
 
         let area = Rect::new(0, 0, 80, 24);
         let mut buffer = Buffer::empty(area);
