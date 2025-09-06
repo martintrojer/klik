@@ -230,6 +230,15 @@ impl Default for CelebrationAnimation {
 mod tests {
     use super::*;
 
+    // Redirect println! in tests behind RUST_LOG to keep CI output clean
+    macro_rules! println {
+        ($($arg:tt)*) => {{
+            if std::env::var("RUST_LOG").is_ok() {
+                eprintln!($($arg)*);
+            }
+        }}
+    }
+
     #[test]
     fn test_celebration_particle_physics() {
         let mut particle = CelebrationParticle::new(10.0, 10.0);

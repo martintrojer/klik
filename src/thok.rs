@@ -567,6 +567,15 @@ mod tests {
     use super::*;
     use std::time::Duration;
 
+    // Redirect noisy println! in tests behind RUST_LOG to keep CI output clean
+    macro_rules! println {
+        ($($arg:tt)*) => {{
+            if std::env::var("RUST_LOG").is_ok() {
+                eprintln!($($arg)*);
+            }
+        }}
+    }
+
     #[test]
     fn test_outcome_equality() {
         assert_eq!(Outcome::Correct, Outcome::Correct);
