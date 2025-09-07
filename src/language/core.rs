@@ -5,7 +5,6 @@ use std::error::Error;
 
 static LANG_DIR: Dir = include_dir!("src/lang");
 
-#[allow(dead_code)]
 #[derive(Deserialize, Clone, Debug)]
 pub struct Language {
     pub name: String,
