@@ -5,13 +5,7 @@ pub struct SessionConfig {
     pub strict: bool,
 }
 
-#[derive(Debug, Clone)]
-pub struct SessionResult {
-    pub wpm: f64,
-    pub accuracy: f64,
-    pub std_dev: f64,
-    pub wpm_coords: Vec<crate::time_series::TimeSeriesPoint>,
-}
+// SessionResult was part of planned split; removed until needed
 
 #[derive(Debug, Clone)]
 pub struct SessionState {
