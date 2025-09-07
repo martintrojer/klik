@@ -351,7 +351,8 @@ impl Thok {
     }
 
     pub fn has_finished(&self) -> bool {
-        (self.session_state.input.len() == self.prompt.len())
+        let prompt_chars = self.prompt.chars().count();
+        (self.session_state.input.len() == prompt_chars)
             || (self.session_state.seconds_remaining.is_some()
                 && self.session_state.seconds_remaining.unwrap() <= 0.0)
     }

@@ -125,11 +125,10 @@ impl Widget for &App {
                     underlined_dim_bold_style,
                 ));
 
-                let start = (thok.cursor_pos() + 1).min(thok.prompt.len());
-                spans.push(Span::styled(
-                    thok.prompt[start..thok.prompt.len()].to_string(),
-                    dim_bold_style,
-                ));
+                // Append the remaining prompt after the cursor using character indexing to avoid
+                // slicing by byte indices (handles Unicode safely)
+                let remaining: String = thok.prompt.chars().skip(thok.cursor_pos() + 1).collect();
+                spans.push(Span::styled(remaining, dim_bold_style));
 
                 let widget = Paragraph::new(Line::from(spans))
                     .alignment(if prompt_occupied_lines == 1 {
