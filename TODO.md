@@ -1,68 +1,30 @@
-# TODO: Abstraction and Architecture Improvements
+# TODO: Improvements and Open Tasks
 
-This document tracks proposed refactors to improve separation of concerns, testability, and maintainability.
+This document tracks pending refactors, bug fixes, and quality improvements.
 
-## Events & Runtime
-- [x] Introduce `ThokEventSource` trait (recv -> ThokEvent)
-  - [x] Impl: `CrosstermEventSource` (prod)
-  - [x] Impl: `TestEventSource` (tests)
-- [x] Add `Ticker`/`Clock` trait for ticks (configurable rate)
-- [x] Extract a `Runner` with `step()` to advance one event/tick
+## Bugs (Subtle/Edge Cases)
+- [ ] Unicode prompt length mismatch: `has_finished()` uses `prompt.len()` (bytes) while input counts typed chars. Use `prompt.chars().count()` and avoid slicing strings with byte indices in UI.
+- [ ] UI slicing bug: `ui.rs` slices `prompt[start..]` where `start` is a character index, not a byte index. Replace with char-iterator based rendering or grapheme-aware slicing.
+- [ ] Timer underflow: clamp `seconds_remaining` at zero in `on_tick()` to avoid negative values and odd UI displays.
+- [ ] Accuracy with zero input: `calc_results()` divides by `input.len()`; when zero this yields NaN. Guard and define desired behavior (e.g., 0%).
+- [ ] Tweet URL encoding: results tweet link uses malformed URL encoding (`github.com%martintrojer`). Fix to `%2Fmartintrojer%2Fklik`.
+- [ ] Prepare input past end: `prepare_input()` can compare typed char vs `' '` when `idx` >= prompt length. Bail early if session finished.
+- [ ] CSV logging safety: `save_results()` writes raw CSV without quoting/escaping (date contains commas); switch to a CSV writer or quote fields.
+- [ ] Idle time reset math: verify `mark_activity()` time shifting logic preserves elapsed accurately across idle transitions.
 
-## UI Boundaries
-- [x] Define `Screen` trait: `render(&self, app, frame)` and `on_key(&mut self, key, app)`
-- [x] Implement screens: Typing, Results, CharacterStats
-- [x] Move character stats rendering out of `main.rs` into `ui` (e.g. `ui/character_stats.rs`)
-- [x] Add a presenter for character stats rows (pure function) to simplify the widget
+## Performance/Quality
+- [ ] Reduce UI allocations: building spans and to_string per char; consider preallocating and avoiding repeated string conversions.
+- [ ] Batch DB writes: consider buffering stats and flushing less frequently (currently per char plus flush at end).
+- [ ] Error handling: avoid silently ignoring DB errors in stats recording; surface logs in debug/test modes.
+- [ ] Config persistence on setting toggles at Results screen (optional): persist updated `runtime_settings` via `ConfigStore`.
 
-## Domain vs Persistence
-- [x] Create `StatsStore` trait (get/put/flush/summary APIs)
-  - [x] Impl: `SqliteStatsStore` (current DB via `StatsDb`)
-  - [x] Impl: `NoopStatsStore` (tests)
-  - [x] Impl: `InMemoryStatsStore` (bench/tests)
-- [x] Introduce `AppDirs` service for config/log/db paths
-- [x] Inject `StatsStore` into `Thok` instead of owning DB directly
-
-## Typing Logic (Thok)
-- [x] Extract `TypingPolicy` strategies (strict vs normal) from `write()`
-- [x] Add `SessionConfig` and `SessionResult` scaffolding (to evolve into full split)
-- [ ] Split session into `Session` (config), `SessionState` (mutable), `SessionResult`
-  - [x] Added `SessionConfig` and `SessionState` (timers/idle)
-  - [x] Wired Thok to maintain `SessionState` while preserving legacy fields
-  - [x] Mirror input/cursor/results into `SessionState` (sync from legacy)
-  - [x] Flip primary ownership to `SessionState` and remove legacy fields
-- [x] Replace raw `(f64,f64)` WPM points with `TimeSeriesPoint { t, wpm }`
-
-## Language & Formatting
-- [x] Consolidate `language/formatter.rs` and `language/formatting.rs`
-  - [x] Keep `TextFormatter` + `CompositeFormatter` strategy
-  - [x] Redirect `Language::apply_advanced_formatting` to formatter (preserving basic punctuation behavior)
-- [x] Ensure a single source of truth for word selectors (avoid duplication with `selection.rs`)
-- [x] Make `WordGenerator` depend only on formatter trait for formatting step
-
-## Configuration
-- [x] Add persisted `Config` (user prefs: defaults, language)
-- [x] Create `ConfigStore` trait with file-backed impl
-
-## Rendering Helpers
-- [x] Extract `charting` helpers (bounds, label formatting) used by UI
-
-## Logging/Diagnostics
-- [x] Replace noisy test `println!` with conditional output guarded by `RUST_LOG`
+## Architecture
+- [ ] Consider a distinct `Session` type (wrapper) owning `SessionConfig/SessionState` to reduce responsibilities in `Thok`.
 
 ## Tests Organization
-- [ ] Move long integration-style tests from `src/*` to `tests/` where feasible
-- [x] Keep PTY-driven E2E test (Unix) and add a headless integration test using `ThokEventSource` test impl
+- [ ] Move remaining long integration-style tests from `src/thok.rs` into `tests/` where feasible.
 
----
-
-### Suggested Phasing
-- Phase 1: EventSource/Ticker/Runner + move character-stats UI + chart helpers [COMPLETED]
-- Phase 2: StatsStore/AppDirs injection [DONE], TypingPolicy + Session structs [NEXT]
-- Phase 3: Formatter consolidation + Config/ConfigStore
-- Phase 4: Test reorganization + logging cleanup
-
-### Testing Policy for New Abstractions
+## Testing Policy
 - [ ] Every new abstraction (trait/struct/module) must include targeted unit tests.
 - [ ] Refactor existing tests to use the new abstraction (migrate mocks/helpers accordingly).
 - [ ] Prefer headless tests over PTY where possible (use `ThokEventSource`/`Ticker` test impls).
