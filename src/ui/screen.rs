@@ -54,12 +54,15 @@ impl Screen for ResultsScreen {
         match key.code {
             KeyCode::Char('t') => {
                 if webbrowser::Browser::is_available() {
-                    let _ = webbrowser::open(&format!(
-                        "https://twitter.com/intent/tweet?text={}%20wpm%20%2F%20{}%25%20acc%20%2F%20{:.2}%20sd%0A%0Ahttps%3A%2F%2Fgithub.com%martintrojer%2Fklik",
-                        app.thok.wpm(),
-                        app.thok.accuracy(),
-                        app.thok.std_dev()
-                    ));
+                    // Construct a minimal encoded tweet without external deps.
+                    // Format: "<wpm> wpm / <acc>% acc / <sd> sd\n\nhttps://github.com/martintrojer/klik"
+                    let wpm = app.thok.wpm();
+                    let acc = app.thok.accuracy();
+                    let sd = app.thok.std_dev();
+                    let url = format!(
+                        "https://twitter.com/intent/tweet?text={wpm}%20wpm%20%2F%20{acc}%25%20acc%20%2F%20{sd:.2}%20sd%0A%0Ahttps%3A%2F%2Fgithub.com%2Fmartintrojer%2Fklik"
+                    );
+                    let _ = webbrowser::open(&url);
                 }
                 Some(KeyAction::Continue)
             }

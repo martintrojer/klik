@@ -115,7 +115,8 @@ impl Thok {
     pub fn on_tick(&mut self) {
         if let Some(remaining) = self.session_state.seconds_remaining {
             let next = remaining - (TICK_RATE_MS as f64 / 1000_f64);
-            self.session_state.seconds_remaining = Some(next);
+            // Clamp at zero to avoid negative time in UI/logic
+            self.session_state.seconds_remaining = Some(next.max(0.0));
         }
 
         // Check for idle timeout
@@ -263,8 +264,11 @@ impl Thok {
         } else {
             self.session_state.wpm = 0.0;
         }
-        self.session_state.accuracy =
-            ((correct_chars.len() as f64 / self.session_state.input.len() as f64) * 100.0).round();
+        self.session_state.accuracy = if self.session_state.input.is_empty() {
+            0.0
+        } else {
+            ((correct_chars.len() as f64 / self.session_state.input.len() as f64) * 100.0).round()
+        };
 
         let _ = self.save_results();
 
