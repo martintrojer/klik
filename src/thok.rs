@@ -4,10 +4,11 @@ use crate::util::std_dev;
 // Default tick rate used for timing calculations in absence of external driver
 const TICK_RATE_MS: u64 = 100;
 use chrono::prelude::*;
+use csv::Writer;
 use directories::ProjectDirs;
 use itertools::Itertools;
 use std::fs::OpenOptions;
-use std::io::{self, Write};
+use std::io;
 use std::{char, collections::HashMap, time::SystemTime};
 
 #[derive(Clone, Debug, Copy, PartialEq)]
@@ -371,16 +372,23 @@ impl Thok {
             // If the config file doesn't exist, we need to emit a header
             let needs_header = !log_path.exists();
 
-            let mut log_file = OpenOptions::new()
+            let log_file = OpenOptions::new()
                 .append(true)
                 .create(true)
                 .open(log_path)?;
 
+            let mut writer = Writer::from_writer(log_file);
+
             if needs_header {
-                writeln!(
-                    log_file,
-                    "date,num_words,num_secs,elapsed_secs,wpm,accuracy,std_dev"
-                )?;
+                writer.write_record([
+                    "date",
+                    "num_words",
+                    "num_secs",
+                    "elapsed_secs",
+                    "wpm",
+                    "accuracy",
+                    "std_dev",
+                ])?;
             }
 
             let elapsed_secs = self
@@ -391,19 +399,27 @@ impl Thok {
                 .unwrap_or_default()
                 .as_secs_f64();
 
-            writeln!(
-                log_file,
-                "{},{},{},{:.2},{},{},{:.2}",
-                Local::now().format("%c"),
-                self.session_config.number_of_words,
-                self.session_config
-                    .number_of_secs
-                    .map_or(String::from(""), |ns| format!("{ns:.2}")),
-                elapsed_secs,
-                self.session_state.wpm,      // already rounded
-                self.session_state.accuracy, // already rounded
-                self.session_state.std_dev,
-            )?;
+            let date_str = Local::now().format("%c").to_string();
+            let num_secs_str = self
+                .session_config
+                .number_of_secs
+                .map_or(String::from(""), |ns| format!("{:.2}", ns));
+            let elapsed_secs_str = format!("{:.2}", elapsed_secs);
+            let wpm_str = self.session_state.wpm.to_string();
+            let accuracy_str = self.session_state.accuracy.to_string();
+            let std_dev_str = format!("{:.2}", self.session_state.std_dev);
+
+            writer.write_record([
+                &date_str,
+                &self.session_config.number_of_words.to_string(),
+                &num_secs_str,
+                &elapsed_secs_str,
+                &wpm_str,
+                &accuracy_str,
+                &std_dev_str,
+            ])?;
+
+            writer.flush()?;
         }
 
         Ok(())
