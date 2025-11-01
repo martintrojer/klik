@@ -85,40 +85,43 @@ impl Widget for &App {
                     )
                     .split(area);
 
-                let mut spans = thok
-                    .input()
-                    .iter()
-                    .enumerate()
-                    .map(|(idx, input)| {
-                        let expected = thok.get_expected_char(idx).to_string();
+                // Preallocate spans vector to avoid reallocations
+                let input_len = thok.input().len();
+                let mut spans = Vec::with_capacity(input_len + 2); // +2 for cursor and remaining
 
-                        match input.outcome {
-                            Outcome::Incorrect => Span::styled(
-                                match input.char {
-                                    ' ' => "·".to_owned(),
-                                    c => c.to_string(),
-                                },
-                                red_bold_style,
-                            ),
-                            Outcome::Correct => {
-                                // In strict mode, show corrected positions with a different color
-                                if thok.session_config.strict
-                                    && thok.corrected_positions().contains(&idx)
-                                {
-                                    // Show corrected errors with orange color (much more distinct from green)
-                                    Span::styled(
-                                        expected,
-                                        Style::default()
-                                            .patch(bold_style)
-                                            .fg(Color::Rgb(255, 165, 0)),
-                                    )
-                                } else {
-                                    Span::styled(expected, green_bold_style)
+                // Build spans for typed input, avoiding repeated string conversions
+                for (idx, input) in thok.input().iter().enumerate() {
+                    match input.outcome {
+                        Outcome::Incorrect => {
+                            let char_str = match input.char {
+                                ' ' => "·",
+                                c => {
+                                    // For single chars, convert to String once
+                                    spans.push(Span::styled(c.to_string(), red_bold_style));
+                                    continue;
                                 }
+                            };
+                            spans.push(Span::styled(char_str, red_bold_style));
+                        }
+                        Outcome::Correct => {
+                            let expected = thok.get_expected_char(idx);
+                            // In strict mode, show corrected positions with a different color
+                            if thok.session_config.strict
+                                && thok.corrected_positions().contains(&idx)
+                            {
+                                // Show corrected errors with orange color (much more distinct from green)
+                                spans.push(Span::styled(
+                                    expected.to_string(),
+                                    Style::default()
+                                        .patch(bold_style)
+                                        .fg(Color::Rgb(255, 165, 0)),
+                                ));
+                            } else {
+                                spans.push(Span::styled(expected.to_string(), green_bold_style));
                             }
                         }
-                    })
-                    .collect::<Vec<Span>>();
+                    }
+                }
 
                 spans.push(Span::styled(
                     thok.get_expected_char(thok.cursor_pos()).to_string(),
@@ -127,7 +130,11 @@ impl Widget for &App {
 
                 // Append the remaining prompt after the cursor using character indexing to avoid
                 // slicing by byte indices (handles Unicode safely)
-                let remaining: String = thok.prompt.chars().skip(thok.cursor_pos() + 1).collect();
+                // Preallocate remaining string with approximate capacity
+                let cursor_pos = thok.cursor_pos();
+                let remaining_len = thok.prompt.chars().count().saturating_sub(cursor_pos + 1);
+                let mut remaining = String::with_capacity(remaining_len);
+                remaining.extend(thok.prompt.chars().skip(cursor_pos + 1));
                 spans.push(Span::styled(remaining, dim_bold_style));
 
                 let widget = Paragraph::new(Line::from(spans))
