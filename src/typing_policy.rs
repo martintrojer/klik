@@ -65,7 +65,10 @@ fn prepare_input(thok: &mut Thok, c: char) -> (usize, char, Outcome, SystemTime,
             context_before,
             context_after,
         };
-        let _ = stats_db.record_char_stat(&stat);
+        if let Err(e) = stats_db.record_char_stat(&stat) {
+            #[cfg(any(debug_assertions, test))]
+            eprintln!("Failed to record char stat: {}", e);
+        }
     }
 
     (idx, expected_char, outcome, now, time_to_press_ms)

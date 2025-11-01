@@ -554,7 +554,14 @@ impl Thok {
     /// Flush character statistics to ensure all data is written to database
     pub fn flush_char_stats(&mut self) -> Option<()> {
         if let Some(ref mut stats_db) = self.stats_db {
-            stats_db.flush().ok()
+            match stats_db.flush() {
+                Ok(()) => Some(()),
+                Err(e) => {
+                    #[cfg(any(debug_assertions, test))]
+                    eprintln!("Failed to flush char stats: {}", e);
+                    None
+                }
+            }
         } else {
             None
         }
@@ -848,13 +855,19 @@ mod tests {
     fn test_character_statistics_methods() {
         let thok = Thok::new("test".to_string(), 1, None, false);
 
-        // These methods should return None if no database is available
-        assert!(thok.get_char_stats('t').is_none() || thok.get_char_stats('t').is_some());
-        assert!(
-            thok.get_avg_time_to_press('t').is_none() || thok.get_avg_time_to_press('t').is_some()
-        );
-        assert!(thok.get_miss_rate('t').is_none() || thok.get_miss_rate('t').is_some());
-        assert!(thok.get_all_char_summary().is_none() || thok.get_all_char_summary().is_some());
+        // These methods should not panic and return valid Option values
+        // (they may return None or Some depending on whether database was created)
+        let stats = thok.get_char_stats('t');
+        assert!(stats.is_none() || stats.is_some());
+
+        let avg_time = thok.get_avg_time_to_press('t');
+        assert!(avg_time.is_none() || avg_time.is_some());
+
+        let miss_rate = thok.get_miss_rate('t');
+        assert!(miss_rate.is_none() || miss_rate.is_some());
+
+        let summary = thok.get_all_char_summary();
+        assert!(summary.is_none() || summary.is_some());
     }
 
     #[test]
