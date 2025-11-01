@@ -4,6 +4,12 @@ use chrono::Local;
 use std::time::SystemTime;
 
 fn prepare_input(thok: &mut Thok, c: char) -> (usize, char, Outcome, SystemTime, u64) {
+    // Bail early if session is finished to avoid comparing against ' ' when idx >= prompt length
+    if thok.has_finished() {
+        let now = SystemTime::now();
+        return (0, ' ', Outcome::Incorrect, now, 0);
+    }
+
     let idx = if thok.session_config.strict {
         thok.session_state.cursor_pos
     } else {
