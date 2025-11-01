@@ -8,7 +8,7 @@ This document tracks pending refactors, bug fixes, and quality improvements.
 - [x] Idle time reset math: verify `mark_activity()` time shifting logic preserves elapsed accurately across idle transitions.
 
 ## Performance/Quality
-- [ ] Reduce UI allocations: building spans and to_string per char; consider preallocating and avoiding repeated string conversions.
+- [x] Reduce UI allocations: building spans and to_string per char; consider preallocating and avoiding repeated string conversions.
 - [ ] Batch DB writes: consider buffering stats and flushing less frequently (currently per char plus flush at end).
 - [ ] Error handling: avoid silently ignoring DB errors in stats recording; surface logs in debug/test modes.
 - [ ] Config persistence on setting toggles at Results screen (optional): persist updated `runtime_settings` via `ConfigStore`.
