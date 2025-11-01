@@ -156,11 +156,26 @@ impl Thok {
         let was_idle = self.session_state.is_idle;
 
         if self.session_state.is_idle {
-            // Exiting idle state - restart timers
+            // Exiting idle state - preserve elapsed time accurately
             self.session_state.is_idle = false;
             if self.has_started() && !self.has_finished() {
-                // Reset started_at to effectively restart the session timer
-                self.session_state.started_at = Some(now);
+                // Preserve elapsed time across idle transitions
+                // When going idle, check_idle_timeout() adjusted started_at to preserve elapsed time
+                // When exiting idle, we need to account for the idle period
+                if let Some(started_at) = self.session_state.started_at {
+                    if let Some(last_activity) = self.session_state.last_activity {
+                        // Calculate elapsed time before idle: how long from original start to last activity
+                        // The adjusted started_at preserves this: elapsed_before_idle = last_activity - started_at
+                        // But started_at was adjusted to (idle_start_time - elapsed_before_idle)
+                        // So elapsed_before_idle = last_activity.duration_since(started_at)
+                        if let Ok(elapsed_before_idle) = last_activity.duration_since(started_at) {
+                            // Set started_at to preserve elapsed time: now - elapsed_before_idle
+                            // This ensures elapsed time calculation is accurate after exiting idle
+                            self.session_state.started_at =
+                                Some(now.checked_sub(elapsed_before_idle).unwrap_or(started_at));
+                        }
+                    }
+                }
                 // Reset remaining time for timed sessions
                 self.session_state.seconds_remaining = self.session_config.number_of_secs;
             }
