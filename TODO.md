@@ -4,7 +4,7 @@ This document tracks pending refactors, bug fixes, and quality improvements.
 
 ## Bugs (Subtle/Edge Cases)
 - [x] Prepare input past end: `prepare_input()` can compare typed char vs `' '` when `idx` >= prompt length. Bail early if session finished.
-- [ ] CSV logging safety: `save_results()` writes raw CSV without quoting/escaping (date contains commas); switch to a CSV writer or quote fields.
+- [x] CSV logging safety: `save_results()` writes raw CSV without quoting/escaping (date contains commas); switch to a CSV writer or quote fields.
 - [ ] Idle time reset math: verify `mark_activity()` time shifting logic preserves elapsed accurately across idle transitions.
 
 ## Performance/Quality
