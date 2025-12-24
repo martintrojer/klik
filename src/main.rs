@@ -24,7 +24,6 @@ use crate::{
     thok::Thok,
     word_generator::{WordGenConfig, WordGenerator},
 };
-// use chrono::Local; // no longer needed here
 use clap::{error::ErrorKind, CommandFactory, Parser, ValueEnum};
 use crossterm::{
     event::{KeyCode, KeyModifiers},
@@ -41,10 +40,9 @@ use std::{
     io::{self, stdin},
     time::Duration,
 };
-// humanize only used in legacy block (removed)
-// Browser is used in ui module; not needed here
 
-const TICK_RATE_MS: u64 = 100;
+// Use TICK_RATE_MS from thok module to avoid duplication
+use crate::thok::TICK_RATE_MS;
 
 /// sleek typing tui with visualized results, intelligent practice, and comprehensive analytics
 #[derive(Parser, Debug, Clone)]
@@ -104,26 +102,17 @@ pub enum SupportedLanguage {
 
 impl SupportedLanguage {
     fn as_lang(&self) -> Language {
-        Language::new(self.to_string().to_lowercase())
+        // Use match instead of string conversion for better performance and clarity
+        let file_name = match self {
+            SupportedLanguage::English => "english",
+            SupportedLanguage::English1k => "english1k",
+            SupportedLanguage::English10k => "english10k",
+        };
+        Language::new(file_name.to_string())
     }
 }
 
-impl Cli {
-    /// Convert CLI arguments to word generation configuration
-    #[allow(dead_code)]
-    fn to_word_gen_config(&self, custom_prompt: Option<String>) -> WordGenConfig {
-        WordGenConfig {
-            number_of_words: self.number_of_words,
-            number_of_sentences: self.number_of_sentences,
-            custom_prompt,
-            language: self.supported_language,
-            random_words: self.random_words,
-            substitute: self.substitute,
-            capitalize: self.capitalize,
-            symbols: self.symbols,
-        }
-    }
-}
+// Removed Cli::to_word_gen_config - use RuntimeSettings::to_word_gen_config instead
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AppState {
@@ -170,8 +159,8 @@ pub struct RuntimeSettings {
     pub substitute: bool,
 }
 
-impl RuntimeSettings {
-    pub fn from_cli(cli: &Cli) -> Self {
+impl From<&Cli> for RuntimeSettings {
+    fn from(cli: &Cli) -> Self {
         Self {
             number_of_words: cli.number_of_words,
             number_of_sentences: cli.number_of_sentences,
@@ -183,6 +172,13 @@ impl RuntimeSettings {
             symbols: cli.symbols,
             substitute: cli.substitute,
         }
+    }
+}
+
+impl RuntimeSettings {
+    // Keep for backward compatibility, but prefer From trait
+    pub fn from_cli(cli: &Cli) -> Self {
+        Self::from(cli)
     }
 
     pub fn to_word_gen_config(&self, custom_prompt: Option<String>) -> WordGenConfig {
@@ -199,18 +195,18 @@ impl RuntimeSettings {
     }
 }
 
-#[derive(Debug)]
 pub struct App {
     pub cli: Option<Cli>,
     pub thok: Thok,
     pub state: AppState,
     pub char_stats_state: CharStatsState,
     pub runtime_settings: RuntimeSettings,
+    pub config_store: Box<dyn crate::config::ConfigStore>,
 }
 
 impl App {
     pub fn new(cli: Cli) -> Self {
-        let runtime_settings = RuntimeSettings::from_cli(&cli);
+        let runtime_settings = RuntimeSettings::from(&cli);
         let config = runtime_settings.to_word_gen_config(cli.prompt.clone());
         let generator = WordGenerator::new(config);
         let (prompt, word_count) = generator.generate_prompt();
@@ -226,6 +222,16 @@ impl App {
             state: AppState::Typing,
             char_stats_state: CharStatsState::default(),
             runtime_settings,
+            config_store: Box::new(crate::config::FileConfigStore::default()),
+        }
+    }
+
+    /// Persist current runtime settings to config file
+    pub fn save_config(&self) {
+        let config = crate::config::Config::from(&self.runtime_settings);
+        if let Err(e) = self.config_store.save(&config) {
+            #[cfg(any(debug_assertions, test))]
+            eprintln!("Failed to save config: {}", e);
         }
     }
 
@@ -805,7 +811,7 @@ mod tests {
     }
 
     #[test]
-    fn test_cli_to_word_gen_config() {
+    fn test_runtime_settings_to_word_gen_config() {
         let cli = Cli {
             number_of_words: 20,
             number_of_sentences: Some(3),
@@ -819,7 +825,8 @@ mod tests {
             substitute: false,
         };
 
-        let config = cli.to_word_gen_config(None);
+        let runtime_settings = RuntimeSettings::from(&cli);
+        let config = runtime_settings.to_word_gen_config(None);
 
         assert_eq!(config.number_of_words, 20);
         assert_eq!(config.number_of_sentences, Some(3));
@@ -832,7 +839,7 @@ mod tests {
     }
 
     #[test]
-    fn test_cli_to_word_gen_config_with_custom_prompt() {
+    fn test_runtime_settings_to_word_gen_config_with_custom_prompt() {
         let cli = Cli {
             number_of_words: 10,
             number_of_sentences: None,
@@ -846,7 +853,9 @@ mod tests {
             substitute: false,
         };
 
-        let config = cli.to_word_gen_config(Some("custom prompt override".to_string()));
+        let runtime_settings = RuntimeSettings::from(&cli);
+        let config =
+            runtime_settings.to_word_gen_config(Some("custom prompt override".to_string()));
 
         assert_eq!(
             config.custom_prompt,

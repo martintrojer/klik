@@ -93,32 +93,28 @@ impl Widget for &App {
                 for (idx, input) in thok.input().iter().enumerate() {
                     match input.outcome {
                         Outcome::Incorrect => {
-                            let char_str = match input.char {
-                                ' ' => "·",
-                                c => {
-                                    // For single chars, convert to String once
-                                    spans.push(Span::styled(c.to_string(), red_bold_style));
-                                    continue;
-                                }
+                            let char_str = if input.char == ' ' {
+                                "·"
+                            } else {
+                                // For single chars, convert to String once
+                                spans.push(Span::styled(input.char.to_string(), red_bold_style));
+                                continue;
                             };
                             spans.push(Span::styled(char_str, red_bold_style));
                         }
                         Outcome::Correct => {
                             let expected = thok.get_expected_char(idx);
-                            // In strict mode, show corrected positions with a different color
-                            if thok.session_config.strict
+                            let style = if thok.session_config.strict
                                 && thok.corrected_positions().contains(&idx)
                             {
                                 // Show corrected errors with orange color (much more distinct from green)
-                                spans.push(Span::styled(
-                                    expected.to_string(),
-                                    Style::default()
-                                        .patch(bold_style)
-                                        .fg(Color::Rgb(255, 165, 0)),
-                                ));
+                                Style::default()
+                                    .patch(bold_style)
+                                    .fg(Color::Rgb(255, 165, 0))
                             } else {
-                                spans.push(Span::styled(expected.to_string(), green_bold_style));
-                            }
+                                green_bold_style
+                            };
+                            spans.push(Span::styled(expected.to_string(), style));
                         }
                     }
                 }
@@ -375,15 +371,10 @@ mod tests {
                     keypress_start: None,
                 };
                 thok.session_state.input.push(input);
-                thok.session_state.input.push(input);
             }
             thok.session_state.cursor_pos = prompt.len();
-            thok.session_state.cursor_pos = prompt.len();
-            thok.session_state.wpm = 42.0;
             thok.session_state.wpm = 42.0;
             thok.session_state.accuracy = 95.0;
-            thok.session_state.accuracy = 95.0;
-            thok.session_state.std_dev = 2.5;
             thok.session_state.std_dev = 2.5;
             thok.session_state.wpm_coords = vec![
                 crate::time_series::TimeSeriesPoint::new(1.0, 20.0),
@@ -412,6 +403,7 @@ mod tests {
                 symbols: false,
                 substitute: false,
             },
+            config_store: Box::new(crate::config::FileConfigStore::default()),
         }
     }
 

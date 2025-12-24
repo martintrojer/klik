@@ -441,6 +441,11 @@ impl StatsDb {
     }
 
     /// Record a character statistic (buffers for session aggregation)
+    ///
+    /// This method buffers statistics in memory during the typing session.
+    /// Statistics are aggregated and written to the database in a single batch
+    /// when `flush()` is called (typically at session end), reducing database
+    /// write overhead from per-character writes to a single aggregated write.
     pub fn record_char_stat(&mut self, stat: &CharStat) -> Result<()> {
         self.session_buffer
             .entry(stat.character)

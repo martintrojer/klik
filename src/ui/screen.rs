@@ -72,25 +72,30 @@ impl Screen for ResultsScreen {
                 app.state = AppState::CharacterStats;
                 Some(KeyAction::Continue)
             }
-            // Settings toggles
+            // Settings toggles - persist to config after each change
             KeyCode::Char('1') => {
                 app.runtime_settings.random_words = !app.runtime_settings.random_words;
+                app.save_config();
                 Some(KeyAction::Continue)
             }
             KeyCode::Char('2') => {
                 app.runtime_settings.capitalize = !app.runtime_settings.capitalize;
+                app.save_config();
                 Some(KeyAction::Continue)
             }
             KeyCode::Char('3') => {
                 app.runtime_settings.strict = !app.runtime_settings.strict;
+                app.save_config();
                 Some(KeyAction::Continue)
             }
             KeyCode::Char('4') => {
                 app.runtime_settings.symbols = !app.runtime_settings.symbols;
+                app.save_config();
                 Some(KeyAction::Continue)
             }
             KeyCode::Char('5') => {
                 app.runtime_settings.substitute = !app.runtime_settings.substitute;
+                app.save_config();
                 Some(KeyAction::Continue)
             }
             KeyCode::Char('w') => {
@@ -100,6 +105,7 @@ impl Screen for ResultsScreen {
                     50 => 100,
                     _ => 15,
                 };
+                app.save_config();
                 Some(KeyAction::Continue)
             }
             KeyCode::Char('l') => {
@@ -109,6 +115,7 @@ impl Screen for ResultsScreen {
                         crate::SupportedLanguage::English1k => crate::SupportedLanguage::English10k,
                         crate::SupportedLanguage::English10k => crate::SupportedLanguage::English,
                     };
+                app.save_config();
                 Some(KeyAction::Continue)
             }
             _ => None,
