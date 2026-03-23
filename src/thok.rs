@@ -879,93 +879,13 @@ mod tests {
     }
 
     #[test]
-    fn test_database_path_and_creation() {
+    fn test_database_path_retrieval_and_creation() {
         let thok = Thok::new("test".to_string(), 1, None, false);
 
-        // Print debug information
-        println!("Has stats database: {}", thok.has_stats_database());
-        if let Some(path) = thok.get_stats_database_path() {
-            println!("Database path: {path:?}");
-            println!("Database exists: {}", path.exists());
-            if let Some(parent) = path.parent() {
-                println!("Parent directory exists: {}", parent.exists());
-            }
-        }
-
-        // Try to create a character stat
-        if thok.has_stats_database() {
-            println!("Database is available for statistics");
-        } else {
-            println!("Database is NOT available for statistics");
-        }
-    }
-
-    #[test]
-    fn test_real_typing_saves_to_database() {
-        let mut thok = Thok::new("hello".to_string(), 1, None, false);
-
-        println!("Starting real typing simulation...");
-
-        // Simulate real typing with timing
-        thok.on_keypress_start();
-        thread::sleep(Duration::from_millis(100));
-        thok.write('h');
-
-        thok.on_keypress_start();
-        thread::sleep(Duration::from_millis(150));
-        thok.write('e');
-
-        thok.on_keypress_start();
-        thread::sleep(Duration::from_millis(120));
-        thok.write('l');
-
-        thok.on_keypress_start();
-        thread::sleep(Duration::from_millis(90));
-        thok.write('l');
-
-        thok.on_keypress_start();
-        thread::sleep(Duration::from_millis(110));
-        thok.write('o');
-
-        // Complete the typing test
-        assert!(thok.has_finished());
-        thok.calc_results();
-
-        // Now check if we can query the statistics
-        if let Some(h_stats) = thok.get_char_stats('h') {
-            println!("Found {} statistics for 'h'", h_stats.len());
-            if !h_stats.is_empty() {
-                println!(
-                    "First 'h' stat: char={}, time={}ms, correct={}",
-                    h_stats[0].character, h_stats[0].time_to_press_ms, h_stats[0].was_correct
-                );
-            }
-        } else {
-            println!("No statistics found for 'h'");
-        }
-
-        if let Some(summary) = thok.get_all_char_summary() {
-            println!("Summary statistics for {} characters", summary.len());
-            for (char, avg_time, miss_rate, attempts) in &summary {
-                println!("  '{char}': avg={avg_time}ms, miss={miss_rate}%, attempts={attempts}");
-            }
-
-            // Debug: Check specifically for our characters
-            println!("\nDEBUG: Checking specific characters from our test:");
-            for target_char in ['h', 'e', 'l', 'o'] {
-                if let Some((_, avg_time, _, attempts)) =
-                    summary.iter().find(|(c, _, _, _)| *c == target_char)
-                {
-                    println!(
-                        "  Character '{target_char}': avg_time={avg_time}ms, attempts={attempts}"
-                    );
-                } else {
-                    println!("  Character '{target_char}': NOT FOUND in summary");
-                }
-            }
-        } else {
-            println!("No summary statistics found");
-        }
+        let path = thok.get_stats_database_path();
+        assert!(path.is_some());
+        let p = path.unwrap();
+        assert!(p.to_string_lossy().contains("klik") || p.to_string_lossy().contains("stats"));
     }
 
     #[test]
@@ -1289,43 +1209,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(any())]
-    fn test_auto_compaction_integration() {
-        let mut thok = Thok::new("test".to_string(), 1, None, false);
-
-        // Set up a typing session
-        thok.session_state.started_at = Some(SystemTime::now());
-        thok.write('t');
-        thok.write('e');
-        thok.write('s');
-        thok.write('t');
-
-        // This should complete without error and potentially trigger auto-compaction
-        thok.calc_results();
-
-        // Verify the session completed successfully
-        assert!(thok.has_finished());
-        assert!(thok.session_state.wpm >= 0.0);
-        assert!(thok.session_state.accuracy >= 0.0);
-    }
-
-    #[test]
-    fn test_database_path_retrieval() {
-        let thok = Thok::new("test".to_string(), 1, None, false);
-
-        // Should return a path (whether database exists or not)
-        let path = thok.get_stats_database_path();
-
-        // The path method should always return something (default path if no config dir)
-        assert!(path.is_some());
-
-        let path = path.unwrap();
-        assert!(
-            path.to_string_lossy().contains("klik") || path.to_string_lossy().contains("stats")
-        );
-    }
-
-    #[test]
     fn test_inter_keystroke_timing() {
         let mut thok = Thok::new("hello".to_string(), 1, None, false);
 
@@ -1366,15 +1249,13 @@ mod tests {
     }
 
     #[test]
-    fn test_celebration_triggers_on_perfect_session() {
+    fn test_celebration_perfect_session() {
         let mut thok = Thok::new("hello".to_string(), 1, None, false);
 
-        // Clear any existing stats to ensure clean test state
         if let Some(ref stats_db) = thok.stats_db {
             let _ = stats_db.clear_all_stats();
         }
 
-        // Type perfectly
         thok.write('h');
         thok.write('e');
         thok.write('l');
@@ -1383,58 +1264,16 @@ mod tests {
 
         assert!(thok.has_finished());
         thok.calc_results();
-
-        // Should have 100% accuracy
         assert_eq!(thok.session_state.accuracy, 100.0);
 
-        // Start celebration - should work
         thok.start_celebration_if_worthy(80, 24);
-
-        // Celebration should be active
         assert!(thok.celebration.is_active);
         assert!(!thok.celebration.particles.is_empty());
 
-        println!(
-            "✅ Celebration triggered successfully with {} particles",
-            thok.celebration.particles.len()
-        );
-    }
-
-    #[test]
-    fn test_celebration_animation_perfect_session() {
-        let mut thok = Thok::new("hello".to_string(), 1, None, false);
-
-        // Clear any existing stats to ensure clean test state
-        if let Some(ref stats_db) = thok.stats_db {
-            let _ = stats_db.clear_all_stats();
-        }
-
-        // Type the prompt perfectly
-        thok.write('h');
-        thok.write('e');
-        thok.write('l');
-        thok.write('l');
-        thok.write('o');
-
-        assert!(thok.has_finished());
-        thok.calc_results();
-
-        // Should have 100% accuracy
-        assert_eq!(thok.session_state.accuracy, 100.0);
-
-        // Start celebration
-        thok.start_celebration_if_worthy(80, 24);
-
-        // Celebration should be active
-        assert!(thok.celebration.is_active);
-        assert!(!thok.celebration.particles.is_empty());
-
-        // Update celebration a few times
+        // Animation continues after updates (duration is 3 seconds)
         for _ in 0..10 {
             thok.update_celebration();
         }
-
-        // Celebration should still be active (duration is 3 seconds)
         assert!(thok.celebration.is_active);
     }
 
@@ -1465,23 +1304,17 @@ mod tests {
 
     #[test]
     fn test_fresh_database_with_realistic_timing() {
-        // This test simulates a fresh session to verify timing data is properly recorded
         let mut thok = Thok::new("hello world test".to_string(), 3, None, false);
 
-        println!("Testing fresh database with realistic typing...");
-
-        // Clear any existing stats for this test
         if let Some(ref mut stats_db) = thok.stats_db {
             let _ = stats_db.clear_all_stats();
         }
 
-        // Simulate realistic typing with varying inter-keystroke intervals
-        let message = "hello world test";
-        let timings = [
+        let timings: [u64; 16] = [
             200, 150, 180, 120, 250, 300, 180, 160, 140, 170, 200, 160, 220, 180, 190, 210,
-        ]; // ms
+        ];
 
-        for (i, c) in message.chars().enumerate() {
+        for (i, c) in "hello world test".chars().enumerate() {
             if i > 0 && i < timings.len() {
                 thread::sleep(Duration::from_millis(timings[i]));
             }
@@ -1491,119 +1324,12 @@ mod tests {
         assert!(thok.has_finished());
         thok.calc_results();
 
-        if let Some(summary) = thok.get_all_char_summary() {
-            println!("Fresh database timing results:");
-
-            let mut has_meaningful_timing = false;
-            for (char, avg_time, miss_rate, attempts) in &summary {
-                let char_display = if *char == ' ' {
-                    "SPACE".to_string()
-                } else {
-                    char.to_string()
-                };
-                println!(
-                    "  '{char_display}': avg={avg_time}ms, miss={miss_rate}%, attempts={attempts}",
-                );
-
-                // Check that timing data is meaningful (not 0)
-                if *avg_time > 0.0 {
-                    has_meaningful_timing = true;
-                }
-            }
-
-            assert!(
-                has_meaningful_timing,
-                "No characters have meaningful timing data!"
-            );
-            println!("Timing fix verified - characters show realistic timing data");
-        } else {
-            panic!("No summary statistics found for fresh database test");
-        }
+        let summary = thok
+            .get_all_char_summary()
+            .expect("Should have summary statistics");
+        let has_meaningful_timing = summary.iter().any(|(_, avg_time, _, _)| *avg_time > 0.0);
+        assert!(has_meaningful_timing, "Should have meaningful timing data");
     }
-
-    #[test]
-    #[cfg(any())]
-    fn test_char_summary_with_deltas_integration() {
-        let mut thok = Thok::new("hello".to_string(), 1, None, false);
-
-        // Type the prompt to generate some session data
-        thok.write('h');
-        thok.write('e');
-        thok.write('l');
-        thok.write('l');
-        thok.write('o');
-
-        assert!(thok.has_finished());
-
-        // Get summary with deltas (should work even with no historical data)
-        if let Some(summary_with_deltas) = thok.get_char_summary_with_deltas() {
-            // Should have data for all characters typed
-            assert!(!summary_with_deltas.is_empty());
-
-            // For new characters (no historical data), deltas should be None
-            for (
-                character,
-                _hist_avg,
-                _hist_miss,
-                _hist_attempts,
-                _time_delta,
-                _miss_delta,
-                session_attempts,
-                _latest_datetime,
-            ) in &summary_with_deltas
-            {
-                if ['h', 'e', 'l', 'o'].contains(character) {
-                    // Deltas might be None for new characters or Some for existing ones
-                    assert!(
-                        *session_attempts > 0,
-                        "Session attempts should be > 0 for typed characters"
-                    );
-                }
-            }
-
-            println!("Character summary with deltas working correctly");
-        } else {
-            println!(
-                "Character summary with deltas not available (database may not be initialized)"
-            );
-        }
-    }
-
-    #[test]
-    #[cfg(any())]
-    fn test_session_delta_summary() {
-        let mut thok = Thok::new("test".to_string(), 1, None, false);
-
-        // Type the prompt to generate session data
-        thok.write('t');
-        thok.write('e');
-        thok.write('s');
-        thok.write('t');
-
-        assert!(thok.has_finished());
-
-        // Get the session delta summary
-        let summary = thok.get_session_delta_summary();
-
-        // Should return a string (content will depend on database availability)
-        assert!(!summary.is_empty());
-
-        // Should contain either historical comparison or no data message
-        assert!(
-            summary.contains("vs historical:")
-                || summary.contains("New session")
-                || summary.contains("No character statistics")
-        );
-
-        println!("Session delta summary: {summary}");
-    }
-
-    // Integration tests moved to tests/integration_training_sessions.rs:
-    // - test_training_session_integration_single_session
-    // - test_training_session_integration_multiple_sessions
-    // - test_training_session_stats_ui_integration
-    // - test_training_session_character_difficulty_tracking
-    // - test_training_session_database_compaction_integration
     // - test_training_session_celebration_integration
 
     #[test]
