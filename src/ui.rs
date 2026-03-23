@@ -364,13 +364,12 @@ mod tests {
 
         if finished {
             for c in prompt.chars() {
-                let input = Input {
+                thok.session_state.input.push(Input {
                     char: c,
                     outcome: Outcome::Correct,
                     timestamp: SystemTime::now(),
                     keypress_start: None,
-                };
-                thok.session_state.input.push(input);
+                });
             }
             thok.session_state.cursor_pos = prompt.len();
             thok.session_state.wpm = 42.0;
@@ -407,75 +406,97 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_ui_widget_in_progress() {
-        let app = create_test_app("hello world", false);
-        let area = Rect::new(0, 0, 80, 24);
+    fn render_to_string(app: &App, area: Rect) -> String {
         let mut buffer = Buffer::empty(area);
-
-        (&app).render(area, &mut buffer);
-
-        let rendered = buffer
+        app.render(area, &mut buffer);
+        buffer
             .content()
             .iter()
             .map(|c| c.symbol())
-            .collect::<String>();
-        assert!(rendered.contains("hello world") || !rendered.trim().is_empty());
+            .collect::<String>()
+    }
+
+    const STD_AREA: Rect = Rect {
+        x: 0,
+        y: 0,
+        width: 80,
+        height: 24,
+    };
+
+    // -- Rendering doesn't panic for various sizes and edge cases --
+
+    #[test]
+    fn test_render_various_sizes() {
+        let areas = [
+            Rect::new(0, 0, 10, 5),     // tiny
+            Rect::new(0, 0, 20, 50),    // narrow tall
+            Rect::new(0, 0, 200, 5),    // wide short
+            Rect::new(0, 0, 80, 24),    // standard
+            Rect::new(0, 0, 40, 20),    // medium
+            Rect::new(0, 0, 1000, 100), // huge
+        ];
+        for area in areas {
+            let app = create_test_app("test prompt", false);
+            let mut buffer = Buffer::empty(area);
+            (&app).render(area, &mut buffer);
+        }
     }
 
     #[test]
-    fn test_ui_widget_finished() {
-        let app = create_test_app("test", true);
-        let area = Rect::new(0, 0, 80, 24);
-        let mut buffer = Buffer::empty(area);
+    fn test_render_edge_case_prompts() {
+        for prompt in [
+            "",
+            "x",
+            "line one\nline two\nline three",
+            &"word ".repeat(1000),
+        ] {
+            let app = create_test_app(prompt, false);
+            let mut buffer = Buffer::empty(STD_AREA);
+            (&app).render(STD_AREA, &mut buffer);
+        }
+    }
 
-        (&app).render(area, &mut buffer);
+    // -- In-progress rendering --
 
-        let rendered = buffer
-            .content()
-            .iter()
-            .map(|c| c.symbol())
-            .collect::<String>();
-
-        assert!(rendered.contains("42") || rendered.contains("95") || !rendered.trim().is_empty());
+    #[test]
+    fn test_in_progress_shows_prompt() {
+        let rendered = render_to_string(&create_test_app("hello world", false), STD_AREA);
+        assert!(rendered.contains("hello world"));
     }
 
     #[test]
-    fn test_ui_widget_with_time_limit() {
+    fn test_in_progress_with_timer() {
         let mut app = create_test_app("test", false);
         app.thok.session_state.seconds_remaining = Some(25.5);
         app.thok.session_config.number_of_secs = Some(30.0);
 
-        let area = Rect::new(0, 0, 80, 24);
-        let mut buffer = Buffer::empty(area);
+        let rendered = render_to_string(&app, STD_AREA);
+        assert!(rendered.contains("25.5"));
+    }
 
-        (&app).render(area, &mut buffer);
+    #[test]
+    fn test_partial_typing_shows_prompt() {
+        let mut app = create_test_app("hello world", false);
+        app.thok.write('h');
+        app.thok.write('e');
+        app.thok.write('l');
 
-        let rendered = buffer
-            .content()
-            .iter()
-            .map(|c| c.symbol())
-            .collect::<String>();
-        assert!(
-            rendered.contains("25.5") || rendered.contains("test") || !rendered.trim().is_empty()
+        let rendered = render_to_string(&app, STD_AREA);
+        assert!(rendered.contains("lo world"));
+    }
+
+    #[test]
+    fn test_unicode_prompt_renders() {
+        let rendered = render_to_string(
+            &create_test_app("cafe\u{301} nai\u{308}ve", false),
+            STD_AREA,
         );
+        assert!(!rendered.trim().is_empty());
     }
 
     #[test]
-    fn test_ui_widget_small_area() {
-        let app = create_test_app("hello", false);
-        let area = Rect::new(0, 0, 20, 5);
-        let mut buffer = Buffer::empty(area);
-
-        (&app).render(area, &mut buffer);
-
-        assert!(*buffer.area() == area);
-    }
-
-    #[test]
-    fn test_ui_widget_with_incorrect_input() {
+    fn test_incorrect_input_renders() {
         let mut app = create_test_app("test", false);
-
         app.thok.session_state.input.push(Input {
             char: 't',
             outcome: Outcome::Correct,
@@ -490,331 +511,53 @@ mod tests {
         });
         app.thok.session_state.cursor_pos = 2;
 
-        let area = Rect::new(0, 0, 80, 24);
-        let mut buffer = Buffer::empty(area);
-
-        (&app).render(area, &mut buffer);
-
-        assert!(*buffer.area() == area);
-    }
-
-    #[test]
-    fn test_ui_constants() {
-        assert_eq!(HORIZONTAL_MARGIN, 5);
-        assert_eq!(VERTICAL_MARGIN, 2);
-    }
-
-    #[test]
-    fn test_ui_widget_finished_with_browser_available() {
-        let app = create_test_app("test", true);
-        let area = Rect::new(0, 0, 80, 24);
-        let mut buffer = Buffer::empty(area);
-
-        (&app).render(area, &mut buffer);
-
-        let rendered = buffer
-            .content()
-            .iter()
-            .map(|c| c.symbol())
-            .collect::<String>();
-
-        if Browser::is_available() {
-            assert!(
-                rendered.contains("(t)weet")
-                    || rendered.contains("(r)etry")
-                    || rendered.contains("(n)ew")
-                    || rendered.contains("(s)tats")
-                    || rendered.contains("(esc)ape")
-                    || !rendered.trim().is_empty()
-            );
-        } else {
-            assert!(
-                rendered.contains("(r)etry")
-                    || rendered.contains("(n)ew")
-                    || rendered.contains("(s)tats")
-                    || rendered.contains("(esc)ape")
-                    || !rendered.trim().is_empty()
-            );
-        }
-    }
-
-    #[test]
-    fn test_ui_widget_large_prompt() {
-        let large_prompt = "This is a very long prompt that should wrap across multiple lines when rendered in the terminal interface to test the text wrapping functionality";
-        let app = create_test_app(large_prompt, false);
-        let area = Rect::new(0, 0, 40, 20);
-        let mut buffer = Buffer::empty(area);
-
-        (&app).render(area, &mut buffer);
-
-        assert!(*buffer.area() == area);
-    }
-
-    #[test]
-    fn test_ui_widget_empty_prompt() {
-        let app = create_test_app("", false);
-        let area = Rect::new(0, 0, 80, 24);
-        let mut buffer = Buffer::empty(area);
-
-        (&app).render(area, &mut buffer);
-
-        assert!(*buffer.area() == area);
-    }
-
-    #[test]
-    fn test_ui_widget_extreme_sizes() {
-        let app = create_test_app("test prompt", false);
-
-        // Test small area
-        let small_area = Rect::new(0, 0, 10, 5);
-        let mut small_buffer = Buffer::empty(small_area);
-        (&app).render(small_area, &mut small_buffer);
-        assert!(*small_buffer.area() == small_area);
-
-        // Test very large area
-        let large_area = Rect::new(0, 0, 1000, 1000);
-        let mut large_buffer = Buffer::empty(large_area);
-        (&app).render(large_area, &mut large_buffer);
-        assert!(*large_buffer.area() == large_area);
-
-        // Test normal sized area
-        let normal_area = Rect::new(0, 0, 80, 24);
-        let mut normal_buffer = Buffer::empty(normal_area);
-        (&app).render(normal_area, &mut normal_buffer);
-        assert!(*normal_buffer.area() == normal_area);
-    }
-
-    #[test]
-    fn test_ui_widget_partial_typing() {
-        let mut app = create_test_app("hello world", false);
-
-        // Type partially through the prompt
-        app.thok.write('h');
-        app.thok.write('e');
-        app.thok.write('l');
-
-        let area = Rect::new(0, 0, 80, 24);
-        let mut buffer = Buffer::empty(area);
-
-        (&app).render(area, &mut buffer);
-
-        let rendered = buffer
-            .content()
-            .iter()
-            .map(|c| c.symbol())
-            .collect::<String>();
-
-        // Should contain the prompt text
-        assert!(rendered.contains("hello") || rendered.contains("world"));
-    }
-
-    #[test]
-    fn test_ui_widget_with_errors() {
-        let mut app = create_test_app("hello", false);
-
-        // Type with some errors
-        app.thok.write('h');
-        app.thok.write('x'); // Wrong character
-        app.thok.write('l');
-        app.thok.write('l');
-        app.thok.write('o');
-
-        let area = Rect::new(0, 0, 80, 24);
-        let mut buffer = Buffer::empty(area);
-
-        (&app).render(area, &mut buffer);
-
-        let rendered = buffer
-            .content()
-            .iter()
-            .map(|c| c.symbol())
-            .collect::<String>();
-
-        // Should render without panicking and contain some content
+        let rendered = render_to_string(&app, STD_AREA);
         assert!(!rendered.trim().is_empty());
     }
 
+    // -- Finished/results rendering --
+
     #[test]
-    fn test_ui_widget_special_characters() {
-        let app = create_test_app("café naïve résumé", false);
-
-        let area = Rect::new(0, 0, 80, 24);
-        let mut buffer = Buffer::empty(area);
-
-        (&app).render(area, &mut buffer);
-
-        let rendered = buffer
-            .content()
-            .iter()
-            .map(|c| c.symbol())
-            .collect::<String>();
-
-        // Should handle unicode characters without issues
-        assert!(
-            rendered.contains("café")
-                || rendered.contains("naïve")
-                || rendered.contains("résumé")
-                || !rendered.trim().is_empty()
-        );
+    fn test_finished_shows_stats() {
+        let rendered = render_to_string(&create_test_app("test", true), STD_AREA);
+        assert!(rendered.contains("42")); // wpm
+        assert!(rendered.contains("95")); // accuracy
     }
 
     #[test]
-    fn test_ui_widget_color_consistency() {
-        let mut app = create_test_app("test", false);
-
-        // Type correctly
-        app.thok.write('t');
-        app.thok.write('e');
-
-        let area = Rect::new(0, 0, 80, 24);
-        let mut buffer = Buffer::empty(area);
-
-        (&app).render(area, &mut buffer);
-
-        // Check that the buffer was successfully populated
-        // (We can't easily test colors in unit tests, but we can verify rendering succeeds)
-        assert!(!buffer.content().is_empty());
+    fn test_finished_shows_legend() {
+        let rendered = render_to_string(&create_test_app("test", true), STD_AREA);
+        assert!(rendered.contains("(r)etry"));
+        assert!(rendered.contains("(n)ew"));
+        assert!(rendered.contains("(esc)ape"));
     }
 
-    #[test]
-    fn test_ui_widget_renders_without_panic() {
-        let app = create_test_app("test", false);
-
-        let area = Rect::new(0, 0, 80, 24);
-        let mut buffer = Buffer::empty(area);
-
-        // Test that basic rendering works without panicking
-        (&app).render(area, &mut buffer);
-
-        // Should render successfully
-        assert!(*buffer.area() == area);
-    }
+    // -- State progression --
 
     #[test]
-    fn test_ui_widget_different_aspect_ratios() {
-        let app = create_test_app("testing different aspect ratios", false);
-
-        // Test wide and short
-        let wide_area = Rect::new(0, 0, 200, 5);
-        let mut wide_buffer = Buffer::empty(wide_area);
-        (&app).render(wide_area, &mut wide_buffer);
-        assert!(*wide_buffer.area() == wide_area);
-
-        // Test narrow and tall
-        let tall_area = Rect::new(0, 0, 20, 50);
-        let mut tall_buffer = Buffer::empty(tall_area);
-        (&app).render(tall_area, &mut tall_buffer);
-        assert!(*tall_buffer.area() == tall_area);
-
-        // Test square
-        let square_area = Rect::new(0, 0, 50, 50);
-        let mut square_buffer = Buffer::empty(square_area);
-        (&app).render(square_area, &mut square_buffer);
-        assert!(*square_buffer.area() == square_area);
-    }
-
-    #[test]
-    fn test_ui_constants_consistency() {
-        // Test that UI constants are reasonable values
-        assert_eq!(HORIZONTAL_MARGIN, 5);
-        assert_eq!(VERTICAL_MARGIN, 2);
-
-        // These are compile-time checks that our constants are reasonable
-        const _: () = assert!(HORIZONTAL_MARGIN <= 20); // Should not be excessive
-        const _: () = assert!(VERTICAL_MARGIN <= 10); // Should not be excessive
-        const _: () = assert!(HORIZONTAL_MARGIN * 2 < 80); // Common terminal width
-        const _: () = assert!(VERTICAL_MARGIN * 2 < 24); // Common terminal height
-    }
-
-    #[test]
-    fn test_ui_widget_with_newlines_in_prompt() {
-        let app = create_test_app("line one\nline two\nline three", false);
-
-        let area = Rect::new(0, 0, 80, 24);
-        let mut buffer = Buffer::empty(area);
-
-        (&app).render(area, &mut buffer);
-
-        let rendered = buffer
-            .content()
-            .iter()
-            .map(|c| c.symbol())
-            .collect::<String>();
-
-        // Should handle newlines in the prompt gracefully
-        assert!(!rendered.trim().is_empty());
-    }
-
-    #[test]
-    fn test_ui_widget_render_multiple_times() {
+    fn test_render_changes_after_typing() {
         let mut app = create_test_app("hello", false);
+        let mut buf_before = Buffer::empty(STD_AREA);
+        (&app).render(STD_AREA, &mut buf_before);
 
-        let area = Rect::new(0, 0, 80, 24);
-
-        // Render initial state
-        let mut buffer1 = Buffer::empty(area);
-        (&app).render(area, &mut buffer1);
-
-        // Type a character
         app.thok.write('h');
+        let mut buf_after = Buffer::empty(STD_AREA);
+        (&app).render(STD_AREA, &mut buf_after);
 
-        // Render after typing
-        let mut buffer2 = Buffer::empty(area);
-        (&app).render(area, &mut buffer2);
-
-        // Type another character
-        app.thok.write('e');
-
-        // Render again
-        let mut buffer3 = Buffer::empty(area);
-        (&app).render(area, &mut buffer3);
-
-        // All renders should succeed
-        assert!(!buffer1.content().is_empty());
-        assert!(!buffer2.content().is_empty());
-        assert!(!buffer3.content().is_empty());
+        // Content text is the same but styles differ (green vs underlined)
+        assert_ne!(buf_before, buf_after);
     }
 
-    #[test]
-    fn test_ui_widget_performance_large_text() {
-        // Test with a very large prompt to ensure performance doesn't degrade significantly
-        let large_text = "word ".repeat(1000); // 5000 characters
-        let app = create_test_app(&large_text, false);
-
-        let area = Rect::new(0, 0, 80, 24);
-        let mut buffer = Buffer::empty(area);
-
-        // This should complete without hanging or excessive memory usage
-        (&app).render(area, &mut buffer);
-
-        assert!(*buffer.area() == area);
-    }
+    // -- Celebration --
 
     #[test]
-    fn test_celebration_animation_rendering() {
-        use crate::celebration::CelebrationAnimation;
-
+    fn test_celebration_renders() {
         let mut app = create_test_app("test", true);
-
-        // Manually set up celebration
-        app.thok.session_state.accuracy = 100.0;
-        app.thok.celebration = CelebrationAnimation::default();
+        app.thok.celebration = crate::celebration::CelebrationAnimation::default();
         app.thok.celebration.start(80, 24);
-
-        // Ensure celebration is active
         assert!(app.thok.celebration.is_active);
-        assert!(!app.thok.celebration.particles.is_empty());
 
-        let area = Rect::new(0, 0, 80, 24);
-        let mut buffer = Buffer::empty(area);
-
-        // Render with celebration
-        (&app).render(area, &mut buffer);
-
-        // Should render without panicking
-        assert!(*buffer.area() == area);
-
-        // The buffer should contain content (hard to test specific particles due to randomness)
-        assert!(!buffer.content().is_empty());
+        let mut buffer = Buffer::empty(STD_AREA);
+        (&app).render(STD_AREA, &mut buffer);
     }
 }

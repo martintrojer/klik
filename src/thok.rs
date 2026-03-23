@@ -894,9 +894,9 @@ mod tests {
 
         // Try to create a character stat
         if thok.has_stats_database() {
-            println!("✅ Database is available for statistics");
+            println!("Database is available for statistics");
         } else {
-            println!("❌ Database is NOT available for statistics");
+            println!("Database is NOT available for statistics");
         }
     }
 
@@ -941,7 +941,7 @@ mod tests {
                 );
             }
         } else {
-            println!("❌ No statistics found for 'h'");
+            println!("No statistics found for 'h'");
         }
 
         if let Some(summary) = thok.get_all_char_summary() {
@@ -964,7 +964,7 @@ mod tests {
                 }
             }
         } else {
-            println!("❌ No summary statistics found");
+            println!("No summary statistics found");
         }
     }
 
@@ -1361,7 +1361,7 @@ mod tests {
                 }
             }
         } else {
-            panic!("❌ No summary statistics found for inter-keystroke timing test");
+            panic!("No summary statistics found for inter-keystroke timing test");
         }
     }
 
@@ -1515,9 +1515,9 @@ mod tests {
                 has_meaningful_timing,
                 "No characters have meaningful timing data!"
             );
-            println!("✅ Timing fix verified - characters show realistic timing data");
+            println!("Timing fix verified - characters show realistic timing data");
         } else {
-            panic!("❌ No summary statistics found for fresh database test");
+            panic!("No summary statistics found for fresh database test");
         }
     }
 
@@ -1561,10 +1561,10 @@ mod tests {
                 }
             }
 
-            println!("✅ Character summary with deltas working correctly");
+            println!("Character summary with deltas working correctly");
         } else {
             println!(
-                "❌ Character summary with deltas not available (database may not be initialized)"
+                "Character summary with deltas not available (database may not be initialized)"
             );
         }
     }
@@ -1595,7 +1595,7 @@ mod tests {
                 || summary.contains("No character statistics")
         );
 
-        println!("✅ Session delta summary: {summary}");
+        println!("Session delta summary: {summary}");
     }
 
     // Integration tests moved to tests/integration_training_sessions.rs:

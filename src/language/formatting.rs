@@ -90,17 +90,18 @@ mod tests {
         assert!(lowercase_result.contains("hello"));
         assert!(lowercase_result.contains("world"));
 
-        // Should potentially have symbols (due to 25% chance, run multiple times)
-        let mut _found_symbols = false;
-        for _ in 0..10 {
+        // With 25% symbol chance per word and 2 words, over 100 trials
+        // the probability of never seeing a symbol is (0.75^2)^100 ~ 0
+        let symbol_chars = "@#$%^&*()[]{}|\\~`+-=<>:;\"'";
+        let mut found_symbols = false;
+        for _ in 0..100 {
             let test_result = lang.apply_advanced_formatting(words.clone(), false, true);
-            let symbol_chars = "@#$%^&*()[]{}|\\~`+-=<>";
             if test_result.chars().any(|c| symbol_chars.contains(c)) {
-                _found_symbols = true;
+                found_symbols = true;
                 break;
             }
         }
-        // Note: Due to randomness, we can't guarantee symbols, but the function should support them
+        assert!(found_symbols, "Should produce symbols over 100 trials");
     }
 
     #[test]

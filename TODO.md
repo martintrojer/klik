@@ -17,10 +17,11 @@
 
 ## Tests
 
-- [ ] **Fix trivially-true UI test assertions**: Most UI tests in `ui.rs` use `|| !rendered.trim().is_empty()` fallbacks that make them pass for any non-empty buffer. Remove fallbacks, assert on specific expected content.
-- [ ] **Consolidate duplicate smoke tests**: 6+ tests that only assert `buffer.area() == area` (doesn't-panic). Merge into one parameterized test.
-- [ ] **Remove tautological constant tests**: `test_ui_constants` asserts a constant equals its literal value — catches nothing.
-- [ ] **Fix `test_flag_independence_symbols_only`**: Sets `_found_symbols` but never asserts on it. Test cannot fail for the feature it claims to test.
-- [ ] **Un-ignore integration test**: `integration_min_session` is `#[ignore]` and doesn't run in CI. The only end-to-end test has zero automated coverage.
+- [x] **Fix trivially-true UI test assertions**: Replaced with specific content assertions (`contains("42")`, `contains("(r)etry")`, etc).
+- [x] **Consolidate duplicate smoke tests**: Merged 6+ size/edge-case tests into `test_render_various_sizes` and `test_render_edge_case_prompts`.
+- [x] **Remove tautological constant tests**: Deleted `test_ui_constants` and `test_ui_constants_consistency`.
+- [x] **Fix `test_flag_independence_symbols_only`**: Now asserts `found_symbols` over 100 trials.
+- [x] **Remove emoji bloat from tests**: Cleaned up println/panic in thok.rs, celebration.rs, integration tests.
+- [ ] **Un-ignore integration test**: `integration_min_session` is `#[ignore]` and doesn't run in CI.
 - [ ] Move remaining long integration-style tests from `src/thok.rs` into `tests/`.
 - [ ] Prefer headless tests over PTY where possible (use `ThokEventSource`/`Ticker` test impls).

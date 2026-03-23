@@ -86,7 +86,7 @@ fn training_session_integration_single_session() {
             );
         }
 
-        println!("✅ Session 1 database verification successful");
+        println!("Session 1 database verification successful");
         for (char, avg_time, miss_rate, attempts) in &summary {
             println!(
                 "  '{char}': {avg_time}ms avg, {miss_rate:.1}% miss rate, {attempts} attempts"
@@ -262,7 +262,7 @@ fn training_session_integration_multiple_sessions() {
             }
         }
 
-        println!("✅ {characters_with_improvements} characters showed improvements in Session 2",);
+        println!("{characters_with_improvements} characters showed improvements in Session 2",);
         assert!(
             characters_with_improvements > 0,
             "At least some characters should show improvement in Session 2"
@@ -480,7 +480,7 @@ fn training_session_character_difficulty_tracking() {
                 "Character 'a' should be faster than 'b'"
             );
 
-            println!("✅ Character difficulty correctly identified: 'a' easier than 'b'");
+            println!("Character difficulty correctly identified: 'a' easier than 'b'");
         }
     }
 }
@@ -543,7 +543,7 @@ fn training_session_database_compaction_integration() {
                 "Should have at least one character with valid stats after compaction"
             );
 
-            println!("✅ Database compaction integration test passed");
+            println!("Database compaction integration test passed");
         }
     }
 }
@@ -645,10 +645,10 @@ fn training_session_celebration_integration() {
         );
     } else {
         // If no improvements, celebration might not trigger - that's acceptable
-        println!("ℹ️  Perfect session but no significant improvements vs historical data");
+        println!("Perfect session but no significant improvements vs historical data");
     }
 
-    println!("✅ Session 1: Perfect session celebrated (no historical data)");
+    println!("Session 1: Perfect session celebrated (no historical data)");
 
     // Session 2: Perfect session with improvements
     let mut thok2 = Thok::new("perfect".to_string(), 1, None, false);
@@ -712,9 +712,9 @@ fn training_session_celebration_integration() {
                 thok2.celebration.is_active,
                 "Should celebrate perfect session with improvements"
             );
-            println!("✅ Session 2: Perfect session with improvements celebrated");
+            println!("Session 2: Perfect session with improvements celebrated");
         } else {
-            println!("ℹ️  Session 2: Perfect session but improvements not significant enough for celebration");
+            println!("Session 2: Perfect session but improvements not significant enough for celebration");
         }
     }
 }
