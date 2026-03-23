@@ -329,7 +329,7 @@ fn start_tui<B: Backend>(
                         let was_idle = app.thok.mark_activity();
                         if was_idle {
                             // Reset session when exiting idle state
-                            app.reset(Some(app.thok.prompt.clone()));
+                            app.reset(Some(app.thok.session.prompt.clone()));
                             // Skip processing this key event since we just reset
                             continue;
                         }
@@ -381,7 +381,7 @@ fn start_tui<B: Backend>(
 
         match exit_type {
             ExitType::Restart => {
-                app.reset(Some(app.thok.prompt.clone()));
+                app.reset(Some(app.thok.session.prompt.clone()));
             }
             ExitType::New => {
                 app.reset(None);
@@ -511,10 +511,10 @@ mod tests {
 
         let app = App::new(cli.clone());
 
-        assert_eq!(app.thok.session_config.number_of_words, 10);
-        assert_eq!(app.thok.session_config.number_of_secs, None);
+        assert_eq!(app.thok.session.config.number_of_words, 10);
+        assert_eq!(app.thok.session.config.number_of_secs, None);
         assert!(app.cli.is_some());
-        assert!(!app.thok.prompt.is_empty());
+        assert!(!app.thok.session.prompt.is_empty());
         assert_eq!(app.state, AppState::Typing);
     }
 
@@ -535,8 +535,8 @@ mod tests {
 
         let app = App::new(cli);
 
-        assert_eq!(app.thok.prompt, "custom test prompt");
-        assert_eq!(app.thok.session_config.number_of_words, 10);
+        assert_eq!(app.thok.session.prompt, "custom test prompt");
+        assert_eq!(app.thok.session.config.number_of_words, 10);
         assert_eq!(app.state, AppState::Typing);
     }
 
@@ -557,8 +557,8 @@ mod tests {
 
         let app = App::new(cli);
 
-        assert!(app.thok.session_config.number_of_words > 0);
-        assert!(!app.thok.prompt.is_empty());
+        assert!(app.thok.session.config.number_of_words > 0);
+        assert!(!app.thok.session.prompt.is_empty());
         assert_eq!(app.state, AppState::Typing);
     }
 
@@ -579,8 +579,8 @@ mod tests {
 
         let app = App::new(cli);
 
-        assert_eq!(app.thok.session_config.number_of_secs, Some(60.0));
-        assert_eq!(app.thok.session_state.seconds_remaining, Some(60.0));
+        assert_eq!(app.thok.session.config.number_of_secs, Some(60.0));
+        assert_eq!(app.thok.session.state.seconds_remaining, Some(60.0));
         assert_eq!(app.state, AppState::Typing);
     }
 
@@ -600,14 +600,14 @@ mod tests {
         };
 
         let mut app = App::new(cli);
-        let original_prompt = app.thok.prompt.clone();
+        let original_prompt = app.thok.session.prompt.clone();
 
         app.reset(Some("new test prompt".to_string()));
 
-        assert_eq!(app.thok.prompt, "new test prompt");
-        assert_ne!(app.thok.prompt, original_prompt);
-        assert_eq!(app.thok.session_state.input.len(), 0);
-        assert_eq!(app.thok.session_state.cursor_pos, 0);
+        assert_eq!(app.thok.session.prompt, "new test prompt");
+        assert_ne!(app.thok.session.prompt, original_prompt);
+        assert_eq!(app.thok.session.state.input.len(), 0);
+        assert_eq!(app.thok.session.state.cursor_pos, 0);
         assert_eq!(app.state, AppState::Typing);
     }
 
@@ -627,17 +627,17 @@ mod tests {
         };
 
         let mut app = App::new(cli);
-        let original_prompt = app.thok.prompt.clone();
+        let original_prompt = app.thok.session.prompt.clone();
 
         app.thok.write('t');
         app.thok.write('e');
-        assert_eq!(app.thok.session_state.input.len(), 2);
+        assert_eq!(app.thok.session.state.input.len(), 2);
 
         app.reset(None);
 
-        assert_ne!(app.thok.prompt, original_prompt);
-        assert_eq!(app.thok.session_state.input.len(), 0);
-        assert_eq!(app.thok.session_state.cursor_pos, 0);
+        assert_ne!(app.thok.session.prompt, original_prompt);
+        assert_eq!(app.thok.session.state.input.len(), 0);
+        assert_eq!(app.thok.session.state.cursor_pos, 0);
         assert_eq!(app.state, AppState::Typing);
     }
 
@@ -738,7 +738,7 @@ mod tests {
         };
         let app_substitute = App::new(cli_substitute_only);
         // Should generate substituted words without extra formatting
-        assert!(!app_substitute.thok.prompt.is_empty());
+        assert!(!app_substitute.thok.session.prompt.is_empty());
 
         // Test capitalize only
         let cli_capitalize_only = Cli {
@@ -757,6 +757,7 @@ mod tests {
         // Should have capitalization
         assert!(app_capitalize
             .thok
+            .session
             .prompt
             .chars()
             .next()
@@ -779,12 +780,12 @@ mod tests {
         let app_symbols = App::new(cli_symbols_only);
         // Should have symbols available (end punctuation at minimum)
         assert!(
-            app_symbols.thok.prompt.ends_with('.')
-                || app_symbols.thok.prompt.ends_with('!')
-                || app_symbols.thok.prompt.ends_with('?')
-                || app_symbols.thok.prompt.ends_with(';')
-                || app_symbols.thok.prompt.ends_with(':')
-                || app_symbols.thok.prompt.ends_with("...")
+            app_symbols.thok.session.prompt.ends_with('.')
+                || app_symbols.thok.session.prompt.ends_with('!')
+                || app_symbols.thok.session.prompt.ends_with('?')
+                || app_symbols.thok.session.prompt.ends_with(';')
+                || app_symbols.thok.session.prompt.ends_with(':')
+                || app_symbols.thok.session.prompt.ends_with("...")
         );
 
         // Test all three combined
@@ -802,7 +803,7 @@ mod tests {
         };
         let app_all = App::new(cli_all);
         // Should have all features
-        assert!(!app_all.thok.prompt.is_empty());
+        assert!(!app_all.thok.session.prompt.is_empty());
         // Due to substitution and symbol randomness, just check that the prompt is generated
         // The capitalization will be handled by the formatting logic when both flags are enabled
     }
@@ -906,7 +907,7 @@ mod tests {
         };
 
         let app = App::new(cli_strict);
-        assert!(app.thok.session_config.strict);
+        assert!(app.thok.session.config.strict);
     }
 
     #[test]
@@ -1249,8 +1250,8 @@ mod tests {
         app.state = AppState::Results;
 
         // Verify results exist
-        assert!(app.thok.session_state.wpm > 0.0);
-        assert!(app.thok.session_state.accuracy >= 0.0 && app.thok.session_state.accuracy <= 100.0);
+        assert!(app.thok.session.state.wpm > 0.0);
+        assert!(app.thok.session.state.accuracy >= 0.0 && app.thok.session.state.accuracy <= 100.0);
 
         // Test state transitions
         app.state = AppState::CharacterStats;
@@ -1261,7 +1262,7 @@ mod tests {
         assert_eq!(app.state, AppState::Typing);
         assert!(!app.thok.has_started());
         assert!(!app.thok.has_finished());
-        assert_eq!(app.thok.session_state.input.len(), 0);
+        assert_eq!(app.thok.session.state.input.len(), 0);
     }
 
     #[test]
@@ -1283,8 +1284,8 @@ mod tests {
         let mut app = App::new(cli);
 
         // Verify timed session setup
-        assert_eq!(app.thok.session_config.number_of_secs, Some(1.0));
-        assert_eq!(app.thok.session_state.seconds_remaining, Some(1.0));
+        assert_eq!(app.thok.session.config.number_of_secs, Some(1.0));
+        assert_eq!(app.thok.session.state.seconds_remaining, Some(1.0));
 
         // Start typing
         app.thok.on_keypress_start();
@@ -1320,7 +1321,7 @@ mod tests {
         let mut app = App::new(cli);
 
         // Verify strict mode is enabled
-        assert!(app.thok.session_config.strict);
+        assert!(app.thok.session.config.strict);
 
         // Start typing
         app.thok.on_keypress_start();
@@ -1353,7 +1354,7 @@ mod tests {
         let app = App::new(cli);
 
         // Verify substitution mode generates a prompt
-        assert!(!app.thok.prompt.is_empty());
+        assert!(!app.thok.session.prompt.is_empty());
         // The actual substitution logic is tested in the language module
         // Here we just verify the integration works
     }
@@ -1377,9 +1378,9 @@ mod tests {
         let mut app = App::new(cli.clone());
 
         // Verify initial settings
-        assert_eq!(app.thok.session_config.number_of_words, 25);
-        assert_eq!(app.thok.session_config.number_of_secs, Some(60.0));
-        assert!(app.thok.session_config.strict);
+        assert_eq!(app.thok.session.config.number_of_words, 25);
+        assert_eq!(app.thok.session.config.number_of_secs, Some(60.0));
+        assert!(app.thok.session.config.strict);
 
         // Type something to change state
         app.thok.write('t');
@@ -1389,11 +1390,11 @@ mod tests {
         app.reset(None);
 
         // Verify settings are preserved after reset
-        assert_eq!(app.thok.session_config.number_of_words, 25);
-        assert_eq!(app.thok.session_config.number_of_secs, Some(60.0));
-        assert!(app.thok.session_config.strict);
-        assert_eq!(app.thok.session_state.input.len(), 0); // But input is cleared
-        assert_eq!(app.thok.session_state.cursor_pos, 0); // And cursor is reset
+        assert_eq!(app.thok.session.config.number_of_words, 25);
+        assert_eq!(app.thok.session.config.number_of_secs, Some(60.0));
+        assert!(app.thok.session.config.strict);
+        assert_eq!(app.thok.session.state.input.len(), 0); // But input is cleared
+        assert_eq!(app.thok.session.state.cursor_pos, 0); // And cursor is reset
         assert_eq!(app.state, AppState::Typing); // And state is reset
     }
 
@@ -1423,8 +1424,8 @@ mod tests {
             let app = App::new(cli);
 
             // Verify that each language generates a valid prompt
-            assert!(!app.thok.prompt.is_empty());
-            assert!(app.thok.session_config.number_of_words > 0);
+            assert!(!app.thok.session.prompt.is_empty());
+            assert!(app.thok.session.config.number_of_words > 0);
         }
     }
 
@@ -1459,12 +1460,12 @@ mod tests {
             let app = App::new(cli);
 
             // Verify that all formatting combinations generate valid prompts
-            assert!(!app.thok.prompt.is_empty());
+            assert!(!app.thok.session.prompt.is_empty());
 
             // If capitalize is enabled, check for capitalization (may be affected by other formatting)
             if capitalize && !substitute && !symbols {
                 // Only test when other formatting options don't interfere
-                let first_char = app.thok.prompt.chars().next().unwrap();
+                let first_char = app.thok.session.prompt.chars().next().unwrap();
                 // Allow for punctuation or other formatting that might come first
                 if first_char.is_alphabetic() {
                     assert!(first_char.is_uppercase());

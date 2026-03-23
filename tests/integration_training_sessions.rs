@@ -14,7 +14,7 @@ fn training_session_integration_single_session() {
     }
 
     // Debug: Check the actual prompt
-    println!("Prompt: '{}', length: {}", thok.prompt, thok.prompt.len());
+    println!("Prompt: '{}', length: {}", thok.session.prompt, thok.session.prompt.len());
 
     // Session 1: Type with some mistakes
     // Need to be careful: typing an error + correct char means we'll have extra input
@@ -33,8 +33,8 @@ fn training_session_integration_single_session() {
         thok.write(c);
         println!(
             "Current cursor position: {}, input length: {}",
-            thok.session_state.cursor_pos,
-            thok.session_state.input.len()
+            thok.session.state.cursor_pos,
+            thok.session.state.input.len()
         );
 
         // Stop if we've reached the end of the prompt
@@ -48,9 +48,9 @@ fn training_session_integration_single_session() {
     thok.calc_results();
 
     // Verify results calculation
-    assert!(thok.session_state.accuracy < 100.0); // Should be less than perfect due to one error
-    assert!(thok.session_state.accuracy > 85.0); // But still quite high
-    assert!(thok.session_state.wpm > 0.0);
+    assert!(thok.session.state.accuracy < 100.0); // Should be less than perfect due to one error
+    assert!(thok.session.state.accuracy > 85.0); // But still quite high
+    assert!(thok.session.state.wpm > 0.0);
 
     // Verify stats were recorded to database
     if let Some(ref stats_db) = thok.stats_db {
@@ -125,10 +125,10 @@ fn training_session_integration_multiple_sessions() {
     assert!(thok1.has_finished());
     thok1.calc_results();
 
-    let session1_accuracy = thok1.session_state.accuracy;
+    let session1_accuracy = thok1.session.state.accuracy;
     println!(
         "Session 1 - Accuracy: {session1_accuracy}%, WPM: {}",
-        thok1.session_state.wpm
+        thok1.session.state.wpm
     );
 
     // Verify first session stats
@@ -169,19 +169,19 @@ fn training_session_integration_multiple_sessions() {
     assert!(thok2.has_finished());
     thok2.calc_results();
 
-    let session2_accuracy = thok2.session_state.accuracy;
+    let session2_accuracy = thok2.session.state.accuracy;
     println!(
         "Session 2 - Accuracy: {session2_accuracy}%, WPM: {}",
-        thok2.session_state.wpm
+        thok2.session.state.wpm
     );
 
     // Session 2 should be faster (higher WPM) or at least equal
     // On some platforms timing precision might cause identical WPM values
     assert!(
-        thok2.session_state.wpm >= thok1.session_state.wpm,
+        thok2.session.state.wpm >= thok1.session.state.wpm,
         "Session 2 should be at least as fast as Session 1 (Session 1: {}, Session 2: {})",
-        thok1.session_state.wpm,
-        thok2.session_state.wpm
+        thok1.session.state.wpm,
+        thok2.session.state.wpm
     );
 
     // Verify second session stats and deltas
@@ -394,7 +394,7 @@ fn training_session_character_difficulty_tracking() {
 
     // Session with intentional mistakes on 'b' to make it appear difficult
     // "aaa bbb" = 7 characters, but we'll have errors that advance cursor
-    println!("Prompt: '{}', length: {}", thok.prompt, thok.prompt.len());
+    println!("Prompt: '{}', length: {}", thok.session.prompt, thok.session.prompt.len());
 
     let chars: Vec<char> = "aaa bbb".chars().collect();
     for (i, &c) in chars.iter().enumerate() {
@@ -407,8 +407,8 @@ fn training_session_character_difficulty_tracking() {
             thok.write('x'); // incorrect
             println!(
                 "After error: cursor={}, input_len={}",
-                thok.session_state.cursor_pos,
-                thok.session_state.input.len()
+                thok.session.state.cursor_pos,
+                thok.session.state.input.len()
             );
             std::thread::sleep(std::time::Duration::from_millis(250)); // slow
 
@@ -422,8 +422,8 @@ fn training_session_character_difficulty_tracking() {
         thok.write(c); // correct character
         println!(
             "After correct: cursor={}, input_len={}",
-            thok.session_state.cursor_pos,
-            thok.session_state.input.len()
+            thok.session.state.cursor_pos,
+            thok.session.state.input.len()
         );
         std::thread::sleep(std::time::Duration::from_millis(100));
 
@@ -577,7 +577,7 @@ fn training_session_celebration_integration() {
     thok.calc_results();
 
     assert_eq!(
-        thok.session_state.accuracy, 100.0,
+        thok.session.state.accuracy, 100.0,
         "First session should be perfect"
     );
 
@@ -672,12 +672,12 @@ fn training_session_celebration_integration() {
     thok2.calc_results();
 
     assert_eq!(
-        thok2.session_state.accuracy, 100.0,
+        thok2.session.state.accuracy, 100.0,
         "Second session should also be perfect"
     );
     println!(
         "Session 1 WPM: {}, Session 2 WPM: {}",
-        thok.session_state.wpm, thok2.session_state.wpm
+        thok.session.state.wpm, thok2.session.state.wpm
     );
     // Relax this assertion since timing differences might be minimal
     // assert!(thok2.wpm > thok.wpm, "Second session should be faster");

@@ -32,11 +32,11 @@ fn session_delta_summary_smoke() {
 #[test]
 fn auto_compaction_integration_smoke() {
     let mut thok = Thok::new("test".to_string(), 1, None, false);
-    thok.session_state.started_at = Some(std::time::SystemTime::now());
+    thok.session.state.started_at = Some(std::time::SystemTime::now());
     for c in "test".chars() {
         thok.write(c);
     }
     thok.calc_results();
     assert!(thok.has_finished());
-    assert!(thok.session_state.wpm >= 0.0);
+    assert!(thok.session.state.wpm >= 0.0);
 }

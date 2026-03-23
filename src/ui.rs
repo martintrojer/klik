@@ -55,15 +55,16 @@ impl Widget for &App {
             (true, false) => {
                 let max_chars_per_line = area.width - (HORIZONTAL_MARGIN * 2);
                 let mut prompt_occupied_lines =
-                    ((thok.prompt.width() as f64 / max_chars_per_line as f64).ceil() + 1.0) as u16;
+                    ((thok.session.prompt.width() as f64 / max_chars_per_line as f64).ceil() + 1.0)
+                        as u16;
 
-                let time_left_lines = if thok.session_config.number_of_secs.is_some() {
+                let time_left_lines = if thok.session.config.number_of_secs.is_some() {
                     2
                 } else {
                     0
                 };
 
-                if thok.prompt.width() <= max_chars_per_line as usize {
+                if thok.session.prompt.width() <= max_chars_per_line as usize {
                     prompt_occupied_lines = 1;
                 }
 
@@ -104,7 +105,7 @@ impl Widget for &App {
                         }
                         Outcome::Correct => {
                             let expected = thok.get_expected_char(idx);
-                            let style = if thok.session_config.strict
+                            let style = if thok.session.config.strict
                                 && thok.corrected_positions().contains(&idx)
                             {
                                 // Show corrected errors with orange color (much more distinct from green)
@@ -128,9 +129,14 @@ impl Widget for &App {
                 // slicing by byte indices (handles Unicode safely)
                 // Preallocate remaining string with approximate capacity
                 let cursor_pos = thok.cursor_pos();
-                let remaining_len = thok.prompt.chars().count().saturating_sub(cursor_pos + 1);
+                let remaining_len = thok
+                    .session
+                    .prompt
+                    .chars()
+                    .count()
+                    .saturating_sub(cursor_pos + 1);
                 let mut remaining = String::with_capacity(remaining_len);
-                remaining.extend(thok.prompt.chars().skip(cursor_pos + 1));
+                remaining.extend(thok.session.prompt.chars().skip(cursor_pos + 1));
                 spans.push(Span::styled(remaining, dim_bold_style));
 
                 let widget = Paragraph::new(Line::from(spans))
@@ -364,18 +370,18 @@ mod tests {
 
         if finished {
             for c in prompt.chars() {
-                thok.session_state.input.push(Input {
+                thok.session.state.input.push(Input {
                     char: c,
                     outcome: Outcome::Correct,
                     timestamp: SystemTime::now(),
                     keypress_start: None,
                 });
             }
-            thok.session_state.cursor_pos = prompt.len();
-            thok.session_state.wpm = 42.0;
-            thok.session_state.accuracy = 95.0;
-            thok.session_state.std_dev = 2.5;
-            thok.session_state.wpm_coords = vec![
+            thok.session.state.cursor_pos = prompt.len();
+            thok.session.state.wpm = 42.0;
+            thok.session.state.accuracy = 95.0;
+            thok.session.state.std_dev = 2.5;
+            thok.session.state.wpm_coords = vec![
                 crate::time_series::TimeSeriesPoint::new(1.0, 20.0),
                 crate::time_series::TimeSeriesPoint::new(2.0, 35.0),
                 crate::time_series::TimeSeriesPoint::new(3.0, 42.0),
@@ -467,8 +473,8 @@ mod tests {
     #[test]
     fn test_in_progress_with_timer() {
         let mut app = create_test_app("test", false);
-        app.thok.session_state.seconds_remaining = Some(25.5);
-        app.thok.session_config.number_of_secs = Some(30.0);
+        app.thok.session.state.seconds_remaining = Some(25.5);
+        app.thok.session.config.number_of_secs = Some(30.0);
 
         let rendered = render_to_string(&app, STD_AREA);
         assert!(rendered.contains("25.5"));
@@ -497,19 +503,19 @@ mod tests {
     #[test]
     fn test_incorrect_input_renders() {
         let mut app = create_test_app("test", false);
-        app.thok.session_state.input.push(Input {
+        app.thok.session.state.input.push(Input {
             char: 't',
             outcome: Outcome::Correct,
             timestamp: SystemTime::now(),
             keypress_start: None,
         });
-        app.thok.session_state.input.push(Input {
+        app.thok.session.state.input.push(Input {
             char: 'x',
             outcome: Outcome::Incorrect,
             timestamp: SystemTime::now(),
             keypress_start: None,
         });
-        app.thok.session_state.cursor_pos = 2;
+        app.thok.session.state.cursor_pos = 2;
 
         let rendered = render_to_string(&app, STD_AREA);
         assert!(!rendered.trim().is_empty());

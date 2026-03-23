@@ -12,7 +12,8 @@ fn calculate_time_to_press(thok: &Thok, now: SystemTime) -> u64 {
     }
 
     let keypress_time = thok
-        .session_state
+        .session
+        .state
         .keypress_start_time
         .map(|start| crate::stats::time_diff_ms(start, now))
         .unwrap_or(0);
@@ -20,8 +21,8 @@ fn calculate_time_to_press(thok: &Thok, now: SystemTime) -> u64 {
         return keypress_time;
     }
 
-    if thok.session_state.input.is_empty() {
-        if let Some(start_time) = thok.session_state.started_at {
+    if thok.session.state.input.is_empty() {
+        if let Some(start_time) = thok.session.state.started_at {
             let since_start = crate::stats::time_diff_ms(start_time, now);
             if since_start > 0 {
                 return since_start;
@@ -42,13 +43,13 @@ fn prepare_input(thok: &mut Thok, c: char) -> Option<PreparedInput> {
         return None;
     }
 
-    let idx = if thok.session_config.strict {
-        thok.session_state.cursor_pos
+    let idx = if thok.session.config.strict {
+        thok.session.state.cursor_pos
     } else {
-        thok.session_state.input.len()
+        thok.session.state.input.len()
     };
 
-    if idx == 0 && thok.session_state.started_at.is_none() {
+    if idx == 0 && thok.session.state.started_at.is_none() {
         thok.start();
     }
 
@@ -64,7 +65,7 @@ fn prepare_input(thok: &mut Thok, c: char) -> Option<PreparedInput> {
 
     // Record char stat
     if let Some(ref mut stats_db) = thok.stats_db {
-        let (context_before, context_after) = extract_context(&thok.prompt, idx, 3);
+        let (context_before, context_after) = extract_context(&thok.session.prompt, idx, 3);
         let stat = CharStat {
             character: expected_char.to_lowercase().next().unwrap_or(expected_char),
             time_to_press_ms,
@@ -87,17 +88,17 @@ pub fn write_normal(thok: &mut Thok, c: char) {
     let Some(prepared) = prepare_input(thok, c) else {
         return;
     };
-    thok.session_state.input.insert(
-        thok.session_state.cursor_pos,
+    thok.session.state.input.insert(
+        thok.session.state.cursor_pos,
         Input {
             char: c,
             outcome: prepared.outcome,
             timestamp: prepared.now,
-            keypress_start: thok.session_state.keypress_start_time,
+            keypress_start: thok.session.state.keypress_start_time,
         },
     );
     thok.increment_cursor();
-    thok.session_state.keypress_start_time = None;
+    thok.session.state.keypress_start_time = None;
 }
 
 pub fn write_strict(thok: &mut Thok, c: char) {
@@ -108,35 +109,36 @@ pub fn write_strict(thok: &mut Thok, c: char) {
         char: c,
         outcome: prepared.outcome,
         timestamp: prepared.now,
-        keypress_start: thok.session_state.keypress_start_time,
+        keypress_start: thok.session.state.keypress_start_time,
     };
 
     if prepared.outcome == Outcome::Correct {
-        let had_error = thok.session_state.cursor_pos < thok.session_state.input.len()
-            && thok.session_state.input[thok.session_state.cursor_pos].outcome
+        let had_error = thok.session.state.cursor_pos < thok.session.state.input.len()
+            && thok.session.state.input[thok.session.state.cursor_pos].outcome
                 == Outcome::Incorrect;
         if had_error {
-            thok.session_state
+            thok.session
+                .state
                 .corrected_positions
-                .insert(thok.session_state.cursor_pos);
+                .insert(thok.session.state.cursor_pos);
         }
-        if thok.session_state.cursor_pos < thok.session_state.input.len() {
-            thok.session_state.input[thok.session_state.cursor_pos] = input;
+        if thok.session.state.cursor_pos < thok.session.state.input.len() {
+            thok.session.state.input[thok.session.state.cursor_pos] = input;
         } else {
-            thok.session_state.input.push(input);
+            thok.session.state.input.push(input);
         }
         thok.increment_cursor();
-    } else if thok.session_state.cursor_pos < thok.session_state.input.len() {
-        thok.session_state.input[thok.session_state.cursor_pos] = input;
+    } else if thok.session.state.cursor_pos < thok.session.state.input.len() {
+        thok.session.state.input[thok.session.state.cursor_pos] = input;
     } else {
-        thok.session_state.input.push(input);
+        thok.session.state.input.push(input);
     }
 
-    thok.session_state.keypress_start_time = None;
+    thok.session.state.keypress_start_time = None;
 }
 
 pub fn apply_write(thok: &mut Thok, c: char) {
-    if thok.session_config.strict {
+    if thok.session.config.strict {
         write_strict(thok, c)
     } else {
         write_normal(thok, c)

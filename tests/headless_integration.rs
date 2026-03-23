@@ -49,8 +49,8 @@ fn headless_typing_flow_completes() {
     // Assert: finished and results computable
     assert!(thok.has_finished(), "thok should have finished typing");
     thok.calc_results();
-    assert!(thok.session_state.wpm >= 0.0);
-    assert!(thok.session_state.accuracy >= 0.0);
+    assert!(thok.session.state.wpm >= 0.0);
+    assert!(thok.session.state.accuracy >= 0.0);
 }
 
 #[test]
@@ -60,11 +60,11 @@ fn headless_strict_mode_flow() {
 
     // Type wrong char first
     thok.write('x');
-    assert_eq!(thok.session_state.cursor_pos, 0);
+    assert_eq!(thok.session.state.cursor_pos, 0);
 
     // Type correct sequence
     thok.write('a');
-    assert_eq!(thok.session_state.cursor_pos, 1);
+    assert_eq!(thok.session.state.cursor_pos, 1);
     thok.write('b');
     assert!(thok.has_finished());
 }

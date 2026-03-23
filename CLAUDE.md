@@ -57,9 +57,9 @@ CLI Args -> App::new() -> Thok::new() -> Event Loop -> UI Rendering
 | Module | Role |
 |---|---|
 | `main.rs` | CLI (clap derive), `App`/`RuntimeSettings` structs, event loop, terminal setup/teardown |
-| `thok.rs` | `Thok` struct: typing state, input processing, WPM/accuracy calculation, CSV persistence |
+| `thok.rs` | `Thok` struct: wraps `Session` + stats DB + celebration, delegates typing to Session, adds CSV/SQLite persistence |
 | `typing_policy.rs` | `write_normal`/`write_strict`: input handling strategies, char stat recording |
-| `session.rs` | `SessionConfig` and `SessionState` data types |
+| `session.rs` | `Session` (prompt + config + state), pure typing logic: tick, idle, cursor, backspace, calc_results |
 | `stats.rs` | `StatsDb`/`StatsStore` trait: SQLite character stats, aggregation, compaction, difficulty queries |
 | `ui.rs` | `Widget` impl for `App`: prompt rendering, results screen with chart |
 | `ui/screen.rs` | `Screen` trait: `TypingScreen`, `ResultsScreen`, `CharacterStatsScreen` with key handling |
