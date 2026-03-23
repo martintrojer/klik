@@ -17,7 +17,7 @@ cargo run -- -w 25 -s 60       # 25 words, 60 second time limit
 RUST_LOG=debug cargo run        # debug logging
 ```
 
-Coverage: `cargo tarpaulin --out Html`. See [TESTING.md](TESTING.md) for test structure and coverage status.
+Integration test (Unix only, ignored by default): `cargo test --test integration_min_session -- --ignored`
 
 ## Before Committing
 
