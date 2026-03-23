@@ -339,9 +339,9 @@ impl Thok {
     pub fn flush_char_stats(&mut self) -> Option<()> {
         match self.stats_db.as_mut()?.flush() {
             Ok(()) => Some(()),
-            Err(e) => {
+            Err(_e) => {
                 #[cfg(any(debug_assertions, test))]
-                eprintln!("Failed to flush char stats: {}", e);
+                eprintln!("Failed to flush char stats: {}", _e);
                 None
             }
         }

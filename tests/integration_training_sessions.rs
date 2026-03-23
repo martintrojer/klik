@@ -14,7 +14,11 @@ fn training_session_integration_single_session() {
     }
 
     // Debug: Check the actual prompt
-    println!("Prompt: '{}', length: {}", thok.session.prompt, thok.session.prompt.len());
+    println!(
+        "Prompt: '{}', length: {}",
+        thok.session.prompt,
+        thok.session.prompt.len()
+    );
 
     // Session 1: Type with some mistakes
     // Need to be careful: typing an error + correct char means we'll have extra input
@@ -394,7 +398,11 @@ fn training_session_character_difficulty_tracking() {
 
     // Session with intentional mistakes on 'b' to make it appear difficult
     // "aaa bbb" = 7 characters, but we'll have errors that advance cursor
-    println!("Prompt: '{}', length: {}", thok.session.prompt, thok.session.prompt.len());
+    println!(
+        "Prompt: '{}', length: {}",
+        thok.session.prompt,
+        thok.session.prompt.len()
+    );
 
     let chars: Vec<char> = "aaa bbb".chars().collect();
     for (i, &c) in chars.iter().enumerate() {

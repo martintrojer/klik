@@ -226,9 +226,9 @@ impl App {
     /// Persist current runtime settings to config file
     pub fn save_config(&self) {
         let config = crate::config::Config::from(&self.runtime_settings);
-        if let Err(e) = self.config_store.save(&config) {
+        if let Err(_e) = self.config_store.save(&config) {
             #[cfg(any(debug_assertions, test))]
-            eprintln!("Failed to save config: {}", e);
+            eprintln!("Failed to save config: {}", _e);
         }
     }
 
