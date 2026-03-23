@@ -5,22 +5,12 @@ use ratatui::{
     Frame,
 };
 
+use crate::stats::CharSummaryWithDeltas;
 use crate::{App, SortBy};
-
-pub struct CharRowData {
-    pub character: char,
-    pub avg_time: f64,
-    pub miss_rate: f64,
-    pub attempts: i64,
-    pub time_delta: Option<f64>,
-    pub miss_delta: Option<f64>,
-    pub session_attempts: i64,
-    pub latest_datetime: Option<String>,
-}
 
 /// Pure presenter for a single character stats row
 /// Returns a Row given the raw tuple from Thok summary
-pub fn present_row(data: &CharRowData) -> Row<'static> {
+pub fn present_row(data: &CharSummaryWithDeltas) -> Row<'static> {
     let char_display = if data.character == ' ' {
         "SPACE".to_string()
     } else {
@@ -160,34 +150,41 @@ pub fn render_character_stats(app: &mut App, f: &mut Frame) {
     // Get character statistics with session deltas
     if let Some(mut summary) = app.thok.get_char_summary_with_deltas() {
         // Sort the data based on current sort criteria
+        let ascending = app.char_stats_state.sort_ascending;
         match app.char_stats_state.sort_by {
             SortBy::Character => summary.sort_by(|a, b| {
-                let cmp = a.0.cmp(&b.0);
-                if app.char_stats_state.sort_ascending {
+                let cmp = a.character.cmp(&b.character);
+                if ascending {
                     cmp
                 } else {
                     cmp.reverse()
                 }
             }),
             SortBy::AvgTime => summary.sort_by(|a, b| {
-                let cmp = a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal);
-                if app.char_stats_state.sort_ascending {
+                let cmp = a
+                    .avg_time
+                    .partial_cmp(&b.avg_time)
+                    .unwrap_or(std::cmp::Ordering::Equal);
+                if ascending {
                     cmp
                 } else {
                     cmp.reverse()
                 }
             }),
             SortBy::MissRate => summary.sort_by(|a, b| {
-                let cmp = a.2.partial_cmp(&b.2).unwrap_or(std::cmp::Ordering::Equal);
-                if app.char_stats_state.sort_ascending {
+                let cmp = a
+                    .miss_rate
+                    .partial_cmp(&b.miss_rate)
+                    .unwrap_or(std::cmp::Ordering::Equal);
+                if ascending {
                     cmp
                 } else {
                     cmp.reverse()
                 }
             }),
             SortBy::Attempts => summary.sort_by(|a, b| {
-                let cmp = a.3.cmp(&b.3);
-                if app.char_stats_state.sort_ascending {
+                let cmp = a.attempts.cmp(&b.attempts);
+                if ascending {
                     cmp
                 } else {
                     cmp.reverse()
@@ -245,30 +242,7 @@ pub fn render_character_stats(app: &mut App, f: &mut Frame) {
             .iter()
             .skip(app.char_stats_state.scroll_offset)
             .take(table_height)
-            .map(
-                |(
-                    character,
-                    avg_time,
-                    miss_rate,
-                    attempts,
-                    time_delta,
-                    miss_delta,
-                    session_attempts,
-                    latest_datetime,
-                )| {
-                    let data = CharRowData {
-                        character: *character,
-                        avg_time: *avg_time,
-                        miss_rate: *miss_rate,
-                        attempts: *attempts,
-                        time_delta: *time_delta,
-                        miss_delta: *miss_delta,
-                        session_attempts: *session_attempts,
-                        latest_datetime: latest_datetime.clone(),
-                    };
-                    present_row(&data)
-                },
-            )
+            .map(|data| present_row(data))
             .collect();
 
         // Create the table

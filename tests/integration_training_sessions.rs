@@ -224,39 +224,33 @@ fn training_session_integration_multiple_sessions() {
         let deltas = stats_db.get_char_summary_with_deltas().unwrap();
         let mut characters_with_improvements = 0;
 
-        for (
-            char,
-            hist_avg,
-            _hist_miss,
-            _hist_attempts,
-            time_delta,
-            miss_delta,
-            session_attempts,
-            _latest_datetime,
-        ) in &deltas
-        {
-            if *session_attempts > 0 {
+        for s in &deltas {
+            if s.session_attempts > 0 {
                 let mut improved = false;
 
-                println!("  Character '{char}': hist_avg={hist_avg:.1}ms, session_attempts={session_attempts}");
+                println!(
+                    "  Character '{}': hist_avg={:.1}ms, session_attempts={}",
+                    s.character, s.avg_time, s.session_attempts
+                );
 
-                if let Some(time_d) = time_delta {
+                if let Some(time_d) = s.time_delta {
                     println!("    Time delta: {time_d:.1}ms");
-                    if *time_d < -5.0 {
-                        // More than 5ms faster
+                    if time_d < -5.0 {
                         improved = true;
-                        println!("    ✅ '{char}' improved by {:.1}ms", -time_d);
+                        println!("    ✅ '{}' improved by {:.1}ms", s.character, -time_d);
                     }
                 } else {
                     println!("    No time delta available");
                 }
 
-                if let Some(miss_d) = miss_delta {
+                if let Some(miss_d) = s.miss_delta {
                     println!("    Miss delta: {miss_d:.1}%");
-                    if *miss_d < -1.0 {
-                        // More than 1% more accurate
+                    if miss_d < -1.0 {
                         improved = true;
-                        println!("    ✅ '{char}' improved accuracy by {:.1}%", -miss_d);
+                        println!(
+                            "    ✅ '{}' improved accuracy by {:.1}%",
+                            s.character, -miss_d
+                        );
                     }
                 } else {
                     println!("    No miss delta available");
@@ -591,10 +585,11 @@ fn training_session_celebration_integration() {
     println!("About to test celebration for perfect session...");
     if let Some(deltas) = thok.get_char_summary_with_deltas() {
         println!("Delta data available, {} characters", deltas.len());
-        for (c, _, _, _, time_delta, miss_delta, session_attempts, _) in &deltas {
-            if *session_attempts > 0 {
+        for s in &deltas {
+            if s.session_attempts > 0 {
                 println!(
-                    "  '{c}': time_delta={time_delta:?}, miss_delta={miss_delta:?}, session_attempts={session_attempts}",
+                    "  '{}': time_delta={:?}, miss_delta={:?}, session_attempts={}",
+                    s.character, s.time_delta, s.miss_delta, s.session_attempts,
                 );
             }
         }
@@ -610,11 +605,9 @@ fn training_session_celebration_integration() {
     let should_celebrate = if let Some(deltas) = thok.get_char_summary_with_deltas() {
         let chars_with_deltas = deltas
             .iter()
-            .filter(
-                |(_, _, _, _, time_delta, miss_delta, session_attempts, _)| {
-                    *session_attempts > 0 && (time_delta.is_some() || miss_delta.is_some())
-                },
-            )
+            .filter(|s| {
+                s.session_attempts > 0 && (s.time_delta.is_some() || s.miss_delta.is_some())
+            })
             .count();
 
         if chars_with_deltas == 0 {
@@ -623,23 +616,21 @@ fn training_session_celebration_integration() {
             // Check if there are meaningful improvements
             let improvements = deltas
                 .iter()
-                .filter(
-                    |(_, _, _, _, time_delta, miss_delta, session_attempts, _)| {
-                        if *session_attempts > 0 {
-                            if let Some(time_d) = time_delta {
-                                if *time_d < -10.0 {
-                                    return true;
-                                }
-                            }
-                            if let Some(miss_d) = miss_delta {
-                                if *miss_d < -5.0 {
-                                    return true;
-                                }
+                .filter(|s| {
+                    if s.session_attempts > 0 {
+                        if let Some(time_d) = s.time_delta {
+                            if time_d < -10.0 {
+                                return true;
                             }
                         }
-                        false
-                    },
-                )
+                        if let Some(miss_d) = s.miss_delta {
+                            if miss_d < -5.0 {
+                                return true;
+                            }
+                        }
+                    }
+                    false
+                })
                 .count();
             improvements >= 3 // Should celebrate if enough improvements
         }
@@ -702,23 +693,12 @@ fn training_session_celebration_integration() {
         let deltas = stats_db.get_char_summary_with_deltas().unwrap();
         let mut improvement_count = 0;
 
-        for (
-            char,
-            _hist_avg,
-            _hist_miss,
-            _hist_attempts,
-            time_delta,
-            _miss_delta,
-            session_attempts,
-            _latest_datetime,
-        ) in &deltas
-        {
-            if *session_attempts > 0 {
-                if let Some(time_d) = time_delta {
-                    if *time_d < -10.0 {
-                        // Significant improvement
+        for s in &deltas {
+            if s.session_attempts > 0 {
+                if let Some(time_d) = s.time_delta {
+                    if time_d < -10.0 {
                         improvement_count += 1;
-                        println!("  Character '{char}' improved by {:.1}ms", -time_d);
+                        println!("  Character '{}' improved by {:.1}ms", s.character, -time_d);
                     }
                 }
             }

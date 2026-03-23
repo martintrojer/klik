@@ -476,21 +476,21 @@ impl Thok {
             let mut avg_time_improvement = 0.0;
             let mut avg_miss_improvement = 0.0;
 
-            for (_, _, _, _, time_delta, miss_delta, session_attempts, _) in &summary {
+            for s in &summary {
                 // Only consider characters typed in this session
-                if *session_attempts > 0 {
+                if s.session_attempts > 0 {
                     total_chars_with_deltas += 1;
 
-                    if let Some(time_d) = time_delta {
-                        if *time_d < -5.0 {
+                    if let Some(time_d) = s.time_delta {
+                        if time_d < -5.0 {
                             improvements += 1;
-                        } else if *time_d > 5.0 {
+                        } else if time_d > 5.0 {
                             regressions += 1;
                         }
                         avg_time_improvement += time_d;
                     }
 
-                    if let Some(miss_d) = miss_delta {
+                    if let Some(miss_d) = s.miss_delta {
                         avg_miss_improvement += miss_d;
                     }
                 }

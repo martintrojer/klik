@@ -7,19 +7,18 @@ use std::time::SystemTime;
 
 use crate::language::CharacterDifficulty;
 
-/// Type alias for character statistics with session deltas
-/// (char, historical_avg_time, historical_miss_rate, historical_attempts,
-///  session_avg_time_delta, session_miss_rate_delta, session_attempts_delta, latest_datetime)
-pub type CharSummaryWithDeltas = (
-    char,
-    f64,
-    f64,
-    i64,
-    Option<f64>,
-    Option<f64>,
-    i64,
-    Option<String>,
-);
+/// Character statistics with session deltas for UI display
+#[derive(Debug, Clone)]
+pub struct CharSummaryWithDeltas {
+    pub character: char,
+    pub avg_time: f64,
+    pub miss_rate: f64,
+    pub attempts: i64,
+    pub time_delta: Option<f64>,
+    pub miss_delta: Option<f64>,
+    pub session_attempts: i64,
+    pub latest_datetime: Option<String>,
+}
 
 /// Type alias for character statistics with datetime
 /// (char, avg_time, miss_rate, attempts, latest_datetime)
@@ -341,18 +340,27 @@ impl StatsStore for InMemoryStatsStore {
         let mut combined = Vec::new();
         for (c, s_avg, s_miss, s_attempts) in session_summary {
             if let Some((h_avg, h_miss, h_attempts)) = hist_map.get(&c).cloned() {
-                combined.push((
-                    c,
-                    h_avg,
-                    h_miss,
-                    h_attempts,
-                    Some(s_avg - h_avg),
-                    Some(s_miss - h_miss),
-                    s_attempts,
-                    None,
-                ));
+                combined.push(CharSummaryWithDeltas {
+                    character: c,
+                    avg_time: h_avg,
+                    miss_rate: h_miss,
+                    attempts: h_attempts,
+                    time_delta: Some(s_avg - h_avg),
+                    miss_delta: Some(s_miss - h_miss),
+                    session_attempts: s_attempts,
+                    latest_datetime: None,
+                });
             } else {
-                combined.push((c, s_avg, s_miss, s_attempts, None, None, s_attempts, None));
+                combined.push(CharSummaryWithDeltas {
+                    character: c,
+                    avg_time: s_avg,
+                    miss_rate: s_miss,
+                    attempts: s_attempts,
+                    time_delta: None,
+                    miss_delta: None,
+                    session_attempts: s_attempts,
+                    latest_datetime: None,
+                });
             }
         }
         Ok(combined)
@@ -1104,36 +1112,33 @@ impl StatsDb {
                     (None, None, 0, hist_datetime)
                 };
 
-            combined_summary.push((
+            combined_summary.push(CharSummaryWithDeltas {
                 character,
-                hist_avg_time,
-                hist_miss_rate,
-                hist_attempts,
-                session_avg_delta,
-                session_miss_delta,
+                avg_time: hist_avg_time,
+                miss_rate: hist_miss_rate,
+                attempts: hist_attempts,
+                time_delta: session_avg_delta,
+                miss_delta: session_miss_delta,
                 session_attempts,
                 latest_datetime,
-            ));
+            });
         }
 
         // Add characters that are only in the current session (new characters)
         for (character, session_avg, session_miss, session_attempts, session_datetime) in
             &session_summary
         {
-            if !combined_summary
-                .iter()
-                .any(|(c, _, _, _, _, _, _, _)| c == character)
-            {
-                combined_summary.push((
-                    *character,
-                    *session_avg, // Use session data as historical since it's new
-                    *session_miss,
-                    *session_attempts,
-                    None, // No delta for new characters
-                    None,
-                    *session_attempts,
-                    session_datetime.clone(),
-                ));
+            if !combined_summary.iter().any(|s| s.character == *character) {
+                combined_summary.push(CharSummaryWithDeltas {
+                    character: *character,
+                    avg_time: *session_avg,
+                    miss_rate: *session_miss,
+                    attempts: *session_attempts,
+                    time_delta: None,
+                    miss_delta: None,
+                    session_attempts: *session_attempts,
+                    latest_datetime: session_datetime.clone(),
+                });
             }
         }
 
@@ -1858,32 +1863,23 @@ mod tests {
 
         assert_eq!(summary_with_deltas.len(), 1);
 
-        let (
-            character,
-            hist_avg,
-            hist_miss,
-            hist_attempts,
-            time_delta,
-            miss_delta,
-            session_attempts,
-            _latest_datetime,
-        ) = &summary_with_deltas[0];
+        let s = &summary_with_deltas[0];
 
-        assert_eq!(*character, 'a');
-        assert_eq!(*hist_avg, 200.0); // Historical session: 200ms
-        assert_eq!(*hist_miss, 0.0); // Historical session: 0% miss (1 correct attempt)
-        assert_eq!(*hist_attempts, 1); // Historical session: 1 attempt
-        assert_eq!(*session_attempts, 2);
+        assert_eq!(s.character, 'a');
+        assert_eq!(s.avg_time, 200.0); // Historical session: 200ms
+        assert_eq!(s.miss_rate, 0.0); // Historical session: 0% miss (1 correct attempt)
+        assert_eq!(s.attempts, 1); // Historical session: 1 attempt
+        assert_eq!(s.session_attempts, 2);
 
         // Session average: (150+170)/2 = 160ms
         // Delta: 160 - 200 = -40ms (improvement)
-        assert!(time_delta.is_some());
-        assert_eq!(time_delta.unwrap(), -40.0);
+        assert!(s.time_delta.is_some());
+        assert_eq!(s.time_delta.unwrap(), -40.0);
 
         // Session miss rate: 0% (both correct)
         // Delta: 0 - 0 = 0% (no change)
-        assert!(miss_delta.is_some());
-        assert_eq!(miss_delta.unwrap(), 0.0);
+        assert!(s.miss_delta.is_some());
+        assert_eq!(s.miss_delta.unwrap(), 0.0);
     }
 
     #[test]
@@ -1908,25 +1904,16 @@ mod tests {
 
         assert_eq!(summary_with_deltas.len(), 1);
 
-        let (
-            character,
-            hist_avg,
-            hist_miss,
-            hist_attempts,
-            time_delta,
-            miss_delta,
-            session_attempts,
-            _latest_datetime,
-        ) = &summary_with_deltas[0];
+        let s = &summary_with_deltas[0];
 
-        assert_eq!(*character, 'z');
-        assert_eq!(*hist_avg, 180.0); // Uses session data as historical
-        assert_eq!(*hist_miss, 0.0); // Uses session data as historical
-        assert_eq!(*hist_attempts, 1); // Uses session data as historical
-        assert_eq!(*session_attempts, 1);
+        assert_eq!(s.character, 'z');
+        assert_eq!(s.avg_time, 180.0); // Uses session data as historical
+        assert_eq!(s.miss_rate, 0.0); // Uses session data as historical
+        assert_eq!(s.attempts, 1); // Uses session data as historical
+        assert_eq!(s.session_attempts, 1);
 
         // No deltas for new characters
-        assert!(time_delta.is_none());
-        assert!(miss_delta.is_none());
+        assert!(s.time_delta.is_none());
+        assert!(s.miss_delta.is_none());
     }
 }

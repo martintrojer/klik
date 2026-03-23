@@ -3,7 +3,7 @@
 ## Code Quality
 
 - [x] **Deduplicate `CombinedFormatter` / `SymbolFormatter`**: Extracted shared `format_with_symbols()` helper; both formatters now delegate to it.
-- [ ] **Replace `CharSummaryWithDeltas` tuple with struct**: 8-element tuple is unreadable at every call site. `CharRowData` in `ui/character_stats.rs` already has the right fields — promote it to the canonical type.
+- [x] **Replace `CharSummaryWithDeltas` tuple with struct**: Promoted to named struct in `stats.rs`, removed duplicate `CharRowData` from `ui/character_stats.rs`.
 - [x] **Fix `read_language_from_file` error handling**: Inlined into `Language::new()`, removed misleading `Result` wrapper.
 - [x] **Remove `pub use language as lang` alias**: Removed from `lib.rs` and `main.rs`.
 - [x] **Remove `#[allow(clippy::new_without_default)]`** on `FileConfigStore::new`.

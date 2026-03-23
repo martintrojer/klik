@@ -12,18 +12,8 @@ fn char_summary_with_deltas_integration() {
 
     if let Some(summary_with_deltas) = thok.get_char_summary_with_deltas() {
         assert!(!summary_with_deltas.is_empty());
-        for (
-            _character,
-            _hist_avg,
-            _hist_miss,
-            _hist_attempts,
-            _time_delta,
-            _miss_delta,
-            session_attempts,
-            _latest_datetime,
-        ) in &summary_with_deltas
-        {
-            assert!(*session_attempts >= 0);
+        for s in &summary_with_deltas {
+            assert!(s.session_attempts >= 0);
         }
     }
 }
