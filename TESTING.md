@@ -13,8 +13,6 @@ cargo test --test integration_min_session  # PTY integration test (Unix only)
 ## Coverage
 
 ```bash
-./scripts/coverage.sh                   # full coverage analysis
-./scripts/quick-coverage.sh             # quick check
 cargo tarpaulin --out Html              # HTML report
 ```
 
