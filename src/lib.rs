@@ -10,6 +10,3 @@ pub mod thok;
 pub mod time_series;
 pub mod typing_policy;
 pub mod util;
-
-// Keep the old lang module name for compatibility in tests/examples
-pub use language as lang;

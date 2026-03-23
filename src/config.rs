@@ -56,7 +56,6 @@ pub struct FileConfigStore {
 }
 
 impl FileConfigStore {
-    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         let path = if let Some(pd) = ProjectDirs::from("", "", "klik") {
             pd.config_dir().join("config.json")

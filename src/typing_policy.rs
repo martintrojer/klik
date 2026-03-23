@@ -3,11 +3,43 @@ use crate::thok::{Input, Outcome, Thok};
 use chrono::Local;
 use std::time::SystemTime;
 
-fn prepare_input(thok: &mut Thok, c: char) -> (usize, char, Outcome, SystemTime, u64) {
-    // Bail early if session is finished to avoid comparing against ' ' when idx >= prompt length
+const DEFAULT_KEYPRESS_MS: u64 = 150;
+
+fn calculate_time_to_press(thok: &Thok, now: SystemTime) -> u64 {
+    let inter_key_time = thok.calculate_inter_key_time(now);
+    if inter_key_time > 0 {
+        return inter_key_time;
+    }
+
+    let keypress_time = thok
+        .session_state
+        .keypress_start_time
+        .map(|start| crate::stats::time_diff_ms(start, now))
+        .unwrap_or(0);
+    if keypress_time > 5 {
+        return keypress_time;
+    }
+
+    if thok.session_state.input.is_empty() {
+        if let Some(start_time) = thok.session_state.started_at {
+            let since_start = crate::stats::time_diff_ms(start_time, now);
+            if since_start > 0 {
+                return since_start;
+            }
+        }
+    }
+
+    DEFAULT_KEYPRESS_MS
+}
+
+struct PreparedInput {
+    outcome: Outcome,
+    now: SystemTime,
+}
+
+fn prepare_input(thok: &mut Thok, c: char) -> Option<PreparedInput> {
     if thok.has_finished() {
-        let now = SystemTime::now();
-        return (0, ' ', Outcome::Incorrect, now, 0);
+        return None;
     }
 
     let idx = if thok.session_config.strict {
@@ -28,30 +60,7 @@ fn prepare_input(thok: &mut Thok, c: char) -> (usize, char, Outcome, SystemTime,
         Outcome::Incorrect
     };
 
-    let keypress_time = if let Some(start_time) = thok.session_state.keypress_start_time {
-        crate::stats::time_diff_ms(start_time, now)
-    } else {
-        0
-    };
-    let inter_key_time = thok.calculate_inter_key_time(now);
-    let time_to_press_ms = if inter_key_time > 0 {
-        inter_key_time
-    } else if keypress_time > 5 {
-        keypress_time
-    } else if thok.session_state.input.is_empty() && thok.session_state.started_at.is_some() {
-        if let Some(start_time) = thok.session_state.started_at {
-            let since_start = crate::stats::time_diff_ms(start_time, now);
-            if since_start > 0 {
-                since_start
-            } else {
-                150
-            }
-        } else {
-            150
-        }
-    } else {
-        150
-    };
+    let time_to_press_ms = calculate_time_to_press(thok, now);
 
     // Record char stat
     if let Some(ref mut stats_db) = thok.stats_db {
@@ -71,18 +80,19 @@ fn prepare_input(thok: &mut Thok, c: char) -> (usize, char, Outcome, SystemTime,
         }
     }
 
-    (idx, expected_char, outcome, now, time_to_press_ms)
+    Some(PreparedInput { outcome, now })
 }
 
 pub fn write_normal(thok: &mut Thok, c: char) {
-    let (_idx, _expected, outcome, now, _ttp) = prepare_input(thok, c);
-    // Always insert and advance
+    let Some(prepared) = prepare_input(thok, c) else {
+        return;
+    };
     thok.session_state.input.insert(
         thok.session_state.cursor_pos,
         Input {
             char: c,
-            outcome,
-            timestamp: now,
+            outcome: prepared.outcome,
+            timestamp: prepared.now,
             keypress_start: thok.session_state.keypress_start_time,
         },
     );
@@ -91,9 +101,17 @@ pub fn write_normal(thok: &mut Thok, c: char) {
 }
 
 pub fn write_strict(thok: &mut Thok, c: char) {
-    let (idx, expected, outcome, now, _ttp) = prepare_input(thok, c);
+    let Some(prepared) = prepare_input(thok, c) else {
+        return;
+    };
+    let input = Input {
+        char: c,
+        outcome: prepared.outcome,
+        timestamp: prepared.now,
+        keypress_start: thok.session_state.keypress_start_time,
+    };
 
-    if outcome == Outcome::Correct {
+    if prepared.outcome == Outcome::Correct {
         let had_error = thok.session_state.cursor_pos < thok.session_state.input.len()
             && thok.session_state.input[thok.session_state.cursor_pos].outcome
                 == Outcome::Incorrect;
@@ -103,40 +121,17 @@ pub fn write_strict(thok: &mut Thok, c: char) {
                 .insert(thok.session_state.cursor_pos);
         }
         if thok.session_state.cursor_pos < thok.session_state.input.len() {
-            thok.session_state.input[thok.session_state.cursor_pos] = Input {
-                char: c,
-                outcome,
-                timestamp: now,
-                keypress_start: thok.session_state.keypress_start_time,
-            };
+            thok.session_state.input[thok.session_state.cursor_pos] = input;
         } else {
-            thok.session_state.input.push(Input {
-                char: c,
-                outcome,
-                timestamp: now,
-                keypress_start: thok.session_state.keypress_start_time,
-            });
+            thok.session_state.input.push(input);
         }
         thok.increment_cursor();
     } else if thok.session_state.cursor_pos < thok.session_state.input.len() {
-        thok.session_state.input[thok.session_state.cursor_pos] = Input {
-            char: c,
-            outcome,
-            timestamp: now,
-            keypress_start: thok.session_state.keypress_start_time,
-        };
+        thok.session_state.input[thok.session_state.cursor_pos] = input;
     } else {
-        thok.session_state.input.push(Input {
-            char: c,
-            outcome,
-            timestamp: now,
-            keypress_start: thok.session_state.keypress_start_time,
-        });
-        // Cursor stays for retry
+        thok.session_state.input.push(input);
     }
 
-    // Avoid unused warnings for variables we kept for parity
-    let _ = (idx, expected);
     thok.session_state.keypress_start_time = None;
 }
 

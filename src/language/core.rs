@@ -1,7 +1,6 @@
 use include_dir::{include_dir, Dir};
 use serde::Deserialize;
 use serde_json::from_str;
-use std::error::Error;
 
 static LANG_DIR: Dir = include_dir!("src/lang");
 
@@ -14,22 +13,17 @@ pub struct Language {
 
 impl Language {
     pub fn new(file_name: String) -> Self {
-        read_language_from_file(format!("{file_name}.json")).unwrap()
+        let file_name = format!("{file_name}.json");
+        let file = LANG_DIR
+            .get_file(&file_name)
+            .unwrap_or_else(|| panic!("Language file not found: {file_name}"));
+
+        let file_as_str = file
+            .contents_utf8()
+            .unwrap_or_else(|| panic!("Unable to interpret {file_name} as a string"));
+
+        from_str(file_as_str).unwrap_or_else(|e| panic!("Unable to deserialize {file_name}: {e}"))
     }
-}
-
-fn read_language_from_file(file_name: String) -> Result<Language, Box<dyn Error>> {
-    let file = LANG_DIR
-        .get_file(file_name)
-        .expect("Language file not found");
-
-    let file_as_str = file
-        .contents_utf8()
-        .expect("Unable to interpret file as a string");
-
-    let lang = from_str(file_as_str).expect("Unable to deserialize language json");
-
-    Ok(lang)
 }
 
 #[cfg(test)]
@@ -84,18 +78,8 @@ mod tests {
     }
 
     #[test]
-    fn test_read_language_from_file() {
-        let result = read_language_from_file("english.json".to_string());
-        assert!(result.is_ok());
-
-        let lang = result.unwrap();
-        assert_eq!(lang.name, "english");
-        assert!(!lang.words.is_empty());
-    }
-
-    #[test]
     #[should_panic(expected = "Language file not found")]
     fn test_read_nonexistent_language_file() {
-        let _result = read_language_from_file("nonexistent.json".to_string());
+        Language::new("nonexistent".to_string());
     }
 }

@@ -2,13 +2,13 @@
 
 ## Code Quality
 
-- [ ] **Deduplicate `CombinedFormatter` / `SymbolFormatter`**: `formatter.rs` has ~100 lines of identical symbol/punctuation logic in both. `CombinedFormatter` should compose the existing formatters rather than copy-paste them.
+- [x] **Deduplicate `CombinedFormatter` / `SymbolFormatter`**: Extracted shared `format_with_symbols()` helper; both formatters now delegate to it.
 - [ ] **Replace `CharSummaryWithDeltas` tuple with struct**: 8-element tuple is unreadable at every call site. `CharRowData` in `ui/character_stats.rs` already has the right fields — promote it to the canonical type.
-- [ ] **Fix `read_language_from_file` error handling**: Returns `Result` but uses `.expect()` three times internally, making the `Result` misleading. Either propagate errors or drop the `Result` wrapper.
-- [ ] **Remove `pub use language as lang` alias**: `lib.rs` and `main.rs` both re-export this "compatibility" shim. Nothing external depends on it.
-- [ ] **Remove `#[allow(clippy::new_without_default)]`** on `FileConfigStore::new` — a `Default` impl already exists.
-- [ ] **Clean up `prepare_input` time fallback chain**: `typing_policy.rs:31-54` has nested if/else with magic `150` fallback and a redundant `started_at` check.
-- [ ] **Remove `let _ = (idx, expected)` in `write_strict`**: If the values aren't needed, don't destructure them from `prepare_input`.
+- [x] **Fix `read_language_from_file` error handling**: Inlined into `Language::new()`, removed misleading `Result` wrapper.
+- [x] **Remove `pub use language as lang` alias**: Removed from `lib.rs` and `main.rs`.
+- [x] **Remove `#[allow(clippy::new_without_default)]`** on `FileConfigStore::new`.
+- [x] **Clean up `prepare_input` time fallback chain**: Extracted `calculate_time_to_press()`, introduced `PreparedInput` struct, removed redundant checks.
+- [x] **Remove `let _ = (idx, expected)` in `write_strict`**: `prepare_input` now returns only needed fields via `PreparedInput`.
 
 ## Architecture
 

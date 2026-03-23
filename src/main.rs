@@ -12,15 +12,12 @@ pub mod ui;
 pub mod util;
 pub mod word_generator;
 
-// Keep the old lang module name for compatibility
-pub use language as lang;
-
 use crate::runtime::{CrosstermEventSource, FixedTicker, Runner, ThokEvent as RtEvent};
 #[cfg(test)]
 use crate::ui::character_stats::render_character_stats;
 use crate::ui::screen::current_screen;
 use crate::{
-    lang::Language,
+    language::Language,
     thok::Thok,
     word_generator::{WordGenConfig, WordGenerator},
 };
